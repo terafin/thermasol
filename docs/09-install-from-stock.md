@@ -458,7 +458,7 @@ Recovery:
 | Recovery | USB | not available |
 
 **Before concluding the UART is dead, use a real capture tool.** Five ad-hoc `stty`/`dd`
-attempts returned 0 bytes and the session concluded "UART dead, needs a breaker" — then a proper
+attempts returned 0 bytes and the session concluded "UART dead, needs a power cycle" — then a proper
 logger found `u-boot=>` immediately. A two-fd serial open (`3u` + `15u`) produced ~45 minutes of
 phantom `0 bytes`.
 

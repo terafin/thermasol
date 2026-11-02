@@ -64,3 +64,16 @@ open the session file for that chunk and use the `sed` range above. Call numbers
   end was a dead end. The dead ends that taught something are in
   [`../docs/13-instruments-lie.md`](../docs/13-instruments-lie.md).
 - It does not claim the panel is finished. See [`../docs/07-open-issues.md`](../docs/07-open-issues.md).
+
+## Index audit
+
+Each report's mandatory call-by-call index was checked mechanically against its own declared
+range: does every call number in the range appear? The result is in
+[`call-index.txt`](call-index.txt).
+
+Twenty-four of twenty-six reports were complete on the first pass. Two had unindexed calls — all
+of them `SendMessage` or `Agent` calls whose results the extractor batched into a neighbouring
+block, so there was no separate result to cite. **Every one of them was then read individually**
+and recorded in the `PATCH-*` reports. That is the difference between "16,139 calls were
+processed" and "16,139 calls were read": the audit converts the first claim into the second, and
+it found work that the headline number had been quietly hiding.

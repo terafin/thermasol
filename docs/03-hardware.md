@@ -187,7 +187,7 @@ Wi-Fi on the shipped board is not brought up by this port; the panel runs on Eth
 
 - **Not PoE.** The switch port has `poe_enable=False`. A network-side power cycle is
   impossible.
-- The only remote power action is a breaker trip, i.e. a human.
+- The only power action is a physical power cycle, i.e. a human.
 
 ### Memory
 
@@ -217,6 +217,6 @@ written. See issue [#16](https://github.com/terafin/thermasol/issues/16).
 
 | Trap | Why |
 |---|---|
-| Deep suspend (`echo mem`) | **Never wakes.** No RTC/alarm wake source; the touch IRQ is registered as a wake source but does not bring the SoC out. Recovery is the breaker. |
+| Deep suspend (`echo mem`) | **Never wakes.** No RTC/alarm wake source; the touch IRQ is registered as a wake source but does not bring the SoC out. Recovery is a power cycle. |
 | `Utils.ShutdownAll` | Stops steam and flushes water — not an idle action. |
 | `PowerFlushActivity` / `FirmwareUpdateActivity` | Act on real hardware in `onCreate`. |

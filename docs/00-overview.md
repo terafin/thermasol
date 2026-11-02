@@ -27,7 +27,7 @@ every decision in this repo:
   ThermaSol manual (`manual_dspu-tt10-xx.pdf`) shows a reset button — but it is on the *Smart
   PDM*, which this installation does not have.
 - The panel is **not PoE-powered**, so the network cannot power-cycle it. A power cycle is a
-  physical breaker trip.
+  physical power cycle.
 - UART is the only true out-of-band path, and it is only reachable while the wall box is open.
 
 So: **remote access is not a convenience here, it is the only recovery mechanism once sealed.**

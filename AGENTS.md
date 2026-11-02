@@ -61,7 +61,7 @@ evidence are in [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
 1. **Never suspend the panel** (`echo mem > /sys/power/state`). It does not wake. There is no
    RTC/alarm wake source, and the touch IRQ does not bring the SoC out.
 
-   **But do not repeat the old claim that "recovery is the mains breaker."** The i.MX2 watchdog
+   **But do not repeat the old claim that "recovery requires a power cycle."** The i.MX2 watchdog
    resets this panel unattended (measured: uptime 30,628 → 106, new boot_id), and an accidental
    `echo mem` has been observed to heal itself in ~74 s. Deep suspend is still not a substitute
    for an idle policy — but it is not proven fatal.

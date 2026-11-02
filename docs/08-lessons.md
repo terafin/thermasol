@@ -69,7 +69,7 @@ different claims.
 ## 5. Never suspend this panel
 
 I suspended the SoC to test the stock-sleep hypothesis. It never woke, and the operator had to
-trip the breaker. The wake-source check I did beforehand (`input70 wakeup=enabled`) was
+power cycle the panel. The wake-source check I did beforehand (`input70 wakeup=enabled`) was
 necessary but not sufficient — the registration existed, the IRQ still did not wake it, and I
 had not checked for an RTC/alarm source at all.
 
@@ -153,7 +153,7 @@ Each of these was argued, acted on, and then disproved by evidence.
 | "Audio is routed over Android Bluetooth A2DP" | Vendor Music screen said "Audio Source: Bluetooth" | No A2DP device is ever bonded, and that label is present while audio works |
 | "The speaker's standby command stops the hiss" | It is named `slsr_request_sls_standby` | `slsr_is_active = 0` — the legacy SLSR device does not exist on this unit; the command is a no-op |
 | "A userspace poll loop will fix touch" | Stock A10 driver polls | It duplicated and fought the kernel driver; the fix is driver-owned polling |
-| "Suspend will reproduce stock's silent sleep" | Operator reported stock slept quietly | `echo mem` never wakes; no RTC/alarm source; recovered only by breaker — **and the hiss was unchanged anyway** |
+| "Suspend will reproduce stock's silent sleep" | Operator reported stock slept quietly | `echo mem` never wakes; no RTC/alarm source; recovered only by power cycle — **and the hiss was unchanged anyway** |
 | "A newer speaker firmware exists to install" | A firmware update had fixed it once before | The vendor publishes exactly one image, dated 2021; the panel already runs 7.0.0 |
 | "The DSV-4000 controller firmware is the fix" | It is the only recently-updated image on the endpoint | `esv_get_is_dongle_present = false` — that hardware is not on this shower |
 | "Hand-derived CAN opcodes can be tested live" | The opcode catalogue looked complete from disassembly | It was incomplete (`A5 62 7B` is absent from the binary), and guessing **destroyed working audio** |

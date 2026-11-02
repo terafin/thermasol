@@ -76,7 +76,7 @@ lockup, panic and emergency-restart paths go with it. Consequences:
 there is no `/dev/pmsg0` and nothing is recorded. Check for the node, not the mount.
 
 **Self-recovery is what makes debugging possible.** `imx2_wdt` started **at probe** with a 60 s
-timeout has been observed resetting a stalled panel unattended. That is what removed breaker
+timeout has been observed resetting a stalled panel unattended. That is what removed power-cycle
 trips from the debug loop. See issue [#13](https://github.com/terafin/thermasol/issues/13).
 
 ## A/B and flashing

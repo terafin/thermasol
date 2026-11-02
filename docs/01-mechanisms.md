@@ -168,11 +168,11 @@ Whatever you flash, rebuild the access stack in the same session. See
 ## The panel is not PoE-powered
 
 The switch port has `poe_enable=False`. A remote power cycle is impossible — the only power
-action is the mains breaker, a human.
+action is a physical power cycle, a human.
 
 **But recovery does not always need a human.** The i.MX2 watchdog resets the panel unattended:
 a live test measured uptime 30,628 → 106 with a new `boot_id`, and an accidental `echo mem` was
-observed to heal itself in ~74 s. That is why this project can be debugged without a breaker
+observed to heal itself in ~74 s. That is why this project can be debugged without a power-cycle
 trip per cycle.
 
 ## A Termux adb *server* is mutually exclusive with `adbd`

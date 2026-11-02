@@ -151,7 +151,7 @@ This is a deliberate bad CRC, not a repair. Understand it before you use it.
   is therefore dead. `init` cannot exec `su` directly either (policy denial, `-92`); a startup
   script needs an `init → shell → su` route.
 - **`dumpsys SurfaceFlinger`, `dumpsys window`, `logcat -d`, `ps -A --sort=-RSS` and repeated
-  `screencap` kill the panel** for ~70 s each (load 19–22), twice requiring a breaker cycle.
+  `screencap` kill the panel** for ~70 s each (load 19–22), twice requiring a power cycle.
   Single spaced reads only.
 - **`grep` and `find` are shell functions in this environment and fail quietly.** Run the
   binaries directly (`command grep`, `command find`) or do the work in Python. A silent

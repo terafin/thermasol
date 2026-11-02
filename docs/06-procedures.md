@@ -129,9 +129,9 @@ boot. It clears on reboot — but only reboot if you have a second way back.
 
 ## F. If the panel is dark and unresponsive
 
-- **First: do not suspend. Never suspend.** If someone did, the only recovery is the breaker.
+- **First: do not suspend. Never suspend.** If someone did, expect a watchdog reset; otherwise power cycle.
 - Try a soft restart from Ethernet if ADB/SSH answer.
-- Otherwise: breaker for ~10 s. This is the only power control that exists.
+- Otherwise: power cycle for ~10 s. This is the only power control that exists.
 
 ---
 

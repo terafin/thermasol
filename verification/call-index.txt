@@ -1,0 +1,43 @@
+Report                       Declared range   Index entries   Unindexed
+------------------------------------------------------------------------------------
+1aff3792-4001.md             4261-5074             814            0
+1aff3792-4801.md             5075-5897             823            0
+1aff3792-5601.md             5898-6706             809            0
+1aff3792-6401.md             6707-7514             808            0
+1aff3792-7201.md             7201-7967             767            0
+1aff3792_1-800.md            1-800                 802            0
+1aff3792_801-1600.md         801-1600              807            0
+1aff3792_1601-2400.md        1601-2400             846            0
+1aff3792_2401-3200.md        2401-3200             800            0
+1aff3792_3201-4000.md        3201-4000             800            0
+1aff3792_4001-4800.md        4001-4800             834            0
+1aff3792_4801-5600.md        4801-5600             800            0
+1aff3792_5601-6400.md        5601-6400             805            0
+1aff3792_6401-7200.md        6401-7200             800            0
+1aff3792_7201-7967.md        7201-7967             767            0
+3056feeb-001.md              1-864                 864            0
+3056feeb-1601.md             1695-2575             871           10 *
+3056feeb-2401.md             2576-3435             860            0
+3056feeb-3201.md             3436-4693            1258            0
+3056feeb-801.md              865-1694              826            4 *
+570ccc58-001.md              1-570                 570            0
+57b516a6-001.md              1-819                 831            0
+57b516a6-801.md              801-1321              521            0
+GAP-1aff3792_6401-6706.md    6401-6706             351            0
+GAP-3056feeb_4449-4693.md    4449-4693             261            0
+GAP-57b516a6_820-1321.md     820-1321              537            0
+
+* Every unindexed call was subsequently read individually and recorded in
+  PATCH-3056feeb_A.md / PATCH-3056feeb_B.md / PATCH-1aff3792_C.md.
+  They are SendMessage and Agent calls whose results were batched into a
+  neighbouring block by the extractor, so the agent's indexer saw no separate
+  result to cite.
+
+Coverage after patches: 16,139 / 16,139 calls in all six sessions.
+
+Not panel work (read and excluded by content):
+  c4daa379  (1,340 calls)  herdr/chezmoi cockpit session on tellah
+  55e88202  (  248 calls)  Synology RS3618xs RAID operation on yuna
+
+Sessions with zero ThermaTouch content were excluded on the evidence of their own
+calls, not by keyword filtering.

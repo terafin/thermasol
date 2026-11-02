@@ -33,7 +33,7 @@ issues just creates chores that never close.
 | Thing | Reality |
 |---|---|
 | **Deep suspend** | Do not use it as a sleep policy: no RTC/alarm wake source. But the i.MX2 watchdog *does* reset the panel unattended (measured), and one accidental `echo mem` healed in ~74 s. Not proven fatal — not proven safe either. |
-| **Power cycling** | The panel is not PoE. The only remote power action is a breaker trip, i.e. a human. |
+| **Power cycling** | The panel is not PoE. The only power action is a physical power cycle, i.e. a human. |
 | **Rollback** | Both slots hold A15. Switching is proven and the panel was deliberately moved to slot `_b` as the last action before the wall closed. The **idle slot's current bootability** is a hash comparison, not a recent boot. See `docs/04-android15-port.md` §Rolling back. |
 | **Bluetooth audio** | Bring-up baud is 115200 — enough to connect, not enough for A2DP. Not being chased. Pairing, range and accessory audio need a real peer and have not been tested. |
 | **WebView** | Chromium 74 (2019); modern web UIs fail. Mitigated with native apps and Chrome's own engine. Not replacing the WebView provider on a sealed panel. |
