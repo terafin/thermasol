@@ -141,7 +141,51 @@ is a bare `URL.openStream()` with no status check, no length check, no headers, 
 
 A parse failure anywhere also yields a silent empty list — there is no logging on that path.
 
-## The server
+## Step 1 — get the APKs (and verify them)
+
+`scripts/store-mirror/fetch_bootstrap.py` pulls the apps that take a stock panel to a
+persistent shell, and **verifies each one**:
+
+```sh
+./scripts/store-mirror/fetch_bootstrap.py --out ./store \
+    --apksigner /path/to/apksigner.jar --aapt /path/to/aapt
+```
+
+| Package | App | Why it is in the set |
+|---|---|---|
+| `com.termux` | Termux | The shell. Everything depends on it. |
+| `com.termux.boot` | Termux:Boot | Runs `~/.termux/boot/*` at boot — what makes access survive a reboot. |
+| `com.termux.api` | Termux:API | Android APIs (clipboard, notifications, sensors) for shell commands. |
+| `com.termux.widget` | Termux:Widget | Home-screen shortcuts to scripts. |
+
+What "verified" means, per APK:
+
+| Check | Tool | Failure mode it catches |
+|---|---|---|
+| Signature verifies and the cert SHA-256 is F-Droid's | `apksigner` | a substituted or intercepted APK |
+| Package name **inside** the APK matches the filename | `aapt` | a mislabelled file served under the wrong name |
+| SHA-256 recorded, and compared against a pin when one exists | — | silent version drift |
+
+A pin mismatch deletes the file and fails the run. Add pins to `PINS` once you have checked a
+digest yourself. Output is `apks/`, `icons/`, `bootstrap.json` (provenance and digests), and a
+`meta.json` that `serve_store.py` reads automatically, so the listing gets real app names and
+versions with no extra step.
+
+**Deliberately not fetched:**
+
+- **NewPipe** — it was on the first mirror, but it is not part of the access stack and its APK
+  does not carry the F-Droid repository certificate (signer `964dfa41…`, not `228fb2cf…`).
+  Serving an APK whose provenance we cannot confirm would break the one invariant this script
+  exists to enforce.
+- **Aurora Store** — no evidence it was ever the install vehicle, and it is unnecessary: the
+  panel's own store installs whatever this mirror lists.
+- **A standalone sshd or adb binary** — Termux supplies both. A second copy is a second thing
+  to trust for no gain.
+
+Verified 2026-11-02: all four fetch, pass the F-Droid cert check, and pass the package-name
+check.
+
+## Step 2 — serve them
 
 `scripts/store-mirror/serve_store.py`:
 
@@ -217,6 +261,7 @@ answers both names with it.
 
 ## The end-to-end recipe
 
+0. `fetch_bootstrap.py --out ./store` — get and verify the APKs (Step 1).
 1. Override DNS for `thermatouch.tsolup.com` → your server. A UniFi local-DNS A record works and
    is what was used; a router/dnsmasq/pihole entry works the same way.
 2. Serve a listing containing Termux and Termux:Boot, with the APKs at the derived path.
@@ -230,6 +275,10 @@ answers both names with it.
 
 ## Safety
 
+- `fetch_bootstrap.py` refuses anything not signed by F-Droid's repository certificate, and
+  refuses an APK whose internal package name does not match its filename. Do not bypass that by
+  copying files into `apks/` by hand — if you do, you are serving unverified binaries to a
+  root-capable device.
 - Serve only APKs you built or trust. This is a root-capable device with no signature checking
   on the download path.
 - Android still enforces package signatures at install time, so you cannot substitute a
