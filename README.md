@@ -29,6 +29,8 @@ docs/
   08-lessons.md           What I would do differently
   09-install-from-stock.md  Stock panel -> Android 15, start to finish
   10-known-pitfalls.md    Flat "do not do this" list
+  11-vendor-store-mirror.md  The vendor app store, served from our own host
+  12-apps-and-control.md  Installed apps, the local control app, adb UI recipes
 build/                    How OUR Android 15 image is assembled, + its hashes
 devicetree/               Our device-tree additions (ThermaSol port + BT UART2)
 patches/                  Our HAL + vendor-APK patches

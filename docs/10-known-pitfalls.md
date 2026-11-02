@@ -33,6 +33,13 @@ wrong, or from an artifact that proves it would.
 | Re-derive AVB salt/props/size | Copy them out of `info_image` on the baseline, or the root digest changes silently. |
 | Pack with `mkfs.erofs` without an empty-root `fs_config` entry | The pack fails. |
 | "Fix" `--follow_chain_partitions` on `verify_image` | It is only meaningful when a chain exists — and the assertion right above it forbids one. |
+| Write the running slot | Absolute rule — see [02-access.md](02-access.md) and issue #23 for the one bounded exception that was ever taken. |
+| Trust a `mmc dev 1 1` habit | `mmc dev` takes **exactly one argument**; `mmc dev 1 1` selects the boot0 hardware partition and **destroys the bootloader**. |
+| Retype the decimal `mmc read` echo | `mmc part` prints hex with no `0x`; `mmc read` parses hex but **echoes decimal**. `738004` echoes as `block # 7569412`. |
+| `reset` after `setenv` to "apply" it | `reset` reloads U-Boot's environment from eMMC and **discards the RAM change**. Use `run bootcmd`. |
+| Assume the boot.img cmdline reaches the kernel | This U-Boot **ignores it**. Diagnostic flags only work via U-Boot `bootargs`. |
+| Read a dead console as evidence the CPU is dead | `console=ttymxc3` precedes ramoops in the console list, so a stuck UART write wedges `console_flush_on_panic`. |
+| Advance a TFTP chunk loop by a fixed `0x20000` | It pushes `dtbo_b` 60 MiB into `boot_a` and `boot_b` 16 MiB into `system_a`, **silently**. Compute sectors per partition from the panel's own GPT and assert `lba + sectors - 1 <= partition_end`. |
 | Reuse old hardcoded flash scripts | Two inherited scripts were recorded as defective (`deploy-slot-a.sh` writes a **0-byte** blob; a handoff wrapped an ELF as a shell script). |
 
 ## Tooling and diagnosis
@@ -44,4 +51,8 @@ wrong, or from an artifact that proves it would.
 | Believe "the tests never compiled" from an empty log | Check the deployed artifact and run it. |
 | Count a killed run as a RED | Only a controlled assertion failure is a RED. |
 | Trust a chip identity from a bootarg or DT string | The kernel probe decided BCM4335C0, not the BCM43430 bootarg. |
-| Assume `adb root` is safe | With a Termux adb **server** running, it kills `adbd` for the whole boot (`Address already in use`, then `ro.init.updatable_crashing=1`). |
+| Assume `adb root` is safe | Two separate failures. (a) A Termux adb **server** collides: `Address already in use`, then `ro.init.updatable_crashing=1`. (b) `adb root` itself sets `service.adb.root=1`, after which `adbd` **aborts on every start** and crash-loops with nothing on 5555. Recover without root: `setprop service.adb.root ""; setprop ctl.restart adbd`. |
+| Trust `su` inside Termux or an app context | It resolves to **Termux's own stub** ("Termux does not supply tools for rooting", non-zero exit). Every `su 0 …` in a Termux-spawned hook is dead. `init` cannot exec `su` directly either (policy denial, `-92`). Use an `init → shell → su` route. |
+| Run `dumpsys SurfaceFlinger`, `dumpsys window`, `logcat -d`, `ps -A --sort=-RSS`, or repeated `screencap` | Each is followed within ~50–70 s by load 19–22 and ~70 s of dead adb — twice needing a breaker cycle. Single spaced reads only; sample `/proc/pressure/memory` instead of `ps`. |
+| Use `on_input`/injected swipes near ThermaSol's power control | An injected swipe hit the vendor power button, which called `killExternalApps` and left owner apps disabled. The panel healer re-enables them every 20 s for this reason. |
+| Let `watchdogd` go unpetted | `/system/bin/watchdogd 10 50` must stay alive; **an unpetted WDT resets the panel ~60 s later.** |

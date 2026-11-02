@@ -76,13 +76,79 @@ mechanism, because there is no USB.
 Useful variables live in the eMMC **user area at 0x400000**, not in any A/B slot — so
 flashing a slot does not touch them. That is where the CMA fix lives.
 
+### Two commands that destroy the device
+
+**`mmc dev 1 1` destroys the bootloader.** `mmc dev` takes **exactly one argument**. A second
+argument selects the boot0 hardware partition, and from there a write lands on the bootloader
+itself. Type `mmc dev 1` and nothing else.
+
+**`reset` after `setenv` discards the change.** U-Boot reloads its environment from eMMC on
+`reset`, so a transient `setenv` is lost. To boot with transient values use `run bootcmd`.
+
+### Reading block numbers
+
+`mmc part` prints partition offsets in **hex with no `0x` prefix**. `mmc read` **parses hex but
+echoes decimal**:
+
+```
+u-boot=> mmc read 0x48000000 738004 2000
+MMC read: dev # 1, block # 7569412, count 8192: 8192 blocks read: OK
+                    ^^^^^^^ decimal echo of 0x738004
+```
+
+`738004` reads back as `block # 7569412`. **Never retype the echo** — you will write to a different
+place. Copy the hex you typed.
+
+### The misc / A-B metadata write
+
+`misc` at byte offset `0x800` holds 32 bytes: magic `\0AB0`, a version, a slot record, and a
+CRC32 of the first 28 bytes stored **big-endian at offset 28**.
+
+Write it with per-word `mw.l` and **always** bracket the write with `md.b`:
+
+```
+u-boot=> md.b 0x... 20        # BEFORE — record this
+u-boot=> mw.l 0x... <word>
+...
+u-boot=> md.b 0x... 20        # AFTER — must differ only where you intended
+```
+
+Getting the CRC wrong is not a brick, but it does mean the bootloader ignores the record.
+
+### CMA and the no-UART reversal
+
+The vendor U-Boot injects a `cmaargs` value that overrides the device tree. To neutralise it:
+
+```
+u-boot=> setenv cmaargs 'echo cma: using device-tree default'
+u-boot=> saveenv
+```
+
+To undo that **without a UART**, corrupt the saved environment so U-Boot falls back to defaults
+(back to 800 M):
+
+```sh
+dd if=/dev/zero of=/dev/block/mmcblk2 bs=4096 seek=1024 count=1
+```
+
+This is a deliberate bad CRC, not a repair. Understand it before you use it.
+
 ## Things that will bite you
 
-- **`adb root` while a Termux adb *server* is running kills `adbd` for the whole boot.**
-  The server holds the smartsocket listener; `adbd` aborts, and init latches
-  `ro.init.updatable_crashing=1` and stops retrying. Symptom: nothing listening on 5555 at
-  all, port scans empty. Fix: `su 0 kill -9 <termux adb pid>` then
-  `setprop ctl.restart adbd`.
+- **`adb root` crash-loops `adbd` on this build.** It sets `service.adb.root=1`, after which
+  `adbd` aborts on every start: nothing on 5555, `[init.svc.adbd]: [restarting]`. Fix without
+  root, from SSH or Termux: `setprop service.adb.root ""; setprop ctl.restart adbd`.
+- **Separately, a Termux adb *server* racing `adbd` produces the same empty-port symptom.** The
+  server holds the smartsocket listener; `adbd` aborts and init latches
+  `ro.init.updatable_crashing=1`. Fix: `su 0 kill -9 <termux adb pid>`, then
+  `setprop ctl.restart adbd`. Check which of the two you have before acting.
+- **`su` inside Termux or an app context is a stub.** It is Termux's own binary — "Termux does
+  not supply tools for rooting" — and exits non-zero. Every `su 0 …` in a Termux-spawned hook
+  is therefore dead. `init` cannot exec `su` directly either (policy denial, `-92`); a startup
+  script needs an `init → shell → su` route.
+- **`dumpsys SurfaceFlinger`, `dumpsys window`, `logcat -d`, `ps -A --sort=-RSS` and repeated
+  `screencap` kill the panel** for ~70 s each (load 19–22), twice requiring a breaker cycle.
+  Single spaced reads only.
 - **`grep` and `find` are shell functions in this environment and fail quietly.** Run the
   binaries directly (`command grep`, `command find`) or do the work in Python. A silent
   zero-result `grep` has produced false conclusions more than once.

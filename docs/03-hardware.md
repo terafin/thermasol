@@ -58,8 +58,42 @@ disabled, and `mxt_interrupt()` runs from a 20 ms `delayed_work`. With
 **Do not pull the CHG pin low to test it** — that caused a board reset.
 
 Input events use `ABS_MT_POSITION_X/Y` in the range 0..4095, increasing downward for Y, plus
-a separate `ABS_X/ABS_Y` axis stream. **`input tap` / `input swipe` are unreliable on this
-device**; use `sendevent` against `/dev/input/event1` when you need to synthesize input.
+a separate `ABS_X/ABS_Y` axis stream.
+
+**Synthesizing input.** `adb shell input tap` / `input swipe` / `input keyevent` work and were
+used hundreds of times during the app bring-up. An earlier version of this page called them
+unreliable; that was wrong and has been removed. Use `input` first.
+
+`sendevent` is the fallback for when `input` is unavailable (a broken `InputManager`) or when
+you need a raw protocol-B stream. Sequence for a tap on `/dev/input/event1`:
+
+```sh
+# down
+sendevent /dev/input/event1 3 57 <id>    # ABS_MT_TRACKING_ID
+sendevent /dev/input/event1 3 53 <x>     # ABS_MT_POSITION_X
+sendevent /dev/input/event1 3 54 <y>     # ABS_MT_POSITION_Y
+sendevent /dev/input/event1 1 330 1      # BTN_TOUCH down
+sendevent /dev/input/event1 3 0 1        # SYN_REPORT
+sendevent /dev/input/event1 0 0 0
+# up
+sendevent /dev/input/event1 3 57 -1
+sendevent /dev/input/event1 1 330 0
+sendevent /dev/input/event1 3 0 0
+sendevent /dev/input/event1 0 0 0
+```
+
+`ABS_MT_SLOT` is 47 when you need more than one contact. A single-axis
+`sendevent /dev/input/event1 3 0 362` moves the separate `ABS_X` axis and is enough to wake the
+panel, not to tap a widget.
+
+**Reading the UI instead of guessing coordinates.** `uiautomator dump` gives you the bounds:
+
+```sh
+adb shell 'su 0 sh -c "uiautomator dump /data/local/tmp/tt-fw.xml >/dev/null; cat /data/local/tmp/tt-fw.xml"'
+```
+
+then parse `bounds="[x1,y1][x2,y2]"` and tap the centre. **The `>/dev/null` on the dump is
+load-bearing** — the path chatter on stdout corrupts naive parsing.
 
 ## Audio
 
@@ -100,6 +134,35 @@ Known-good commands (verified on the bus, `0x131`):
 unit** (`slsr_is_active = 0`). Every `slsr_*` command is a no-op here. The live device is the
 HVLSR (`hvlsr_is_active = 1`, firmware 7). This single fact explains hours of confusion.
 
+### SELinux: the grant that is easy to miss
+
+Android 15 grants `can_socket` only to `hal_can_socketcan`. The vendor service
+`com.thermasol.thermatouchservice` runs as `system_app` and is therefore **denied** until a
+vendor policy exists for it. The fix is a policy copied from `hal_can_socketcan.te` **minus
+`net_admin`**, granting the ioctl xperms:
+
+| xperm | ioctl |
+|---|---|
+| `0x8913` | `SIOCGIFFLAGS` |
+| `0x8914` | `SIOCSIFFLAGS` |
+| `0x8933` | `SIOCGIFINDEX` |
+
+Only `vendor` and `vbmeta` change. A missing `0x8933` shows up as the service spinning on a
+denied `read` at ~52 000 denials/second, burning a core and overwriting the kernel log.
+
+### `can0` first-contact decision table
+
+The service **raises `can0` itself**. A hand-run `ip link set can0 up` leaves state that
+invalidates everything you measure afterwards. Read, don't touch:
+
+| State | Meaning |
+|---|---|
+| `can0` UP | the path works |
+| DOWN, service running | the socket was refused (policy or bind failure) |
+| DOWN, and the service PID keeps changing | it is dying inside `read_can` |
+
+`ERROR-ACTIVE` with all-zero RX/TX counters proves nothing on its own.
+
 Subsystems behind CAN:
 
 | Prefix | Device |
@@ -128,6 +191,30 @@ Ethernet-only.
 - **Not PoE.** The switch port has `poe_enable=False`. A network-side power cycle is
   impossible.
 - The only remote power action is a breaker trip, i.e. a human.
+
+### Memory
+
+2 GiB, carrying roughly 1.5 GB of Google processes. Free non-CMA RAM sits at 40–140 MB while
+`CmaFree` oscillates between 0.4 and 28 MB against a 320 MB pool.
+
+**Judge memory pressure by `CmaFree` rising and `MemFree > ~200 MB`. Never judge by
+`MemAvailable`** — it reads healthy while the panel is about to stall.
+
+Why the usual knobs don't help here:
+
+- **LMK is misprovisioned with EVK props** (`ro.lmk.upgrade_pressure=80`,
+  `downgrade_pressure=95`, `sys.lmk.minfree_levels=18432:0,…`). mem_pressure around 98.7% sits
+  above the 95 threshold, so **lmkd holds off while swap goes unused** — a transient deadlock.
+- **Swappiness is irrelevant on 4.19**: `get_scan_count` returns `SCAN_FILE` whenever
+  `inactive_file >> active_file`, so the knob does not drive reclaim. One session removed a
+  swappiness-100 change on that basis and then reinstated it as an operator-approved exception;
+  treat it as set, not as a fix.
+- **~600 MB sits idle in CMA** while the movable list thrashes, because the allocator only falls
+  back to CMA when it is empty.
+
+The reversible lever is `panel-stabilize.sh`: it disables 8 Google packages and writes the
+`pm enable --user 0` receipt **before** acting, refusing to run if that receipt cannot be
+written. See issue [#16](https://github.com/terafin/thermasol/issues/16).
 
 ## Known hardware-adjacent traps
 

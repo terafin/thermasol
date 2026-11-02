@@ -4,3 +4,6 @@
 # Our build documentation is prose, not build output
 !build/
 !build/README.md
+
+__pycache__/
+*.pyc

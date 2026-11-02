@@ -1,115 +1,67 @@
 # 07 — Open issues
 
-Honest list. These are **not** fixed.
+**The live list is the GitHub issue tracker:**
+<https://github.com/terafin/thermasol/issues?q=is%3Aissue+is%3Aopen>
+
+Issues are the place to argue, claim, and close things. This page is the human-readable
+summary — what is broken, how badly, and what "fixed" would mean. If the two ever disagree,
+**the tracker wins**, and the discrepancy is a bug in this file.
+
+Labels: `bug` · `audio` · `hardware` · `performance` · `drm` · `documentation` ·
+`needs-operator` (someone has to physically be there) · `unverified` (written down, not proven).
 
 ---
 
-## 1. The ceiling speaker hisses, and nothing we control silences it
+## Unmet acceptance criteria
 
-**Symptom.** Continuous hiss from the ceiling speaker, audible in the attached bedroom.
-Display dimmed, nothing playing — still hissing. Operator reports stock silenced it "at sleep".
+These are the reason the project is not finished. Everything else is a real defect that does
+not block accepting the panel.
 
-**What was ruled out, with evidence:**
+| # | Issue | Why it blocks acceptance |
+|---|---|---|
+| 1 | [Ceiling speaker hiss cannot be silenced](https://github.com/terafin/thermasol/issues/1) | Audible from the bedroom. Operator reported stock silenced it at sleep. |
+| 8 | [Physical behaviours uncertified](https://github.com/terafin/thermasol/issues/8) | Speaker silence, light output and full-panel touch are **commands sent**, never observed by a human. Only the operator can close this. |
+| 9 | [Rollback story is stale](https://github.com/terafin/thermasol/issues/9) | Following the docs' own recovery path would strand a sealed panel. Needs fixing before the wall closes. |
 
-| Test | Result |
-|---|---|
-| Panel audio chain idle (codec DAPM bias off, SAI5 clock disabled, AudioFlinger standby, no PCM) | hiss unchanged |
-| Nine distinct CAN controls (standby, HV mute, music off, BT power off, BT disconnect, master vol 0, source 0, codec headphone off, codec line out off) — each verified on the bus | hiss unchanged |
-| Android Bluetooth disabled | hiss unchanged |
-| ~40 s of total host CAN silence (vendor app + service frozen) | hiss unchanged |
-| **Full SoC suspend** (`echo mem`), panel dark and off the network | **hiss unchanged** |
-| Codec actively driving digital silence into the amp | hiss unchanged |
+**The hiss in one paragraph.** Nine distinct CAN controls, the whole Android audio chain idle,
+Android Bluetooth off, ~40 s of total host CAN silence, and finally **full SoC suspend** — the
+hiss survived all of it. The panel emits nothing, so the noise is generated inside the ceiling
+unit. `slsr_is_active = 0`: the legacy SLSR device is absent and every `slsr_*` command is a
+no-op. The live device is HVLSR (firmware 7), and the vendor publishes exactly one 2021
+firmware image, already installed. Next step is a power cycle of the speaker's **own** supply.
 
-**What that means.** The panel emits nothing, and the noise survives the panel being
-completely suspended. The hiss is generated **inside the ceiling unit**.
+## Known defects, not acceptance blockers
 
-**Structural finding that explains much of the confusion:** `slsr_is_active = 0` — the legacy
-SLSR device **is not present on this installation**. Every `slsr_*` command is a no-op,
-including `slsr_voice_mute` (which transmits nothing at all). The live device is the HVLSR
-(`hvlsr_is_active = 1`, firmware 7).
+| # | Issue | One line |
+|---|---|---|
+| 14 | [CAN sepolicy grant](https://github.com/terafin/thermasol/issues/14) | A15 grants `can_socket` only to `hal_can_socketcan`; the vendor service is `system_app`. Fixed on the device, undocumented. |
+| 15 | [`adb root` crash-loops adbd](https://github.com/terafin/thermasol/issues/15) | Plus: from Termux, `su` is a stub that does nothing. |
+| 16 | [Memory-pressure model](https://github.com/terafin/thermasol/issues/16) | Judge by `CmaFree`, never `MemAvailable`. Reversible debloat exists. |
+| 17 | [Boot-hook supervision](https://github.com/terafin/thermasol/issues/17) | **An unpetted watchdogd resets the panel in ~60 s.** Live hazard. |
+| 18 | [UI recipes / wrong `input tap` claim](https://github.com/terafin/thermasol/issues/18) | The doc says `input` is unreliable; it was used hundreds of times successfully. |
+| 19 | [`ttaudiosource` interface](https://github.com/terafin/thermasol/issues/19) | The actual lever used in the hiss work is undocumented. |
+| 20 | [App workstream](https://github.com/terafin/thermasol/issues/20) | `ttvolume`, app entry points, screencap — no home in the doc set. |
+| 21 | [Image content gates](https://github.com/terafin/thermasol/issues/21) | Integrity passed while the image was content-wrong. |
+| 23 | [Writing the running slot](https://github.com/terafin/thermasol/issues/23) | The rule is absolute; the repair that worked was a bounded exception. |
 
-**Firmware.** The vendor publishes exactly one HydroVive image
-(`firmware/hydrovive/latest.bin`, 47,676 bytes, dated 2021-09-21). The panel reports **7.0.0**.
-There is no newer speaker firmware to install. The app's own *System updates* entry opens the
-updater and immediately closes — nothing to do. The `esv_*`/DSV-4000 controller firmware that
-*is* available is irrelevant: `esv_get_is_dongle_present = false`, that device isn't here.
+## Won't fix, or needs hardware
 
-**Not attempted.** Flashing the DSV-4000 firmware anyway (wrong device), or a bus-level tap at
-the speaker (needs hardware access to the ceiling unit).
+| # | Issue | Position |
+|---|---|---|
+| 2 | [Deep suspend never wakes](https://github.com/terafin/thermasol/issues/2) | Not fixable without a real wake source. Never try it. Breaker recovery only. |
+| 3 | [Wi-Fi physically destroyed](https://github.com/terafin/thermasol/issues/3) | `wontfix`. Ethernet only. No more soldering is sanctioned. |
+| 4 | [Bluetooth audio throughput](https://github.com/terafin/thermasol/issues/4) | 115200 connects but cannot carry A2DP. Needs a higher baud, and a real peer. |
+| 5 | [Home Assistant is heavy](https://github.com/terafin/thermasol/issues/5) | ~82% of four cores. A lighter dashboard beats any code change. |
+| 6 | [WebView is Chromium 74](https://github.com/terafin/thermasol/issues/6) | Modern web UIs fail. Mitigated with native apps. |
+| 7 | [Apple TV sign-in](https://github.com/terafin/thermasol/issues/7) | Deferred by the operator. |
+| 10 | [Heavy adb probes kill the panel](https://github.com/terafin/thermasol/issues/10) | ~70 s of dead adb. Single spaced reads only. |
+| 11 | [TFTP chunk loop corrupts partitions](https://github.com/terafin/thermasol/issues/11) | Documented shape is missing the per-partition sector counts. |
+| 12 | [U-Boot console mechanics](https://github.com/terafin/thermasol/issues/12) | `mmc dev 1 1` destroys the bootloader. `reset` discards `setenv`. |
+| 13 | [Boot-debug methodology](https://github.com/terafin/thermasol/issues/13) | U-Boot ignores the boot.img cmdline. A dead console proves nothing. |
+| 22 | [Store mirror untested on device](https://github.com/terafin/thermasol/issues/22) | Server tested locally; the panel's real APK request line is unknown. |
 
-**Next step, if it is ever chased again:** power-cycle the **speaker's own** supply (separate
-from the panel's) and listen. If the hiss clears, it is a stuck amp state and the fix is a
-power path to that unit. If it does not, it is a hardware/firmware fault and needs ThermaSol.
+## Not a software issue
 
----
-
-## 2. Deep suspend must never be used
-
-`echo mem > /sys/power/state` **never wakes.**
-
-- No RTC or alarm wake source exists: `/dev/rtc*` and `/dev/alarm` are absent.
-- The maXTouch device is registered as a wake source (`device/power/wakeup = enabled`) but
-  its IRQ does not bring the SoC out of `mem`.
-- Ethernet is not a wake source, so ADB and SSH are gone too.
-- Recovery is the mains breaker.
-
-This was learned the hard way — see [08-lessons.md](08-lessons.md). It is why the idle policy
-uses backlight-0 plus a `SCREEN_BRIGHT` wake lock rather than real sleep.
-
----
-
-## 3. Wi-Fi is physically destroyed
-
-Damaged by soldering instructions given by a previous agent. There is no Wi-Fi path and no
-further soldering is sanctioned. **Ethernet only.** This is not a software problem and should
-not be attempted as one.
-
----
-
-## 4. Bluetooth audio throughput
-
-Bring-up baud is **115200**. That is enough to connect and stay connected; it is not enough
-for A2DP audio. A higher-baud configuration is a separate piece of work, not started.
-
-Related, untested: pairing a real peer, RF range, and audio through an accessory. The stack
-discovers devices (`HCI_SUCCESS`) and never pairs with an unknown device on purpose.
-
----
-
-## 5. Home Assistant is heavy
-
-The main HA dashboard runs ~82% of four-core capacity on this 2 GiB SoC, with WebView
-tile-memory warnings and a duplicate custom-card registration error. It *works*; it is not
-pleasant. A lighter dashboard would help more than any code change.
-
----
-
-## 6. Chrome / WebView GPU incompatibility
-
-The stock WebView is Chromium 74 (2019) and the GPU stack does not support it properly.
-Modern web UIs fail in it. Mitigation used: native apps wherever possible, and a
-Chromium-based browser of its own for the rest.
-
----
-
-## 7. Apple TV sign-in
-
-Deferred by the operator; not started. Netflix DRM and Plex both work, and native YouTube
-works.
-
----
-
-## 8. Physical things not certified
-
-- Speaker silence and light output are **commands sent**, not observed by a human. Only the
-  operator can confirm them.
-- The waterproof seal was applied by the operator; nothing here certifies it.
-- Long-term thermal behaviour under sustained steam is not characterised.
-
----
-
-## 9. Nothing here is ThermaSol-approved
-
-The vendor app has been modified (two UI-only methods). The HAL binary was replaced. The
-device tree was changed. ThermaSol has not been asked, and would not bless it. If the panel
-ever needs warranty service, this is entirely non-stock.
+**Nothing here is ThermaSol-approved.** The vendor app has two UI-only methods patched, the HAL
+binary was replaced, and the device tree was changed. ThermaSol has not been asked and would not
+bless it. Warranty service would find a non-stock device.

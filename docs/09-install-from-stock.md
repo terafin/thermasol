@@ -45,6 +45,16 @@ done
 Then `adb pull` each one off the device and record `sha256sum` for both copies. Those files
 are your rollback. Store them somewhere that is not the panel.
 
+> **Verify the backup actually boots before you rely on it.** On this unit, Android 10 came up
+> with **no ethernet carrier** — the A10 overlay's `regulator-eth-phy` lacks
+> `regulator-always-on`/`boot-on`, so the kernel disables the PHY at 3.554 s and there is never
+> a `Link is Up`. A "successful" rollback to A10 would have been a dark panel with no network
+> and no way in. See [04-android15-port.md](04-android15-port.md) §"Rolling back" and issue
+> [#9](https://github.com/terafin/thermasol/issues/9).
+>
+> Test the rollback path *before* the wall closes, or accept that your real safety net is the
+> A15 slot you did not touch.
+
 ---
 
 ## Stage 1 — Get a shell on stock

@@ -37,11 +37,28 @@ payloads found no other `start adbd`.
   2026-09-13 session, and `00-restore-access` sets `service.adb.tcp.port 5555` and calls
   `ctl.restart adbd`.
 
-**What is NOT verified:** there is **no install record** in any artifact — no `pm install`,
-no dated download of Termux or Termux:Boot. The sequence *Aurora Store → Termux →
-Termux:Boot → sshd* is a **plausible reconstruction** from the verified end state, not
-something the evidence proves step by step. Treat it as "this is almost certainly how it was
-done", not as documented history.
+**Now verified, from the 2026-09-13 session log.** The route was **not** Aurora Store:
+
+1. A **UniFi gateway local-DNS A record** pointed `thermatouch.tsolup.com` at a VPS the
+   operator controls (`104.168.102.110`, host `zeal`).
+2. A plain `python3 http.server` there served a hand-written `index.json` / `index-10.json`
+   listing Termux, plus the APK at `/tmp/paneldata/termux.apk` (from F-Droid, 114,920,926 B).
+3. The panel fetched both listings and then the APK, and **Termux installed from ThermaSol's own
+   store screen** — operator: `it's installed`, then `i have a shell`.
+4. `sshd` came up on 8022 from inside Termux.
+5. **Termux:Boot was installed later over `adb`**, once that shell existed — it did not come
+   through the store.
+
+So the sequence is *DNS override → mirror → Termux → sshd → Termux:Boot via adb*, and it is
+recorded step by step. The full recipe is in
+[11-vendor-store-mirror.md](11-vendor-store-mirror.md) §"What was actually done".
+
+**What is still unverified:** Aurora Store does appear as a launcher entry in the 2026-09-13 UI
+dump, but there is no evidence it was the installation vehicle for anything above. It was
+installed at some point by some route; that route is not recorded.
+
+**Loose end:** no delete/revert of that DNS record appears in the log. It may still be live —
+check the UniFi local-DNS table.
 
 What *is* documented is that the panel was **rooted and reachable before any firmware was
 ever touched**, using only apps the stock OS could install. That is the part that matters, and
