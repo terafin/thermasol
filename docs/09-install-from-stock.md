@@ -59,12 +59,28 @@ are your rollback. Store them somewhere that is not the panel.
 
 ## Stage 1 — Get a shell on stock
 
-Stock has side-loading enabled and **no adb**. The way in is the panel's **own app store**: it
-fetches an HTTP listing from a hostname we can redirect, so if you point that hostname at a
-machine you control, the panel installs whatever you put there.
+The stock panel has **no adb** (port 5555 refused), and a full TCP scan of it returns exactly
+three ports: `3500`, `57344`, `57345`. There is no USB, no shell, and no vendor mechanism to
+lean on.
 
-This is the route that was actually used. There is no Play Store client involved and no Google
-account anywhere in it.
+The way in is the panel's **own app store**. It fetches an HTTP catalogue from a hostname that
+resolves through normal DNS — so point that hostname at a machine you control, and the panel
+installs whatever you put there.
+
+> **Do not expect a Play Store client to help.** This is the route that was actually used, and
+> it involved no store client and no Google account at any point.
+
+### 1.0 Find the panel
+
+Through the UniFi controller, not a subnet scan — the switch port is labelled, and the client
+record gives you the address:
+
+```
+"name": "Thermasol", "ip": "10.0.90.130", "is_wired": true, "mac": "f8:dc:7a:9c:9a:e4"
+```
+
+The panel's UPnP banner on port 3500 confirms what it is:
+`Server: Linux UPnP/1.0 Sonos/74.0-44280 (ACR_:freescale:dart_mx8mm:variscite)`.
 
 ### 1.1 Stand up the mirror
 
@@ -75,96 +91,171 @@ serves it in the shape the vendor app expects. Full runbook:
 ```sh
 ./scripts/store-mirror/fetch_bootstrap.py --out ./store \
     --apksigner /path/to/apksigner.jar --aapt /path/to/aapt
-./scripts/store-mirror/serve_store.py --root ./store --port 80 \
+sudo ./scripts/store-mirror/serve_store.py --root ./store --port 80 \
     --base-url http://<your-server-ip> --log
 ```
 
+Port 80 needs root. Serve from somewhere that survives the session — a `/tmp` process started
+with `nohup` works but dies with a reboot; a systemd unit does not.
+
+**The one thing a naive server gets wrong:** the panel requests `/index.json` **and then**
+`/index-10.json`. A server matching only `/index.json` returns 404 for the second and the store
+shows nothing. Both names must return the same catalogue.
+
 ### 1.2 Point the vendor hostname at it
 
-Add a local-DNS A record on whatever serves the panel's VLAN:
+The app's base URL is compiled in:
+
+```java
+private static final String BASE_URL = "http://thermatouch.tsolup.com/";
+```
+
+Add a **local-DNS A record** for that exact hostname. A UniFi gateway record is what was used;
+a router, dnsmasq or pihole entry is equivalent.
 
 ```
 thermatouch.tsolup.com.   A   <your-server-ip>
 ```
 
-A UniFi gateway local-DNS record is what was used; a router, dnsmasq or pihole entry does the
-same job. Confirm it with a query against **the resolver the panel uses**, not your own:
+Verify against **the resolver the panel uses**, not your own:
 
 ```sh
-dig +short @<panel's-gateway> thermatouch.tsolup.com
+dig +short @<panel's-gateway> thermatouch.tsolup.com      # must return your server
+```
+
+Via the UniFi MCP tool the arguments are nested and `confirm` is required — the flat form fails
+with `unknown arguments {enabled, key, ...}. Valid arguments: [confirm, record_data]`:
+
+```json
+{"confirm": true,
+ "record_data": {"enabled": true, "key": "thermatouch.tsolup.com",
+                 "record_type": "A", "ttl": 300, "value": "<your-server-ip>"}}
 ```
 
 ### 1.3 Install Termux from the panel's own store
 
-On the panel, open the app's **Settings → App Store** and install **Termux**.
+On the panel, open **Settings → App Store** and install Termux. It fetches the catalogue from
+your server and the APK from `<base>/apps/<package>.apk`.
 
-Launch it once so it unpacks its bootstrap. `--log` on the server shows the exact request lines
-if anything looks wrong.
+Confirm on your server log that the panel asked for it — the requests look like this:
 
-### 1.4 Get root and start sshd
+```
+172.125.77.119 GET /index.json
+  User-Agent: Dalvik/2.1.0 (Linux; U; Android 10; variscite Build/QD1A.190821.014.C2)
+  Host: thermatouch.tsolup.com
+172.125.77.119 GET /index-10.json
+```
 
-The stock build is `userdebug`, so `su` works. In Termux:
+Launch Termux once so it unpacks its bootstrap, then set up SSH **on the panel's own
+touchscreen** — install `openssh`, set a password, start `sshd` on 8022. The transcript cannot
+see this step; it happened on the device's screen and there is no record of the exact commands.
 
 ```sh
+# in Termux, on the panel
 pkg install openssh
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
-# paste your public key:
-cat > ~/.ssh/authorized_keys <<'KEY'
-ssh-ed25519 AAAA... your-key-here
-KEY
-chmod 600 ~/.ssh/authorized_keys
+passwd                     # this is the password you will sshpass with
 sshd                       # listens on 8022
 ```
 
-Make it survive reboots:
+### 1.4 Turn on adb — and the trap in it
+
+`adbd` is `disabled` in init, and on this build **two obvious approaches do not work**:
+
+| Attempt | Result |
+|---|---|
+| `setprop ctl.start adbd` / `ctl.restart adbd` | init logs `Received control message 'start' for 'adbd'` — and **5555 stays closed**. The restarted `adbd` takes the init USB socket. |
+| `stop adbd` / `start adbd` | `stop: must be root`. From a Termux shell you are uid 10108, not root. |
+
+Do not stop at the dmesg line. **Check the port, not the log.**
+
+`setprop` is not on Termux's `PATH` — call it by absolute path. Then start `adbd` **detached**,
+so it cannot claim the init socket and falls back to TCP:
 
 ```sh
-mkdir -p ~/.termux/boot
-cat > ~/.termux/boot/00-restore-access <<'SH'
-#!/data/data/com.termux/files/usr/bin/sh
-termux-wake-lock
-sshd
-SH
-chmod +x ~/.termux/boot/00-restore-access
+/system/bin/setprop service.adb.tcp.port 5555
+/system/bin/setprop persist.adb.tcp.port 5555
+setsid /system/bin/adbd >/dev/null 2>&1 &
 ```
 
-Now `ssh -p 8022 <panel>` works, and keeps working across reboots.
-
-### 1.5 Start adb
+A successful run logs `adbd E auth.cpp:240] Failed to get adbd socket: Success` — that failure
+**is the mechanism**. Confirm from your workstation:
 
 ```sh
-su 0 setprop ctl.start adbd
+adb connect <panel-ip>:5555
+adb -s <panel-ip>:5555 shell 'id; getprop ro.debuggable'
 ```
 
-`adb connect <panel-ip>:5555` should report a device with `uid=0(root)`.
+Root comes from `adb root` (`restarting adbd as root` → `uid=0(root)`), which works because the
+stock build is `userdebug` (`ro.debuggable=1`) with SELinux `Permissive`.
 
-### 1.6 Install Termux:Boot
+> **Do not leave `service.adb.root` set.** A leftover `adb root` flag makes `adbd` abort on
+> startup and crash-loop. Clear it with `setprop service.adb.root ""` before you rely on a
+> reboot coming back.
 
-Termux:Boot was **not** installed through the store on the original run. Now that adb works,
-push it:
+### 1.5 Install Termux:Boot, and the step everyone forgets
 
 ```sh
 adb install --no-incremental -r store/apks/com.termux.boot.apk
 ```
 
-It is what gives you *persistence* — without it the shell dies at the next reboot. Do not stop
-before this is on.
-
-Once it is installed, the boot hook from §1.4 runs on every boot and both `sshd` and access
-survive a reboot. **Revert the DNS record now** (§1.2) and confirm with `dig` that
-`thermatouch.tsolup.com` resolves to the real vendor address again.
-
-Add it to the same boot hook if you want adb back automatically.
-
-### 1.7 Verify you have what you need
+Then the boot hook, as the Termux user (`su` on this build takes a **uid**, not `-c`):
 
 ```sh
-ssh -p 8022 <panel> 'id; su 0 id'
-adb -P 5038 -s <panel-ip>:5555 shell 'su 0 id'
+A="adb -s <panel-ip>:5555"
+T=/data/data/com.termux/files
+E="HOME=$T/home PREFIX=$T/usr PATH=$T/usr/bin:/system/bin"
+$A shell "su 10108 env $E sh -c 'mkdir -p $T/home/.termux/boot'"
 ```
 
-Both must show root. If either fails, stop here — flashing without two working paths is how
-panels get bricked.
+`~/.termux/boot/00-restore-access`, mode 700:
+
+```sh
+#!/data/data/com.termux/files/usr/bin/sh
+export HOME=/data/data/com.termux/files/home
+export PREFIX=/data/data/com.termux/files/usr
+export PATH=$PREFIX/bin:/system/bin
+sshd 2>/dev/null
+/system/bin/setprop service.adb.tcp.port 5555
+/system/bin/setprop persist.adb.tcp.port 5555
+```
+
+**The forgot-step: a freshly installed Termux:Boot never runs until the package has been
+launched once.** Until then it is `stopped=true notLaunched=true`, and a boot-completed receiver
+will not fire for a stopped app. Arm it:
+
+```sh
+adb shell 'monkey -p com.termux.boot -c android.intent.category.LAUNCHER 1'
+```
+
+Without that, the hook is on disk, correct, and silently never executes.
+
+### 1.6 Verify a reboot comes back
+
+```sh
+adb -s <panel-ip>:5555 reboot
+# then poll — do not assume
+for i in 1 2 3 4 5 6; do sleep 20; printf 't+%ds: ' $((i*20));   for p in 5555 8022; do nc -z -w2 <panel-ip> $p && printf '%s OPEN  ' $p || printf '%s -  ' $p; done; echo; done
+```
+
+A real run from this phase:
+
+```
+t+65s: adb=down ssh=down
+t+85s: adb=up   ssh=down
+```
+
+`adbd` comes back on its own — that is what `persist.adb.tcp.port` plus the `userdebug` build get
+you. `sshd` did **not**, because Termux:Boot was still `notLaunched`; it needed the `monkey` arm
+in §1.5 first.
+
+**Do not move on until a reboot gives you 5555 back.** Everything after this depends on a shell
+that survives a restart — and Stage 2 reboots.
+
+### 1.7 Revert the DNS record
+
+Once Termux is installed you do not need the redirect. Delete it and confirm resolution returns
+to the real vendor address (`50.116.16.103`). A stale record silently breaks the panel's real
+store and firmware lookups, and the failure looks like an empty app grid, not an error.
 
 ---
 
@@ -225,35 +316,86 @@ adb shell 'getprop ro.boot.slot_suffix'
 If the panel is on `_a`, you write the `_b` partitions, and vice versa. **Never write the
 running slot.**
 
-### 2.3 Push and write, one partition at a time
+### 2.3 Write each partition, and verify by reading it back
+
+Two things will silently corrupt a slot if you skip them:
+
+1. **`system`/`vendor`/`product` ship as Android sparse images** (magic `3aff26ed`). `dd`-ing a
+   sparse file writes the **block map**, not the filesystem. Convert with `simg2img` first.
+2. **Read back exactly the bytes you wrote.** Hashing the whole partition against a file smaller
+   than the partition reports a meaningless mismatch.
 
 ```sh
-P=b            # the INACTIVE slot, from 2.2
+P=b                        # the INACTIVE slot
+T=/data/local/tmp
 for n in boot dtbo system vendor product vbmeta; do
-  adb push ${n}.img /data/local/tmp/${n}.img
+  src=${n}.img
+  # sparse -> raw, if needed
+  if [ "$(head -c4 "$src" | od -An -tx1 | tr -d ' \n')" = "3aff26ed" ]; then
+    simg2img "$src" $T/raw-$n.img && src=$T/raw-$n.img
+  fi
+  sz=$(stat -c %s "$src"); want=$(sha256sum "$src" | cut -d' ' -f1)
+  adb push "$src" $T/w.img
   adb shell "su 0 sh -c '
     test \"\$(getprop ro.boot.slot_suffix)\" != _$P || exit 9
-    dd if=/data/local/tmp/${n}.img of=/dev/block/by-name/${n}_${P} bs=4M conv=notrunc,fsync
-    blockdev --flushbufs /dev/block/by-name/${n}_${P}
-    sha256sum /dev/block/by-name/${n}_${P}
-  '"
+    dd if=$T/w.img of=/dev/block/by-name/${n}_${P} bs=1M conv=notrunc,fsync
+    sync'"
+  got=$(adb shell "su 0 sh -c 'echo 3 > /proc/sys/vm/drop_caches; \
+        head -c $sz /dev/block/by-name/${n}_${P} | sha256sum'" | cut -d' ' -f1)
+  [ "$got" = "$want" ] && echo "$n VERIFIED $got" || { echo "$n MISMATCH want=$want got=$got"; exit 1; }
 done
 ```
 
-**Compare every read-back hash** to the expected value before continuing. A mismatch means
-stop, do not reboot.
+That is the real shape from the deployment script — including the `test slot != _$P` guard and
+the `drop_caches` before the read-back, which matters because the page cache will otherwise hand
+you the bytes you just wrote.
 
-### 2.4 Arm the new slot and reboot
+**Gotchas that actually bit:**
 
-```sh
-adb shell 'su 0 sh -c "avbab arm-deploy ${P}; sync"'
-adb reboot
+- `declare -A WANT` listing only three partitions, under `set -u` → the script aborts after three
+  successful writes with `WANT[$part]: unbound variable`.
+- Two concurrent runs pushing to the same `/data/local/tmp/w.img` → spurious verify failures.
+  Serialise with `flock -n 9`.
+
+### 2.4 Arm the new slot
+
+The slot decision is **32 bytes at `misc` offset `0x800`**. There is no `avbab`, `avbctl` or
+`set_active` available on the stock Android 10 build — `set_active` is a *fastboot protocol*
+command, not a U-Boot shell command.
+
+Layout: magic `\0AB0`, version, then per-slot `{priority, tries, successful, rsv}` at bytes
+8–11 (A) and 12–15 (B), `last_boot` at 16, and a **CRC32 over bytes 0–27 stored big-endian at
+offset 28**.
+
+```python
+import struct, zlib
+b = bytearray(32)
+b[0:4] = b"\x00AB0"; b[4] = 1; b[5] = 0
+b[8:12]  = bytes([14, 0, 1, 0])       # A: priority 14, 0 tries, successful
+b[12:16] = bytes([15, 4, 0, 0])       # B: priority 15, 4 tries, not yet successful
+put = lambda o, v: struct.pack_into(">I", b, o, v)
+put(28, zlib.crc32(bytes(b[0:28])) & 0xffffffff)
+open("ab.bin", "wb").write(b)
 ```
 
-If `avbab` is not available on your stock build, write the A/B metadata directly — the record
-lives in `misc` at offset `0x800` (32 bytes: magic `\0AB0`, version 1, per-slot
-priority/tries/successful, CRC32 of the first 28 bytes at offset 28). Set the target slot's
-priority to 15 with 2 tries, and the current slot's to 14.
+Write only those 32 bytes — `seek=2048` is `0x800`, `conv=notrunc` keeps the rest of `misc`:
+
+```sh
+adb push ab.bin /data/local/tmp/ab.bin
+adb shell 'su 0 sh -c "
+  dd if=/data/local/tmp/ab.bin of=/dev/block/by-name/misc bs=1 seek=2048 conv=notrunc
+  sync
+  dd if=/dev/block/by-name/misc bs=1 skip=2048 count=32 | od -An -tx1"'
+```
+
+Expected read-back — `0e 00 01 00` for A, `0f 04 00 00` for B, CRC `06 ef 18 bb` on the end:
+
+```
+00 41 42 30 01 00 00 00 0e 00 01 00 0f 04 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 06 ef 18 bb
+```
+
+Then `adb reboot`.
 
 ### 2.5 First boot
 
@@ -269,6 +411,15 @@ not need you.
 **If the full 2 tries are consumed and the panel comes back on the old slot**, you are where
 you started and nothing is lost. That is the whole point of writing only the inactive slot.
 
+**But the guard does not always fire.** It only decrements when the bootloader gets far enough to
+record a failure. A kernel too large for U-Boot's decompress window is the case that bit this
+panel: over 32 MiB, U-Boot prints `Decompress kernel fail!` and jumps to USB fastboot, the try
+counter **never decrements**, and the panel sits dark indefinitely. On the console the record
+still read `B={15,4,0}` — unchanged, proving it never even counted.
+
+That is a recovery-by-console situation, and it is why §2.6 says verify the image content, not
+just its hash.
+
 **If the panel does not come back at all**, you are into `retrial`:
 
 | Path | Needs | When it works |
@@ -281,17 +432,32 @@ So on a sealed panel with no UART adapter, a panel that will not boot on *either
 recoverable by software. The guard is what stops you getting there: it will fall back unless
 the boot hangs in a way that never lets the tries decrement.
 
-### 2.6 Rebuild the access stack
+### 2.6 Check the image CONTENT before you trust a successful boot
 
-**A system flash wipes `/data`, and with it Termux, sshd, and every boot hook.** Until you
-redo Stage 1 on the new build, the panel has no remote access.
+Integrity passing does not mean the image is right. The dark panel that cost a day had passed
+every gate available — size, AVB layout, signature pubkey, CRC, boot header version, page size —
+and still would not boot. Two content defects:
 
-Do all of Stage 1 again on the Android 15 build — §1.1 through §1.6, including the redirect,
-the Termux install, the boot hook and Termux:Boot. Then verify with
-[`06-procedures.md`](06-procedures.md) §B.
+- **Kernel too big.** This U-Boot decompresses a non-raw kernel into a **32 MiB** window
+  (`fb_fsl_boot.c:47 DST_DECOMPRESS_LEN`). A kernel of 36,915,712 B overflows it, deterministically.
+  Check the uncompressed kernel size before flashing.
+- **Wrong device tree.** Flashing a `dtbo` from a different board tree produces a dark panel with
+  no network. Compare against the panel's own.
 
-> On the A15 build `adbd` still needs the same manual start; there is no vendor hook that
-> starts it. The boot script is the thing that makes this survivable.
+Check both *before* arming the slot — after arming, the only ways back are the guard (which may
+not fire) and the console.
+
+### 2.7 Rebuild the access stack
+
+**A system flash wipes `/data`, and with it Termux, sshd, and every boot hook.** Until you redo
+Stage 1 on the new build, the panel has **no remote access at all**.
+
+Redo §1.1 through §1.6 on the Android 15 build, then verify with
+[`06-procedures.md`](06-procedures.md) §B before you walk away.
+
+> On A15 `adbd` behaves differently from A10 — it starts itself at boot from
+> `persist.sys.usb.config=adb`, which is a persistent property and survives the `/data` wipe.
+> Observed across one 12-day uptime, not across a fresh reboot. **Verify it, do not assume it.**
 
 ---
 

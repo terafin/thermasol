@@ -285,9 +285,13 @@ restore as a safety net here.
 
 ### What the safety net actually is — and what it is not
 
-Be honest about this: **nobody has ever done a slot switch on this panel to prove the other slot
-boots.** The wall is closed, the panel works, and a deliberate switch experiment is not something
-to run on a sealed device. Treat the rollback as **untested**.
+Slot switching **has been done**, and recorded: the A15 image was written to slot B from a
+running Android 10 on slot A, armed by a raw 32-byte `misc+0x800` write, booted, and later the
+same image was written to slot A and booted there. Both slots have run Android 15.
+
+What has **not** been done since the wall closed is a deliberate switch on a working panel. The
+documented history is real; the current readiness of the idle slot is a hash comparison, not a
+recent boot.
 
 What you actually have, in decreasing order of confidence:
 

@@ -88,10 +88,13 @@ network and no way in.
 except UART (wall open) or the watchdog. See [04-android15-port.md](04-android15-port.md)
 §"Rolling back".
 
-**The switch itself has never been performed on this panel.** The wall is closed and the panel
-works; nobody is going to run a deliberate slot-switch experiment on it. The other slot's image is
-verified by hash only — not by booting it. Treat "roll back to the other slot" as a plan, not a
-proven safety net.
+**Slot switching has been performed**, with receipts: A15 written to B from A10 on A, armed by a
+raw `misc+0x800` write, booted and marked successful (`A{14,0,1} B{15,0,1}`); later A15 written to
+A and booted there. See [09-install-from-stock.md](09-install-from-stock.md) §2.4 for the record
+layout.
+
+What is not established is that the **idle slot right now** boots — it is verified by hash, not by
+a recent boot. On a working sealed panel, that distinction is the whole risk.
 
 The "one variable, no writes" rule is still correct when you set up a fresh port:
 [09-install-from-stock.md](09-install-from-stock.md) keeps a slot untouched for exactly that.

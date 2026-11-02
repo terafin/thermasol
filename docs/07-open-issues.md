@@ -34,7 +34,7 @@ issues just creates chores that never close.
 |---|---|
 | **Deep suspend** | Never wakes. No RTC or alarm wake source; the touch IRQ does not bring the SoC out. Recovery is the mains breaker. Never use `echo mem`. |
 | **Power cycling** | The panel is not PoE. The only remote power action is a breaker trip, i.e. a human. |
-| **Rollback** | Both slots hold A15, and the slot switch has **never been performed** on this panel — the other slot is verified by hash only. The wall is closed, so this will not be tested. Treat rollback as a plan, not a proven safety net. See `docs/04-android15-port.md` §Rolling back. |
+| **Rollback** | Both slots hold A15, and switching has been proven before the wall closed. The **idle slot's current bootability** is a hash comparison, not a recent boot. See `docs/04-android15-port.md` §Rolling back. |
 | **Bluetooth audio** | Bring-up baud is 115200 — enough to connect, not enough for A2DP. Not being chased. Pairing, range and accessory audio need a real peer and have not been tested. |
 | **WebView** | Chromium 74 (2019); modern web UIs fail. Mitigated with native apps and Chrome's own engine. Not replacing the WebView provider on a sealed panel. |
 | **Home Assistant dashboard** | ~82% of the SoC. That is a **dashboard** problem, not a panel defect — a lighter dashboard is the fix, and it belongs in the HA repo. |
