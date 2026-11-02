@@ -43,9 +43,10 @@ panel ever sees them.
 
 ## SSH
 
-Termux `sshd` on **port 8022**, key-based, no password. The private key lives on the
-workstation — it is **not** in this repo and cannot be recovered from it. If you are taking
-over this panel, you need that key before you need anything else here.
+Termux `sshd` on **port 8022**. The original installation used **password authentication** with a
+zero-byte `authorized_keys` — the setuid `su` lives at `/system/xbin/su` and Termux cannot run it,
+so a key-only setup has to be added deliberately. Set a key (`~/.ssh/authorized_keys`, mode 600)
+before you rely on this path; the key is **not** in this repo and cannot be recovered from it.
 
 ```sh
 ssh -p 8022 <panel-ip>
@@ -77,8 +78,12 @@ Interrupt autoboot to reach `u-boot=>`. From there you can `tftpboot` images int
 it needs no UART and no wall — see [06-procedures.md](06-procedures.md) §C. U-Boot is the
 fallback for a dark panel or a slot that will not boot.
 
-Useful variables live in the eMMC **user area at 0x400000**, not in any A/B slot — so
-flashing a slot does not touch them. That is where the CMA fix lives.
+Useful variables live in the eMMC **user area at 0x400000**, not in any A/B slot — so flashing a
+slot does not touch them.
+
+**The CMA allocation is not one of them.** CMA is sized by the device tree; the environment
+variable is not what sets it, and the `cmaargs` value in a saved environment is already the
+effective one.
 
 ### Two commands that destroy the device
 
@@ -86,8 +91,9 @@ flashing a slot does not touch them. That is where the CMA fix lives.
 argument selects the boot0 hardware partition, and from there a write lands on the bootloader
 itself. Type `mmc dev 1` and nothing else.
 
-**`reset` after `setenv` discards the change.** U-Boot reloads its environment from eMMC on
-`reset`, so a transient `setenv` is lost. To boot with transient values use `run bootcmd`.
+**`reset` after `setenv` discards the change.** This bootloader's saved environment does not
+survive a `reset` intact — it comes back from defaults. To boot with transient values use
+`run bootcmd`.
 
 ### Reading block numbers
 
@@ -119,23 +125,14 @@ u-boot=> md.b 0x... 20        # AFTER — must differ only where you intended
 
 Getting the CRC wrong is not a brick, but it does mean the bootloader ignores the record.
 
-### CMA and the no-UART reversal
+### CMA
 
-The vendor U-Boot injects a `cmaargs` value that overrides the device tree. To neutralise it:
+CMA size comes from the **device tree**, not the U-Boot environment. The value in a saved
+environment is whatever was last set; setting `cmaargs` does not override the DT node. With no
+`linux,cma` node present the fallback is **16 MiB** — not 800 M — and the framebuffer fails with
+`-ENOMEM`.
 
-```
-u-boot=> setenv cmaargs 'echo cma: using device-tree default'
-u-boot=> saveenv
-```
-
-To undo that **without a UART**, corrupt the saved environment so U-Boot falls back to defaults
-(back to 800 M):
-
-```sh
-dd if=/dev/zero of=/dev/block/mmcblk2 bs=4096 seek=1024 count=1
-```
-
-This is a deliberate bad CRC, not a repair. Understand it before you use it.
+To change CMA, change the DT node and rebuild `dtbo`.
 
 ## Things that will bite you
 
@@ -146,10 +143,12 @@ This is a deliberate bad CRC, not a repair. Understand it before you use it.
   server holds the smartsocket listener; `adbd` aborts and init latches
   `ro.init.updatable_crashing=1`. Fix: `su 0 kill -9 <termux adb pid>`, then
   `setprop ctl.restart adbd`. Check which of the two you have before acting.
-- **`su` inside Termux or an app context is a stub.** It is Termux's own binary — "Termux does
-  not supply tools for rooting" — and exits non-zero. Every `su 0 …` in a Termux-spawned hook
-  is therefore dead. `init` cannot exec `su` directly either (policy denial, `-92`); a startup
-  script needs an `init → shell → su` route.
+- **`su` from Termux is denied by SELinux, not missing.** `/system/xbin/su` is the real setuid
+  binary; Termux's domain is `untrusted_app` and the uid boundary rejects it. Run privileged
+  commands through `adb shell su 0 …` instead. Separately, `init` cannot exec `su` (policy
+  denial); a startup script needs an `init → shell → su` route.
+- **`-92` is `START_CLASS_NOT_FOUND`, not a `su` failure.** It means the app was launched before
+  user unlock.
 - **`dumpsys SurfaceFlinger`, `dumpsys window`, `logcat -d`, `ps -A --sort=-RSS` and repeated
   `screencap` kill the panel** for ~70 s each (load 19–22), twice requiring a power cycle.
   Single spaced reads only.

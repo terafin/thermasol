@@ -55,7 +55,8 @@ disabled, and `mxt_interrupt()` runs from a 20 ms `delayed_work`. With
 `poll_interval_ms=0` it is bit-for-bit stock behaviour.
 
 **Do not add a userspace poll loop.** It duplicates the driver's accounting and fights it.
-**Do not pull the CHG pin low to test it** — that caused a board reset.
+**Do not configure the touch pad as an input with a pull-down** — a weak input pull-down on
+`GPIO1_IO02` (`tt_touch_input.ko pad=0x196`) resets the board.
 
 Input events use `ABS_MT_POSITION_X/Y` in the range 0..4095, increasing downward for Y, plus
 a separate `ABS_X/ABS_Y` axis stream.
@@ -85,14 +86,15 @@ sendevent /dev/input/event1 0 0 0
 `sendevent /dev/input/event1 3 0 362` moves the separate `ABS_X` axis and is enough to wake the
 panel, not to tap a widget.
 
-**Reading the UI instead of guessing coordinates.** `uiautomator dump` gives you the bounds:
+**Reading the UI instead of guessing coordinates.** `uiautomator dump` gives you the bounds.
+**Run it directly as `su 0 uiautomator dump`** — wrapping it in `su 0 sh -c` produces empty dumps:
 
 ```sh
-adb shell 'su 0 sh -c "uiautomator dump /data/local/tmp/tt-fw.xml >/dev/null; cat /data/local/tmp/tt-fw.xml"'
+adb shell 'su 0 uiautomator dump /sdcard/ui.xml'
+adb shell 'su 0 cat /sdcard/ui.xml'
 ```
 
-then parse `bounds="[x1,y1][x2,y2]"` and tap the centre. **The `>/dev/null` on the dump is
-load-bearing** — the path chatter on stdout corrupts naive parsing.
+then parse `bounds="[x1,y1][x2,y2]"` and tap the centre.
 
 ## Audio
 
@@ -129,9 +131,12 @@ Known-good commands (verified on the bus, `0x131`):
 | Steam generator off | `A5 0F 7B` |
 | Standby | `A5 5F 7B FF` |
 
-**`A5 5F 7B FF` is the legacy SLSR standby, and the legacy SLSR device is not present on this
-unit** (`slsr_is_active = 0`). Every `slsr_*` command is a no-op here. The live device is the
-HVLSR (`hvlsr_is_active = 1`, firmware 7). This single fact explains hours of confusion.
+**Standby is `A5 5F 7B FF` and it works.** `slsr_request_sls_standby` (binder transaction 38)
+emits exactly `131 [4] A5 5F 7B FF` and **stops the speaker buzz** — confirmed physically.
+
+Do not conclude from `slsr_is_active = 0` that the `slsr_*` calls are dead: that flag describes
+the legacy SLSR *device*, while the standby path still reaches the HVLSR (`hvlsr_is_active = 1`,
+firmware 7). Only `slsr_voice_mute` (transaction 55) transmits nothing at all.
 
 ### SELinux: the grant that is easy to miss
 
@@ -151,8 +156,9 @@ denied `read` at ~52 000 denials/second, burning a core and overwriting the kern
 
 ### `can0` first-contact decision table
 
-The service **raises `can0` itself**. A hand-run `ip link set can0 up` leaves state that
-invalidates everything you measure afterwards. Read, don't touch:
+**Something external raises `can0`** — the vendor library cannot. `libthermacan` imports no
+`socketopt` and no `AF_NETLINK`; the interface is brought up outside the app process. Do not
+assume the app did it, and do not leave a hand-run `ip link set can0 up` in place:
 
 | State | Meaning |
 |---|---|
@@ -183,6 +189,41 @@ chip's own version report.
 
 Wi-Fi on the shipped board is not brought up by this port; the panel runs on Ethernet.
 
+## Ethernet
+
+Two **independent** causes. Either one alone leaves the panel with no carrier, so fixing one and
+re-testing tells you nothing.
+
+### 1. The PHY rail is switched off ~32 s after boot
+
+`reg_eth_phy` is declared `regulator-boot-on` but **not** `regulator-always-on`. The regulator
+core's cleanup then disables the rail while the link is up, and the carrier drops. The kernel log
+shows `eth_phy_pwr: disabling`; there is never a `Link is Up`.
+
+Fix: add `regulator-always-on` to the `reg_eth_phy` node. This applies to **both** slots — the
+stock A10 overlay has the same defect.
+
+### 2. `fec.ko` never loads
+
+Three separate reasons, all of which must be fixed:
+
+- `ptp.ko` and `pps_core.ko` sit in a path SELinux denies, so the dependency chain fails.
+- `gpio-pca953x.ko` — whose hog releases `enet_rst` — loads at `modules.load` index **59**,
+  while `fec.ko` is at **37**. There is no softdep, so FEC probes before the PHY is released and
+  never retries.
+- `adin.ko`, `libphy` and `of_mdio` must be present in the ramdisk's `modules.load`. The 71-entry
+  vendor list is never read.
+
+### 3. A policy-routing failure, unrelated to the above
+
+The `eth0` policy routing table can empty itself. Two routes restore gateway, internet and adb in
+the same boot.
+
+### Diagnosing
+
+`carrier_changes` climbing without a link means the rail, not the cable. Check `dmesg` for
+`eth_phy_pwr: disabling` before touching hardware.
+
 ## Power
 
 - **Not PoE.** The switch port has `poe_enable=False`. A network-side power cycle is
@@ -191,11 +232,12 @@ Wi-Fi on the shipped board is not brought up by this port; the panel runs on Eth
 
 ### Memory
 
-2 GiB, carrying roughly 1.5 GB of Google processes. Free non-CMA RAM sits at 40–140 MB while
-`CmaFree` oscillates between 0.4 and 28 MB against a 320 MB pool.
+2 GiB, carrying roughly 1.5 GB of Google processes. Free non-CMA RAM sits at 40–140 MB.
 
-**Judge memory pressure by `CmaFree` rising and `MemFree > ~200 MB`. Never judge by
-`MemAvailable`** — it reads healthy while the panel is about to stall.
+**Judge memory pressure by `MemFree`, and by `__cma_alloc` failures — not by `CmaFree`.** A healthy
+boot shows `CmaFree` around 12 MB against a 320 MB pool with `maxchunk` 42367 and **zero**
+allocation failures; the number looks alarming and means nothing. Never judge by `MemAvailable`
+either — it reads healthy while the panel is about to stall.
 
 Why the usual knobs don't help here:
 
@@ -217,6 +259,6 @@ written. See issue [#16](https://github.com/terafin/thermasol/issues/16).
 
 | Trap | Why |
 |---|---|
-| Deep suspend (`echo mem`) | **Never wakes.** No RTC/alarm wake source; the touch IRQ is registered as a wake source but does not bring the SoC out. Recovery is a power cycle. |
+| Deep suspend (`echo mem`) | No RTC/alarm wake source; the touch IRQ does not bring the SoC out. **Wait ~90 s before power cycling** — the i.MX2 watchdog resets it unattended. |
 | `Utils.ShutdownAll` | Stops steam and flushes water — not an idle action. |
 | `PowerFlushActivity` / `FirmwareUpdateActivity` | Act on real hardware in `onCreate`. |
