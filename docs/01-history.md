@@ -57,8 +57,9 @@ recorded step by step. The full recipe is in
 dump, but there is no evidence it was the installation vehicle for anything above. It was
 installed at some point by some route; that route is not recorded.
 
-**Loose end:** no delete/revert of that DNS record appears in the log. It may still be live —
-check the UniFi local-DNS table.
+**The record was removed.** No revert call appears in the session log, but the override is gone:
+`thermatouch.tsolup.com` resolves to the real vendor IP `50.116.16.103` from both a general
+resolver and the panel's IoT-VLAN gateway (`10.0.90.1`). Verified 2026-11-02.
 
 What *is* documented is that the panel was **rooted and reachable before any firmware was
 ever touched**, using only apps the stock OS could install. That is the part that matters, and

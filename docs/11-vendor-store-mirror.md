@@ -201,10 +201,13 @@ User-Agent: Dalvik/2.1.0 (Linux; U; Android 10; variscite Build/QD1A.190821.014.
 Host: thermatouch.tsolup.com
 ```
 
-**One thing never confirmed:** no delete/revert call for that DNS record appears anywhere in the
-session. **It may still be live.** Check the UniFi local-DNS table before assuming the panel can
-reach the real store, and remove it if it is still there. See
-[issue #22](https://github.com/terafin/thermasol/issues/22).
+**The record is gone.** No revert call appears in the session log, but the override has been
+removed — verified 2026-11-02: `thermatouch.tsolup.com` resolves to the real vendor IP
+`50.116.16.103` from both a general resolver and the panel's IoT-VLAN gateway (`10.0.90.1`).
+The panel can reach the real store and firmware updates.
+
+Before setting the override again, **check the UniFi local-DNS table for a leftover record** —
+a stale one would silently redirect the panel to a mirror that is no longer serving.
 
 **Also worth knowing:** the first attempt returned the generic `{"status":"ok"}` fallback for
 `index-10.json`. Gson produced a null list and the app threw an NPE. The fix was making every
