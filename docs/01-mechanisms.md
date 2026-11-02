@@ -24,6 +24,30 @@ There is no vendor mechanism to lean on. That is why the install path is
 [09-install-from-stock.md](09-install-from-stock.md): get a shell by redirecting the vendor
 store, and everything else follows.
 
+### Turning adb on (A10) — the trap that wastes an evening
+
+Two things that look like they should work and do not:
+
+- **`setprop ctl.start adbd` / `ctl.restart adbd` is received and still does nothing.** init
+  logs `Received control message 'start' for 'adbd'` and restarts the service, but the restarted
+  `adbd` takes the init-provided **USB** socket and never binds TCP 5555. The dmesg line proves
+  init heard you; it does **not** prove adb works. Check port 5555, not the log.
+- **`stop adbd` / `start adbd` return `must be root`** from a Termux shell.
+
+**What actually works** — run `adbd` directly, detached, so it has no init socket to claim and
+falls back to TCP:
+
+```sh
+setsid /system/bin/adbd >/dev/null 2>&1 &
+```
+
+A successful run logs `adbd E auth.cpp:240] Failed to get adbd socket: Success` — the failure to
+get the init socket **is the mechanism**, not an error to fix. Confirm with an external connect
+to port 5555, not with `ps` or `/proc/net/tcp` on the panel: the listener did not appear there
+even when the port answered.
+
+`setprop` is not on Termux's `PATH`; call `/system/bin/setprop` by absolute path.
+
 ### On the Android 15 build — Termux is not involved
 
 Observed on the deployed A15 panel:
