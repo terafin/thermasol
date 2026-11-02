@@ -172,14 +172,47 @@ panels get bricked.
 
 ### 2.1 Download the image set
 
-Grab the release assets for this repo (six `.raw` files) and verify them:
+Six `.img` files plus `SHA256SUMS`, from the release page of this repo — about 4.4 GB, and
+`product` and `system` are 1.75 GiB each, so check free space first.
 
 ```sh
 sha256sum -c SHA256SUMS
-avbtool verify_image --image vbmeta.raw --key testkey_rsa4096.pem
 ```
 
-The expected hashes are in [`../build/README.md`](../build/README.md).
+Every partition must report **OK** before you continue. A single FAILED means a truncated or
+wrong download, and the fix is to fetch it again — not to proceed.
+
+The same hashes are listed in [`../build/README.md`](../build/README.md) with byte counts, so
+you can cross-check without trusting one source.
+
+### 2.1b Optional — verify the AVB signature too
+
+`vbmeta.img` is signed with the **public AOSP test key**, so this is checkable by anyone. It
+proves something the hashes cannot: that the image set is internally consistent, every
+partition hash inside `vbmeta` matching the partition you actually have.
+
+**All six images must be in the same directory**, or it fails on the first missing one:
+
+```sh
+AVB=$ANDROID_BUILD_TOP/out/host/linux-x86/bin/avbtool
+KEY=$ANDROID_BUILD_TOP/external/avb/test/data/testkey_rsa4096.pem   # same as the BSP key
+"$AVB" verify_image --image vbmeta.img --key "$KEY"
+```
+
+A good run ends:
+
+```
+vbmeta: Successfully verified SHA256_RSA4096 vbmeta struct in vbmeta.img
+boot:   Successfully verified sha256 hash of boot.img for image of 34469888 bytes
+dtbo:   Successfully verified sha256 hash of dtbo.img for image of 69099 bytes
+product: Successfully verified sha256 hashtree of product.img for image of 948834304 bytes
+system:  Successfully verified sha256 hashtree of system.img for image of 861192192 bytes
+vendor:  Successfully verified sha256 hashtree of vendor.img for image of 84840448 bytes
+```
+
+Note the `for image of` sizes are **payload sizes, not partition sizes** — they will not match
+the file listing. That is correct, not a mismatch. Skip this step if you do not have a build
+tree; `sha256sum -c` already proves you have the same bytes.
 
 ### 2.2 Decide which slot to write
 
@@ -197,10 +230,10 @@ running slot.**
 ```sh
 P=b            # the INACTIVE slot, from 2.2
 for n in boot dtbo system vendor product vbmeta; do
-  adb push ${n}.raw /data/local/tmp/${n}.raw
+  adb push ${n}.img /data/local/tmp/${n}.img
   adb shell "su 0 sh -c '
     test \"\$(getprop ro.boot.slot_suffix)\" != _$P || exit 9
-    dd if=/data/local/tmp/${n}.raw of=/dev/block/by-name/${n}_${P} bs=4M conv=notrunc,fsync
+    dd if=/data/local/tmp/${n}.img of=/dev/block/by-name/${n}_${P} bs=4M conv=notrunc,fsync
     blockdev --flushbufs /dev/block/by-name/${n}_${P}
     sha256sum /dev/block/by-name/${n}_${P}
   '"

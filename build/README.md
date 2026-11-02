@@ -90,8 +90,13 @@ Two things to know before you do:
    you download against it:
 
    ```sh
-   avbtool verify_image --image vbmeta.raw --key testkey_rsa4096.pem
+   AVB=$ANDROID_BUILD_TOP/out/host/linux-x86/bin/avbtool
+   KEY=$ANDROID_BUILD_TOP/external/avb/test/data/testkey_rsa4096.pem
+   "$AVB" verify_image --image vbmeta.img --key "$KEY"
    ```
+
+   All six `.img` files must be in the current directory — `avbtool` follows every hash inside
+   `vbmeta` and fails on the first missing partition.
 
 2. **`product.img` contains Google proprietary applications** (GMS, Play Store, Pixel
    prebuilts — 1.4 GB). It is published here as a **device backup for owners of this hardware**,
