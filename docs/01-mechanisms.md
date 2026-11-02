@@ -246,16 +246,16 @@ Never recreate the bind mount, and never recreate `/data/local/gapps-enable`.
 
 ## Why something that "should" work doesn't
 
-A table of inferences that looked sound and were wrong. Each is here so the same reasoning
-isn't repeated.
+Patterns that look like they should work and do not. Each is here so the reasoning isn't
+repeated.
 
-| Wrong inference | Killed by |
+| Looks right | Why it is not |
 |---|---|
 | "`/data/local.prop` is a mechanism on Android 10" | the string table of the shipped `init` |
 | "`ALLOW_LOCAL_PROP_OVERRIDE` makes the file inert" | the target property is defined nowhere, so the write-once rule never applies |
 | "`service adbd` is not in the deployed config" | it is — in `/system/init.usb.rc`, which had not been looked in |
 | "`adbd` never starts on its own, so nothing to worry about there" | true on **A10** only. On the **A15** build it starts itself at ~21 s from `persist.sys.usb.config=adb` — see above |
-| "a non-Termux adb path exists" | wrong inference from a true premise; access converges on Termux |
+| "a non-Termux adb path exists" | true premise, wrong conclusion; access converges on Termux |
 | "silence on the wire proves the boot stopped before `netd`" | `netd` is native and starts at `zygote-start`; `eth0`'s address comes from the framework |
 | "the logo proves the failure is before Android" | `bootanim` has two possible starters, so it proves only that `bootanim` is running |
 | "U-Boot netconsole is output-only" | false |
