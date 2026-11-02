@@ -6,14 +6,15 @@
 Only **work items** live there — things someone could actually do. Constraints, known-limitation
 notes and "we decided not to" belong in this file, not in the tracker.
 
-As of 2026-11-02 there are four open items, and all four need a human in front of the panel.
+As of 2026-11-02 there are two open items.
 
 | # | Work item | Who |
 |---|---|---|
 | [1](https://github.com/terafin/thermasol/issues/1) | **Ceiling speaker hiss** — power-cycle the speaker's own supply and listen | operator |
-| [8](https://github.com/terafin/thermasol/issues/8) | **Confirm the physical behaviours** — speaker, light, touch, steam, wake, nav, seal | operator |
-| [9](https://github.com/terafin/thermasol/issues/9) | **Prove the rollback path** — switch slots, verify, switch back | operator |
 | [22](https://github.com/terafin/thermasol/issues/22) | **Re-test the store mirror on A15** — the original success was on Android 10 | operator |
+
+**Everything else physical has been confirmed working** by the operator: speaker, light, touch,
+steam, tap-to-wake, navigation and the seal.
 
 **The hiss, in one paragraph.** Nine distinct CAN controls, the whole Android audio chain idle,
 Android Bluetooth off, ~40 s of total host CAN silence, and finally **full SoC suspend** — the hiss
@@ -34,6 +35,7 @@ issues just creates chores that never close.
 | **Wi-Fi** | Physically destroyed by a prior agent's soldering instructions. Ethernet only. Do not propose Wi-Fi as a fallback. |
 | **Deep suspend** | Never wakes. No RTC or alarm wake source; the touch IRQ does not bring the SoC out. Recovery is the mains breaker. Never use `echo mem`. |
 | **Power cycling** | The panel is not PoE. The only remote power action is a breaker trip, i.e. a human. |
+| **Rollback** | Both slots hold A15, and the slot switch has **never been performed** on this panel — the other slot is verified by hash only. The wall is closed, so this will not be tested. Treat rollback as a plan, not a proven safety net. See `docs/04-android15-port.md` §Rolling back. |
 | **Bluetooth audio** | Bring-up baud is 115200 — enough to connect, not enough for A2DP. Not being chased. Pairing, range and accessory audio need a real peer and have not been tested. |
 | **WebView** | Chromium 74 (2019); modern web UIs fail. Mitigated with native apps and Chrome's own engine. Not replacing the WebView provider on a sealed panel. |
 | **Home Assistant dashboard** | ~82% of the SoC. That is a **dashboard** problem, not a panel defect — a lighter dashboard is the fix, and it belongs in the HA repo. |

@@ -13,10 +13,12 @@ supporting cast.
     com.termux.api      Termux:API — exposes Android APIs (clipboard, notifications,
                         sensors) to shell commands.
     com.termux.widget   Termux:Widget — home-screen shortcuts to scripts.
-    org.schabi.newpipe  NewPipe — a video client that works on old WebViews, and the
-                        app used as a control when the first mirror was built.
 
 NOT fetched, on purpose:
+  * **NewPipe** — it was on the first mirror, but it is not part of the access stack and its
+    APK does not carry the F-Droid repository certificate (verified: signer
+    964dfa41…, not 228fb2cf…). Serving an APK whose provenance this script cannot confirm
+    would break the one invariant it exists to enforce.
   * **Aurora Store** — there is no evidence it was ever the install vehicle here, and it
     is not needed: the panel's own store installs whatever this mirror lists.
   * **A standalone sshd/adb binary** — Termux supplies both (`pkg install openssh`, and
@@ -70,8 +72,6 @@ CATALOGUE = [
      "Android APIs (clipboard, notifications, sensors) exposed to shell commands."),
     ("com.termux.widget",  "com.termux.widget",  "Termux:Widget",
      "Home-screen shortcuts to scripts."),
-    ("org.schabi.newpipe", "org.schabi.newpipe", "NewPipe",
-     "Video client that works on old WebViews; used as the control app on the first run."),
 ]
 
 # Pinned SHA-256 of the exact APK we intend to serve. Empty = not yet pinned; the digest is
@@ -250,6 +250,18 @@ def main(argv=None) -> int:
     manifest = out / "bootstrap.json"
     manifest.write_text(json.dumps({"fetched": records, "failures": failures}, indent=1))
 
+    # serve_store.py reads meta.json as per-package overrides. Writing it here means the
+    # listing gets real app names and versions with no extra step — the two scripts compose.
+    if not failures:
+        meta = {
+            r["package_name"]: {
+                "app_name": r["app_name"],
+                "current_version": r["current_version"],
+            }
+            for r in records
+        }
+        (out / "meta.json").write_text(json.dumps(meta, indent=1))
+
     print()
     if failures:
         print(f"{len(failures)} FAILED — nothing that failed was written:")
@@ -259,7 +271,8 @@ def main(argv=None) -> int:
         return 1
     print(f"{len(records)} app(s) fetched and verified -> {out}/apks/")
     print(f"manifest: {manifest}")
-    print("now run: serve_store.py --root " + str(out) + " --base-url http://<panel-reachable-ip>")
+    print(f"meta:     {out / 'meta.json'} (serve_store.py picks this up automatically)")
+    print(f"now run:  serve_store.py --root {out} --base-url http://<panel-reachable-ip>")
     return 0
 
 

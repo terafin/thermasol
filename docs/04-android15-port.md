@@ -276,11 +276,23 @@ The A10-side device-tree overlay's `regulator-eth-phy` has neither `regulator-al
 exact state the docs warn is unrecoverable without opening the wall. Do not treat slot
 restore as a safety net here.
 
-### What the safety net actually is
+### What the safety net actually is — and what it is not
 
-The safety net is **the other A15 slot**, plus the UART, plus the watchdog: `imx2_wdt` starts at
-probe with a 60 s timeout and has been observed resetting a stalled panel unattended.
+Be honest about this: **nobody has ever done a slot switch on this panel to prove the other slot
+boots.** The wall is closed, the panel works, and a deliberate switch experiment is not something
+to run on a sealed device. Treat the rollback as **untested**.
 
-Before any write, know which slot is running, confirm the other slot boots, and confirm the
-AVB descriptor set. See [06-procedures.md](06-procedures.md) and issue
-[#9](https://github.com/terafin/thermasol/issues/9).
+What you actually have, in decreasing order of confidence:
+
+1. **The running slot works.** Verified every day, for free.
+2. **The other slot has a matching image on it** — verified by hash, not by booting it.
+3. **The watchdog.** `imx2_wdt` starts at probe with a 60 s timeout and has been observed
+   resetting a stalled panel unattended.
+4. **UART.** Needs the wall open and an adapter that may not be present.
+
+So: a write to the **inactive** slot is recoverable in the sense that the running slot is
+unaffected. A write to the **running** slot is not recoverable by slot switch, because the switch
+itself is unproven. See [06-procedures.md](06-procedures.md) §J.
+
+If the wall is ever open for other reasons, *then* prove the switch. Until then, do not claim it
+works.

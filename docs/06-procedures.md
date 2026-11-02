@@ -86,7 +86,12 @@ network and no way in.
 
 **Before you switch, know how you get back.** A bad rollback on a sealed panel has no recovery
 except UART (wall open) or the watchdog. See [04-android15-port.md](04-android15-port.md)
-§"Rolling back" and issue [#9](https://github.com/terafin/thermasol/issues/9).
+§"Rolling back".
+
+**The switch itself has never been performed on this panel.** The wall is closed and the panel
+works; nobody is going to run a deliberate slot-switch experiment on it. The other slot's image is
+verified by hash only — not by booting it. Treat "roll back to the other slot" as a plan, not a
+proven safety net.
 
 The "one variable, no writes" rule is still correct when you set up a fresh port:
 [09-install-from-stock.md](09-install-from-stock.md) keeps a slot untouched for exactly that.
