@@ -64,15 +64,32 @@ Observed on the deployed A15 panel:
 `init.usb.rc` has `on boot && property:persist.sys.usb.config=*` →
 `setprop sys.usb.config ${persist.sys.usb.config}`, which sets `sys.usb.config=adb`.
 
-The most plausible mechanism — **inference, not proven** — is that `on init` sets
-`sys.usb.configfs 0`, the `on boot` above sets `sys.usb.config=adb`, and that pair satisfies
-`property:sys.usb.config=adb && property:sys.usb.configfs=0` → `start adbd`; the vendor's own
-`on boot` then flips `configfs` to `2` afterwards, which is the value visible once the panel is
-up.
+**The mechanism is baked into the image, not runtime state.** Both properties are compiled into
+`/system/build.prop` and `/vendor/build.prop` by this build:
 
-**Consequence:** on A15 `adbd` comes up on its own, and `persist.sys.usb.config` is a
-**persistent** property — it survives a `/data` wipe. Do not assume that means access is safe:
-that has only been observed across one 12-day uptime, not across a reboot.
+```
+ro.adb.secure=0
+persist.adb.tcp.port=5555
+persist.sys.usb.config=adb
+ro.debuggable=1
+```
+
+So on A15:
+
+- `persist.sys.usb.config=adb` → the `on boot` trigger in `init.usb.rc` sets `sys.usb.config=adb`,
+  which satisfies the `configfs=0` start-adbd trigger (`on init` sets configfs 0 before the
+  vendor's `on boot` raises it to 2);
+- `persist.adb.tcp.port=5555` → `packages/modules/adb/daemon/main.cpp:270`
+  (`prop_port = GetProperty("persist.adb.tcp.port", "")`) makes the daemon bind TCP;
+- `ro.adb.secure=0` → no key prompt.
+
+Because these are **build properties**, a fresh flash of this image gets adb back with no
+Termux, no boot hook and nothing typed at the console. That is a deliberate property of the
+A15 build, and it is why this panel needs nothing but an IP.
+
+**Consequence:** on A15 `adbd` comes up on its own. Verify it after any flash — the observed
+behaviour is from one 12-day uptime plus the build properties, not from a reboot test on this
+exact image.
 
 **Recovery mode gives `adbd` regardless.** Its `init.rc` has no configfs gate. But it brings up
 **loopback only** — no `netd`, no DHCP — and binds `adbd` to USB functionfs. With USB excluded,

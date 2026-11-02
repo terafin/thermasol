@@ -452,12 +452,23 @@ not fire) and the console.
 **A system flash wipes `/data`, and with it Termux, sshd, and every boot hook.** Until you redo
 Stage 1 on the new build, the panel has **no remote access at all**.
 
-Redo §1.1 through §1.6 on the Android 15 build, then verify with
-[`06-procedures.md`](06-procedures.md) §B before you walk away.
+**On the Android 15 image you built in §2, adb comes back by itself.**
+`persist.adb.tcp.port=5555`, `persist.sys.usb.config=adb` and `ro.adb.secure=0` are compiled into
+`/system/build.prop` and `/vendor/build.prop`. `adbd` starts at ~21 s with no Termux, no boot
+hook, and nothing typed. Verified on the deployed panel.
 
-> On A15 `adbd` behaves differently from A10 — it starts itself at boot from
-> `persist.sys.usb.config=adb`, which is a persistent property and survives the `/data` wipe.
-> Observed across one 12-day uptime, not across a fresh reboot. **Verify it, do not assume it.**
+So after the flash:
+
+1. `adb connect <panel-ip>:5555` — expect it within a few seconds of boot.
+2. Verify with [`06-procedures.md`](06-procedures.md) §B before you walk away.
+
+**Termux and sshd do not survive the flash, and were never reinstalled on this build.** The
+panel runs on adb alone: `pm list packages | grep -c termux` → `0`, `init.svc.sshd` unset, 8022
+closed. That is a working state, not a broken one — but it means adb is the *only* remote path,
+so treat §1's redirect and Termux work as a one-time entry step, not as something to restore.
+
+Redo §1.1–§1.6 **only if** you want SSH back as a second, independent path. It is worth having:
+one transport is one point of failure.
 
 ---
 
