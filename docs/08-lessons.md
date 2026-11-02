@@ -107,6 +107,40 @@ it does not work."
 
 ---
 
+## The rules that kept the project honest
+
+Distilled from the artifact trail. Each of these caught a real error.
+
+1. **Every claim is bound to a boot instance.** Trial scripts assert `sys.boot_completed`, the
+   slot, the vbmeta digest, and a boot id **different** from the pre-reboot one. If the boot id
+   did not change, nothing was tested.
+2. **Building, writing and arming are three separately witnessed states.** Receipts carry
+   `deployed: false` and `armed: false` until a later, separate step flips them.
+3. **A killed or crashed test run is not a RED.** Only a controlled assertion failure counts.
+   Two "RED" results were discarded on exactly this basis.
+4. **The device measurement outranks every derived number.** An agent's arithmetic (−13.55 dB)
+   was overruled by the on-device `getStreamVolumeDb` readback (−14.45 dB).
+5. **An empty log is not a failed build.** A reviewer inferred "these tests never compiled"
+   from an empty log; the deployed executable plus a fresh run was the evidence that settled it.
+6. **Do not carry a model's report as artifact proof.** A whole review was adjudicated as
+   decoding errors and produced no device change.
+7. **Name the runner and the level** in every test claim — host vs device, and which command.
+   There is no aggregate test command here.
+8. **Scope every completion claim to the gate actually passed.** "Startup crash fixed over two
+   boots" is not "Bluetooth works."
+
+## Two inferences that were laundered into requirements
+
+Worth recording because both cost time and both were mine:
+
+- **"The user rejects permanent polling."** Not something the operator ever said. It was an
+  agent inference, repeated across handoffs until it looked like a constraint, and had to be
+  formally withdrawn.
+- **"A shared physical CHG/WDOG wire."** Inferred from two DT mux entries with no hardware
+  evidence, and retracted when the evidence did not support it.
+
+The rule: quote the transcript, or label it as inference.
+
 ## Appendix — hypotheses that were wrong
 
 Collected in one place, because this is where someone comes looking for what *not* to try.

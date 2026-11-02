@@ -26,6 +26,7 @@ docs/
   07-open-issues.md       What is still wrong (be honest here)
   08-lessons.md           What I would do differently
   09-install-from-stock.md  Stock panel -> Android 15, start to finish
+  10-known-pitfalls.md    Flat "do not do this" list
 build/                    How OUR Android 15 image is assembled, + its hashes
 devicetree/               Our device-tree additions (ThermaSol port + BT UART2)
 patches/                  Our HAL + vendor-APK patches

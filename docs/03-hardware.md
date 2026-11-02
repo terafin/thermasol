@@ -44,14 +44,18 @@ There is a real-time clock chip, `isil,isl12057/8`, on I²C — but see
 
 **Atmel maXTouch** on I²C2 @ address `0x4b`, registered as `/dev/input/event1`.
 
-This one caused enormous trouble. Short version:
+Controller identity, read over I²C: `Family: 164 Variant: 3 Firmware V2.0.AA Objects: 41`,
+`Touchscreen size X4095 Y4095`.
 
-- The stock Android 10 driver polls. The A15 kernel's driver is interrupt-driven.
-- The interrupt never fires reliably on this board.
-- The working configuration is **driver-owned polling** (`vendor.tt.touch_driver=tt_mxt_polled`),
-  not userspace polling.
+**The controller is fine. The CHG interrupt line is not.** `/proc/interrupts` shows
+`24: 0 49486 236240 0 gpio-mxc 2 Edge maxtouch` — zero hardware IRQs while messages queue.
 
-Do not "fix" this by adding a userspace poll loop; it duplicates and fights the driver.
+The working configuration is the **`tt_mxt_polled` driver module**: the IRQ stays requested but
+disabled, and `mxt_interrupt()` runs from a 20 ms `delayed_work`. With
+`poll_interval_ms=0` it is bit-for-bit stock behaviour.
+
+**Do not add a userspace poll loop.** It duplicates the driver's accounting and fights it.
+**Do not pull the CHG pin low to test it** — that caused a board reset.
 
 Input events use `ABS_MT_POSITION_X/Y` in the range 0..4095, increasing downward for Y, plus
 a separate `ABS_X/ABS_Y` axis stream. **`input tap` / `input swipe` are unreliable on this
@@ -60,6 +64,9 @@ device**; use `sendevent` against `/dev/input/event1` when you need to synthesiz
 ## Audio
 
 - Codec: **NXP WM8904** at I²C `2-001a`, on **SAI5** (`30050000.sai`), MCLK 1.536 MHz.
+- DMA: i.MX SDMA, which **needs `imx/sdma/sdma-imx7d.bin` (3,202 B) present in the early
+  ramdisk** or every PCM open fails with `-ENOMEM` while `tinyplay` still exits 0.
+- The codec must be clocked from **SAI5**, not SAI3 — one DT cell, `0xb4` → `0xb8`.
 - Headphone and line outputs are both wired up; the ceiling speaker is fed from the analog
   line/headphone path and has its own amplifier.
 - The codec's `init_ctl` lives in `/vendor/etc/configs/audio/wm8904_config.json`. The accepted
@@ -107,6 +114,10 @@ Subsystems behind CAN:
 Broadcom **BCM4335C0** on **UART2** (`30890000.serial`) via serdev, `hci_uart_bcm`, firmware
 `brcm/BCM4335C0.hcd` build 0809. Bring-up baud is **115200**, which is enough to connect but
 **not** enough for audio streaming.
+
+The DT compatible string is `brcm,bcm43430a1-bt` even though the part is a BCM4335C0 — it binds
+the generic BCM driver with no quirks, and the kernel auto-selects the right firmware from the
+chip's own version report.
 
 **Wi-Fi is physically broken** — damaged by soldering instructions from a previous agent.
 There is no Wi-Fi fallback and no further soldering is sanctioned. Treat this panel as

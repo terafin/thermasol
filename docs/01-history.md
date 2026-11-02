@@ -21,19 +21,31 @@ payloads found no other `start adbd`.
 
 ### How a shell got onto a stock panel the first time
 
-Stock has a Play Store. It also has a vendor browser and side-loading enabled. The route
-that worked was:
+**What is verified:**
 
-1. Install **Aurora Store** (an open-source Play Store proxy client) to download and
-   install **Termux** and **Termux:Boot** without a Google account on the panel.
-2. In Termux, install `openssh`, push an `authorized_keys`, run `sshd` on **port 8022**.
-3. Install the `00-restore-access` Termux:Boot hook so `adbd` and `sshd` come back after
-   every boot.
-4. From there, `su 0` gives root (this is a userdebug build).
+- **Aurora Store was installed on the stock panel.** It appears as a launcher entry in the
+  2026-09-13 UI dump (`txt='Aurora Store' ... pkg=app.lawnchair`). Aurora is an open-source
+  Play Store client, so the panel could fetch Play apps without signing a Google account in.
+- **Termux was installed and running as a normal app.** `uid=10108(u0_a108)`,
+  `context=u:r:untrusted_app_27:s0:c108,...` straight from `ps` and `id`.
+- **`sshd` was running on port 8022**, as that uid, started by a boot hook with no adb
+  involvement (`5790 u0_a108 sshd`).
+- **The access stack was Termux:Boot hooks** under `~/.termux/boot/`, enumerated on-device:
+  `00-restore-access`, `01-gapps`, `02-termux-wakelock`, `50-display-timeout-guard`,
+  `70-sshd-watchdog` (later `40/52/55/60/65`).
+- **ADB over TCP was part of it too** — `persist.adb.tcp.port=5555` is first dated to the
+  2026-09-13 session, and `00-restore-access` sets `service.adb.tcp.port 5555` and calls
+  `ctl.restart adbd`.
 
-That is the whole trick. Everything else in this project descends from it: **the panel was
-rooted and reachable before any firmware was ever touched**, using nothing but apps the
-stock OS could install.
+**What is NOT verified:** there is **no install record** in any artifact — no `pm install`,
+no dated download of Termux or Termux:Boot. The sequence *Aurora Store → Termux →
+Termux:Boot → sshd* is a **plausible reconstruction** from the verified end state, not
+something the evidence proves step by step. Treat it as "this is almost certainly how it was
+done", not as documented history.
+
+What *is* documented is that the panel was **rooted and reachable before any firmware was
+ever touched**, using only apps the stock OS could install. That is the part that matters, and
+it is repeated in [09-install-from-stock.md](09-install-from-stock.md) as a reproducible recipe.
 
 > This is also why the access stack lives in `/data` and why flashing a new system image
 > destroys it — see [04-android15-port.md](04-android15-port.md).
@@ -53,9 +65,25 @@ the allowlist with it, so `PermissionManagerService.systemReady()` threw inside
 Because `boot_completed` is never sent, the hook that would re-apply the overlay could never
 run — deterministic and self-perpetuating.
 
-**Fix:** quarantine GMS from `/data/app` and clear `privateFlags` `8`→`0` on its record with
-the framework stopped. Never recreate the bind mount, never recreate
-`/data/local/gapps-enable`.
+**Fix, three steps** (step 2 alone was enough on 2026-09-13):
+
+1. `rm -f /data/local/gapps-enable` and unmount any live overlay
+   (`umount /system/priv-app /system/app /system/etc/permissions /system/etc/sysconfig`).
+2. Move — **not delete** — `com.google.android.gms-*` and `com.android.vending-*` out of
+   `/data/app` into a quarantine dir. This alone booted the panel immediately.
+3. With the framework stopped, edit the GMS record in `/data/system/packages.xml`,
+   `privateFlags="8"` → `"0"`. Verified byte-wise on the day: identical file size (533,432),
+   one-line diff, 149 package tags before and after, owner/mode/SELinux label preserved.
+
+**Why a partial overlay is fatal:** `gapps-bind.sh` binds priv-app *first* and the
+permissions directory *third*. If priv-app binds and a later pair fails, GMS is privileged
+with no allowlist — and `01-gapps` still fires `setprop ctl.restart zygote`.
+
+**Residual after the repair:** the framework restart leaves the shower kiosk down, because
+`service touchsteam` is `class core`, `disabled`, `oneshot` and nothing restarts it.
+`su 0 setprop ctl.start touchsteam` brings it back.
+
+Never recreate the bind mount, and never recreate `/data/local/gapps-enable`.
 
 **Lesson recorded that day:** the stationary ThermaSol logo is
 `/system/media/bootanimation.zip` — a single frame looping forever. `bootanim` starts only
@@ -81,10 +109,56 @@ worth reading in full if you ever lose this panel. Its durable conclusions:
 - The deployed system image at that time was identified by hash and proven deployed from the
   previous transcript — not merely built.
 
-That brief also contains several **retracted** hypotheses, kept deliberately as a record of
-what was argued and why it was wrong. That habit is why this repo exists in this form.
+That brief contains **nine retracted hypotheses**, kept deliberately as a record of what was
+argued and why it was wrong. The ones worth knowing, because each looked obvious at the time:
+
+| Retracted | Killed by |
+|---|---|
+| "`/data/local.prop` is a mechanism on Android 10" | the string table of the shipped `init` |
+| "`ALLOW_LOCAL_PROP_OVERRIDE` makes the file inert" | the target property is defined nowhere, so the write-once rule never applies |
+| "`service adbd` is not in the deployed config" | it is — in `/system/init.usb.rc`, which had not been looked in |
+| "`adbd` starts automatically on every boot" | `/vendor/etc/init/hw/init.freescale.usb.rc` sets `sys.usb.configfs 2`, and no deployed action handles it |
+| "a non-Termux adb path exists" | wrong inference from a true premise; access converges on Termux after all |
+| "**silence on the wire proves the boot stopped before `netd`**" | `netd` is native and starts at `zygote-start`; `eth0`'s address is configured by the *framework* |
+| "the logo on screen proves the failure is before Android" | the logo is `bootanimation.zip` — but `bootanim` has **two** possible starters, `init` **and** SurfaceFlinger, so the logo proves only that `bootanim` is running |
+
+The access investigation also retracted, in its own revision table: "U-Boot netconsole is
+output-only" (false), "fastboot in 2019.04 is USB-only" (false), and "`avc: granted` proves
+permissive" (invalid reasoning — the conclusion survives on `getenforce` instead). One more:
+a claimed `adbd` USB-or-TCP control flow was "string proximity presented as control flow",
+and the 'durability fix' built on it was withdrawn.
+
+That habit — keeping the retraction rather than deleting it — is why this repo exists in this
+form.
 
 ---
+
+## Milestone timeline (verified)
+
+Dates and numbers pulled from the artifacts, not recalled.
+
+| When | What |
+|---|---|
+| 2026-09-13 01:14 | `01-gapps` hook on disk (51 lines, 1,585 B) |
+| 2026-09-13 01:30 | `/data/local/gapps-enable` created, 0 bytes |
+| 2026-09-13 02:49 | `getenforce` → `0` (permissive) |
+| 2026-09-13 04:09:03Z | `persist.adb.tcp.port=5555` first set |
+| 2026-09-13 18:33–18:57 | `system_fec.img` written over U-Boot TFTP, 28 × 64 MiB chunks, each read back and compared |
+| 2026-09-28 14:38:27 | `local.prop` written (824 B), reboot issued — **panel never answers again** |
+| 2026-09-28 → 10-11 | Forensics; no transport to the panel exists |
+| 2026-10-11 13:36 | adbd cgroup root cause proven: loops in `cpuacct:/uid_0/pid_<adbd>`; moving to `/acct/cgroup.procs` restores ADB in ~9 s |
+| 2026-10-11 20:21 | First `saveenv` persisting the CMA change: `CmaTotal=327680 kB` (320 M) |
+| 2026-10-11 21:13 | Pre-seal verify PASSED: ADB +45 s, SSH +81 s, slot `_a` green, `vbmeta_a` hash exact |
+| **2026-10-11 22:08** | **Panel sealed into the wall (owner)** |
+| 2026-10-12 | DT diff: 250 nodes / 1,377 properties; A15 BSP 357 MB, sha256 `b1b2abc7…` |
+| 2026-10-12 | Rev-1→rev-2 DT corrections: `fec1grp` 1 pin → 16 pins; `atmel,panel-coords` `0 0 4131 1433` → `0 0 1023 599`; brightness levels 0–255 → 0–100 |
+| 2026-10-15 → 10-18 | Android 15 port, flash, and the hardware defect tail |
+| 2026-10-20 | Speaker audio killed by my own CAN experiments, then restored |
+
+Bootloader identity, for reference: `U-Boot 2019.04-41468-ge20d4ecd9f (May 31 2022)`,
+resolving to commit `e20d4ecd9f` — the Variscite ADIN1300 PHY fix. That is also the build
+that has `CONFIG_CMD_NET` + `CONFIG_CMD_TFTPBOOT`, which is what makes network flashing
+possible at all.
 
 ## Phase 3 — 2026-10-11 → 10-14: UART, root, and a supervision stack
 
