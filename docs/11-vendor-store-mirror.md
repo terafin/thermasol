@@ -177,8 +177,8 @@ versions with no extra step.
   does not carry the F-Droid repository certificate (signer `964dfa41…`, not `228fb2cf…`).
   Serving an APK whose provenance we cannot confirm would break the one invariant this script
   exists to enforce.
-- **Aurora Store** — no evidence it was ever the install vehicle, and it is unnecessary: the
-  panel's own store installs whatever this mirror lists.
+- **Any Play Store client** — the route into this panel was never a store client. The panel's
+  own vendor store installs whatever this mirror lists.
 - **A standalone sshd or adb binary** — Termux supplies both. A second copy is a second thing
   to trust for no gain.
 

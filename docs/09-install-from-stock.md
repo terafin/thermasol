@@ -59,24 +59,49 @@ are your rollback. Store them somewhere that is not the panel.
 
 ## Stage 1 — Get a shell on stock
 
-Stock has a Play Store and side-loading enabled. No account is needed for any of this.
+Stock has side-loading enabled and **no adb**. The way in is the panel's **own app store**: it
+fetches an HTTP listing from a hostname we can redirect, so if you point that hostname at a
+machine you control, the panel installs whatever you put there.
 
-### 1.1 Install Aurora Store
+This is the route that was actually used. There is no Play Store client involved and no Google
+account anywhere in it.
 
-Aurora is an open-source Play Store client. Download the APK from its site or F-Droid and
-side-load it (`adb install` or a file manager). It lets you fetch the next two apps without
-signing a Google account into the panel.
+### 1.1 Stand up the mirror
 
-### 1.2 Install Termux and Termux:Boot
+`scripts/store-mirror/fetch_bootstrap.py` downloads and verifies the APK set; `serve_store.py`
+serves it in the shape the vendor app expects. Full runbook:
+[11-vendor-store-mirror.md](11-vendor-store-mirror.md).
 
-Through Aurora, install:
+```sh
+./scripts/store-mirror/fetch_bootstrap.py --out ./store \
+    --apksigner /path/to/apksigner.jar --aapt /path/to/aapt
+./scripts/store-mirror/serve_store.py --root ./store --port 80 \
+    --base-url http://<your-server-ip> --log
+```
 
-- **Termux** — the terminal environment
-- **Termux:Boot** — makes scripts run at boot (this is what gives you *persistence*)
+### 1.2 Point the vendor hostname at it
 
-Launch Termux once so it unpacks its bootstrap.
+Add a local-DNS A record on whatever serves the panel's VLAN:
 
-### 1.3 Get root and start sshd
+```
+thermatouch.tsolup.com.   A   <your-server-ip>
+```
+
+A UniFi gateway local-DNS record is what was used; a router, dnsmasq or pihole entry does the
+same job. Confirm it with a query against **the resolver the panel uses**, not your own:
+
+```sh
+dig +short @<panel's-gateway> thermatouch.tsolup.com
+```
+
+### 1.3 Install Termux from the panel's own store
+
+On the panel, open the app's **Settings → App Store** and install **Termux**.
+
+Launch it once so it unpacks its bootstrap. `--log` on the server shows the exact request lines
+if anything looks wrong.
+
+### 1.4 Get root and start sshd
 
 The stock build is `userdebug`, so `su` works. In Termux:
 
@@ -105,7 +130,7 @@ chmod +x ~/.termux/boot/00-restore-access
 
 Now `ssh -p 8022 <panel>` works, and keeps working across reboots.
 
-### 1.4 Start adb
+### 1.5 Start adb
 
 ```sh
 su 0 setprop ctl.start adbd
@@ -113,9 +138,25 @@ su 0 setprop ctl.start adbd
 
 `adb connect <panel-ip>:5555` should report a device with `uid=0(root)`.
 
+### 1.6 Install Termux:Boot
+
+Termux:Boot was **not** installed through the store on the original run. Now that adb works,
+push it:
+
+```sh
+adb install --no-incremental -r store/apks/com.termux.boot.apk
+```
+
+It is what gives you *persistence* — without it the shell dies at the next reboot. Do not stop
+before this is on.
+
+Once it is installed, the boot hook from §1.4 runs on every boot and both `sshd` and access
+survive a reboot. **Revert the DNS record now** (§1.2) and confirm with `dig` that
+`thermatouch.tsolup.com` resolves to the real vendor address again.
+
 Add it to the same boot hook if you want adb back automatically.
 
-### 1.5 Verify you have what you need
+### 1.7 Verify you have what you need
 
 ```sh
 ssh -p 8022 <panel> 'id; su 0 id'
@@ -193,7 +234,8 @@ If it does not boot: **switch the active slot back to the old one in U-Boot** (s
 **A system flash wipes `/data`, and with it Termux, sshd, and every boot hook.** Until you
 redo Stage 1 on the new build, the panel has no remote access.
 
-Do §1.2–§1.4 again on the Android 15 build. Then verify with
+Do all of Stage 1 again on the Android 15 build — §1.1 through §1.6, including the redirect,
+the Termux install, the boot hook and Termux:Boot. Then verify with
 [`06-procedures.md`](06-procedures.md) §B.
 
 > On the A15 build `adbd` still needs the same manual start; there is no vendor hook that

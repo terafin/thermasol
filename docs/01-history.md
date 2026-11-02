@@ -23,9 +23,6 @@ payloads found no other `start adbd`.
 
 **What is verified:**
 
-- **Aurora Store was installed on the stock panel.** It appears as a launcher entry in the
-  2026-09-13 UI dump (`txt='Aurora Store' ... pkg=app.lawnchair`). Aurora is an open-source
-  Play Store client, so the panel could fetch Play apps without signing a Google account in.
 - **Termux was installed and running as a normal app.** `uid=10108(u0_a108)`,
   `context=u:r:untrusted_app_27:s0:c108,...` straight from `ps` and `id`.
 - **`sshd` was running on port 8022**, as that uid, started by a boot hook with no adb
@@ -37,7 +34,8 @@ payloads found no other `start adbd`.
   2026-09-13 session, and `00-restore-access` sets `service.adb.tcp.port 5555` and calls
   `ctl.restart adbd`.
 
-**Now verified, from the 2026-09-13 session log.** The route was **not** Aurora Store:
+**This is the route, from the 2026-09-13 session log.** No Play Store client, no Google account
+— the panel's own store was redirected at a mirror:
 
 1. A **UniFi gateway local-DNS A record** pointed `thermatouch.tsolup.com` at a VPS the
    operator controls (`104.168.102.110`, host `zeal`).
@@ -52,10 +50,6 @@ payloads found no other `start adbd`.
 So the sequence is *DNS override → mirror → Termux → sshd → Termux:Boot via adb*, and it is
 recorded step by step. The full recipe is in
 [11-vendor-store-mirror.md](11-vendor-store-mirror.md) §"What was actually done".
-
-**What is still unverified:** Aurora Store does appear as a launcher entry in the 2026-09-13 UI
-dump, but there is no evidence it was the installation vehicle for anything above. It was
-installed at some point by some route; that route is not recorded.
 
 **The record was removed.** No revert call appears in the session log, but the override is gone:
 `thermatouch.tsolup.com` resolves to the real vendor IP `50.116.16.103` from both a general

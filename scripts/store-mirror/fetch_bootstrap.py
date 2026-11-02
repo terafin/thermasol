@@ -19,8 +19,8 @@ NOT fetched, on purpose:
     APK does not carry the F-Droid repository certificate (verified: signer
     964dfa41…, not 228fb2cf…). Serving an APK whose provenance this script cannot confirm
     would break the one invariant it exists to enforce.
-  * **Aurora Store** — there is no evidence it was ever the install vehicle here, and it
-    is not needed: the panel's own store installs whatever this mirror lists.
+  * **A Play Store client of any kind.** The route into this panel was never a store client
+    — it was the panel's own vendor store, redirected at a mirror. Nothing here needs one.
   * **A standalone sshd/adb binary** — Termux supplies both (`pkg install openssh`, and
     `adbd` is already on the device). Shipping a second copy would be a second thing to
     trust for no gain.
