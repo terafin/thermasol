@@ -77,3 +77,22 @@ block, so there was no separate result to cite. **Every one of them was then rea
 and recorded in the `PATCH-*` reports. That is the difference between "16,139 calls were
 processed" and "16,139 calls were read": the audit converts the first claim into the second, and
 it found work that the headline number had been quietly hiding.
+
+## The final check
+
+The audit was re-run as a **union** check: for each session, take every report's *actually
+indexed* call numbers — not its declared header — and look for missing numbers.
+
+```
+1aff3792   total= 7967  indexed= 7967  GAPS=0
+3056feeb   total= 4693  indexed= 4693  GAPS=0
+570ccc58   total=  570  indexed=  570  GAPS=0
+57b516a6   total= 1321  indexed= 1321  GAPS=0
+```
+
+That is the claim the guide stands on: **every call in every panel session is indexed in a
+report**, and the check is a script you can re-run rather than a number you have to trust.
+
+Two reports overstated their own range and were corrected — one header, one index-format note.
+Neither was a coverage hole; the calls were indexed elsewhere. Saying so is cheaper than
+pretending the first audit was right.

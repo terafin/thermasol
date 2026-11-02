@@ -5,6 +5,8 @@ Report                       Declared range   Index entries   Unindexed
 1aff3792-5601.md             5898-6706             809            0
 1aff3792-6401.md             6707-7514             808            0
 1aff3792-7201.md             7201-7967             767            0
+   (index uses '[N] text' with no bullet; a bullet-anchored regex reports it as
+    empty. Verified 767/767 by matching '[N]' anywhere in the index section.)
 1aff3792_1-800.md            1-800                 802            0
 1aff3792_801-1600.md         801-1600              807            0
 1aff3792_1601-2400.md        1601-2400             846            0
@@ -19,6 +21,8 @@ Report                       Declared range   Index entries   Unindexed
 3056feeb-1601.md             1695-2575             871           10 *
 3056feeb-2401.md             2576-3435             860            0
 3056feeb-3201.md             3436-4693            1258            0
+   (header previously claimed 3201-4448; index in fact starts at 3436 --
+    calls 3201-3435 are covered by 3056feeb-2401.md, which indexes 2576-3435)
 3056feeb-801.md              865-1694              826            4 *
 570ccc58-001.md              1-570                 570            0
 57b516a6-001.md              1-819                 831            0
