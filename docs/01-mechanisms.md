@@ -54,7 +54,7 @@ Observed on the deployed A15 panel:
 
 | | Value |
 |---|---|
-| `init.svc.adbd` | **running**, pid 550, started at **20.94 s** uptime, ppid 1 (init) |
+| `init.svc.adbd` | **running**, pid 550, ppid 1, started at **20.94 s** of kernel time (`/proc/<pid>/stat` field 22 = 2094 ticks at `CLK_TCK=100`) |
 | `persist.sys.usb.config` | `adb` |
 | `ro.debuggable` | `1` |
 | `ro.boot.usb.debugging` | empty — that trigger never fired |
@@ -107,9 +107,15 @@ Three properties, three jobs:
 | `persist.adb.tcp.port=5555` | `adbd` binds TCP (`daemon/main.cpp:270`) |
 | `ro.adb.secure=0` | no key prompt |
 
-**`/system/build.prop` is the copy that counts.** `/vendor/build.prop` also carries
-`persist.adb.tcp.port`, but init refuses it — `Do not have permissions to set
-'persist.adb.tcp.port' ... property file '/vendor/build.prop'`. Only the `/system` copy loads.
+**Only `/system/build.prop` takes effect.** `/vendor/build.prop` also carries two of the three,
+and init rejects both — `Do not have permissions to set 'persist.adb.tcp.port' to '5555' in
+property file '/vendor/build.prop': SELinux permission check failed`, `scontext=u:r:vendor_init:s0`.
+The `/system` copy is the one that loads:
+
+```
+/system/build.prop: ro.adb.secure=0   persist.adb.tcp.port=5555   persist.sys.usb.config=adb
+/vendor/build.prop: ro.adb.secure=0   persist.adb.tcp.port=5555   ← both rejected
+```
 
 Because these are build properties, **a fresh flash of this image gets adb back with no Termux,
 no boot hook, and nothing typed at a console.**

@@ -64,7 +64,11 @@ with the five-descriptor / `flags=0` / no-chain layout, then verify with
 
 ## The deployed set
 
-Recorded so you can confirm you have the same thing we ran:
+Recorded so you can confirm you have the same thing we ran.
+
+> **A note on `dtbo`.** `c9d51989…` appears in no on-panel recovery record; every other hash here
+> matches a witnessed deployment. Treat the release as a host-side assembly of the deployed
+> content, not a byte-for-byte image of what any one flash wrote.
 
 | Partition | SHA-256 | Bytes |
 |---|---|---|

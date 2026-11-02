@@ -454,8 +454,11 @@ Stage 1 on the new build, the panel has **no remote access at all**.
 
 **On the Android 15 image you built in §2, adb comes back by itself.**
 `persist.adb.tcp.port=5555`, `persist.sys.usb.config=adb` and `ro.adb.secure=0` are compiled into
-`/system/build.prop` and `/vendor/build.prop`. `adbd` starts at ~21 s with no Termux, no boot
-hook, and nothing typed. Verified on the deployed panel.
+`/system/build.prop`. AOSP `usbd` reads `persist.sys.usb.config` and issues `ctl.start adbd`;
+`adbd` binds TCP from `persist.adb.tcp.port`. No Termux, no boot hook, nothing typed.
+
+`/vendor/build.prop` also carries two of these and **init rejects both** — `persist.*` properties
+there fail the SELinux permission check. Only the `/system` copy is live.
 
 So after the flash:
 
