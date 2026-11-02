@@ -10,11 +10,13 @@ It is written for the next person — including future me — who has to touch t
 works, audio works, Google services work, and the panel is remotely recoverable. The
 ceiling speaker hisses and has not been silenced. Nothing here is certified by ThermaSol.
 
-Start with [docs/00-overview.md](docs/00-overview.md).
+**Working in this repo as an agent?** Read [AGENTS.md](AGENTS.md) first — it has the hard
+rules and the map. Otherwise start with [docs/00-overview.md](docs/00-overview.md).
 
 ## Layout
 
 ```
+AGENTS.md                 Agent guidance: hard rules, orientation, what not to try
 docs/
   00-overview.md          What the device is, and the shape of the whole effort
   01-history.md           Chronological narrative: stock → rooted → Android 15
