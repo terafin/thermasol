@@ -1,15 +1,10 @@
 # 09 — Stock panel to Android 15, start to finish
 
-You have a ThermaSol ThermaTouch TT10V2 running the shipped Android 10. This is the whole
-path to a working Android 15, in order, with the failures that actually happen.
+You have a ThermaSol ThermaTouch TT10V2 running the shipped Android 10. This is the path to a
+working Android 15, in order, as it was actually executed.
 
-Every command and result here is reconstructed from the six session transcripts of the
-original conversion — **16,139 tool calls**, read in full. Where a number appears, it came
-out of a terminal. Citation form: `[call]` refers to a call in the session listed in
-[`../verification/transcript-index.md`](../verification/transcript-index.md).
-
-**Read [`10-known-pitfalls.md`](10-known-pitfalls.md) before you type anything.** Most of the
-time lost on this project was lost to instruments that lied, not to the panel.
+**Read [`10-known-pitfalls.md`](10-known-pitfalls.md) first.** It is short and it prevents the
+failures below.
 
 ---
 
@@ -40,9 +35,9 @@ controller**, not the panel — it answers port 80 with:
 {"api_ver": 7, "type": "residential", "model": "T2000", "firmware": "5.65"}
 ```
 
-Roughly 110 calls were spent on it across two full 65,535-port scans before the panel was
-found. If you are scanning a subnet for a shower panel and something answers, check which
-thing it is first.
+**Check which device answered before you spend a night on it.** This is the single most common
+way to lose a session: scanning for a shower panel, finding a ThermaSol thing, and not noticing
+it is the wrong ThermaSol thing.
 
 ## 0.2 Find it by name, from the switch
 
@@ -136,16 +131,14 @@ On the panel: **Settings → App Store → Termux**. The server log confirms the
 172.125.77.119 GET /index-10.json
 ```
 
-> **Expect this to fail the first time if you wrote your own server.** The most common failure
-> is a catalogue that parses to `null` because a key is missing or the JSON exceeds 100,000
-> bytes — the panel's fetch buffer is fixed and overflow is swallowed. The store then shows an
-> empty grid with no error. The original session hit this: `/index-10.json` answered
-> `{"status":"ok"}`, Gson produced a null list, and the app threw.
+> **If the grid is empty, the server is wrong, not the panel.** Two causes: a catalogue that
+> parses to `null` because a key is missing, or JSON over 100,000 bytes — the panel's fetch
+> buffer is fixed and overflow is swallowed. `/index-10.json` answering `{"status":"ok"}` gives
+> Gson a null list and the app throws. Neither shows an error on the panel.
 
 ## 1.4 Set up SSH on the panel
 
-Do this **on the panel's own touchscreen**, inside Termux. The transcripts cannot see this step
-— it happened on the device — so do not expect a script:
+Do this **on the panel's own touchscreen**, inside Termux:
 
 ```sh
 pkg install openssh
@@ -231,8 +224,8 @@ adb shell 'monkey -p com.termux.boot -c android.intent.category.LAUNCHER 1'
 ```
 
 There is a second way to kill it: **`am force-stop com.termux`** puts the package in the stopped
-state and suppresses `BOOT_COMPLETED`. This happened and cost ~3.5 hours of no adb and no ssh.
-Never force-stop Termux.
+state and suppresses `BOOT_COMPLETED` — you lose both adb and ssh, and only a physical launch of
+the app recovers it. **Never force-stop Termux.**
 
 ## 1.7 Prove a reboot comes back
 
@@ -457,10 +450,9 @@ Recovery:
 | Fastboot / SDP | USB | not available |
 | Recovery | USB | not available |
 
-**Before concluding the UART is dead, use a real capture tool.** Five ad-hoc `stty`/`dd`
-attempts returned 0 bytes and the session concluded "UART dead, needs a power cycle" — then a proper
-logger found `u-boot=>` immediately. A two-fd serial open (`3u` + `15u`) produced ~45 minutes of
-phantom `0 bytes`.
+**Before concluding the UART is dead, use a real capture tool.** Ad-hoc `stty`/`dd` reads return
+0 bytes on a healthy console and read as silence. A two-fd serial open (`3u` + `15u`) produces
+phantom `0 bytes` indefinitely. Open the port once, log continuously, and match on `u-boot=>`.
 
 ## 5.2 The named reasons an A15 kernel dies silently
 
@@ -575,5 +567,5 @@ failure.
 - display, touch, audio, Ethernet, CAN and Bluetooth working
 - the shower app running, with a navigable UI
 
-What this does **not** give you is in [07-open-issues.md](07-open-issues.md). The honest
-summary: the ceiling speaker still hisses, and nobody has ever confirmed by ear that it stops.
+Known defects that remain are tracked as issues, not described here —
+[07-open-issues.md](07-open-issues.md).

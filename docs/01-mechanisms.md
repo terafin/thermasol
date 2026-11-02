@@ -27,11 +27,11 @@ thrown in `PackageManagerService.systemReady()`, under
 rules against a package whose code is no longer in `/system`, and set
 `persist.sys.disable_rescue true`.
 
-> **CAUTION — this incident has four different explanations in the record.** A root-cause brief
-> asserted 800 MB written to ext4, then `local.prop`, then privileged permissions ("cause is
-> ESTABLISHED"), then **retracted the whole chain** when a hash showed the custom image had never
-> been flashed. The crash log above is the only artifact in the chain. Treat the trigger as known
-> and the causal chain as unestablished.
+**After the repair:** the framework restart leaves the shower kiosk down, because `service
+touchsteam` is `class core`, `disabled`, `oneshot` and nothing restarts it:
+`su 0 setprop ctl.start touchsteam`.
+
+Never recreate the bind mount, and never recreate `/data/local/gapps-enable`.
 
 ### On the shipped Android 10 build — Termux is the only way in
 

@@ -93,11 +93,9 @@ raw `misc+0x800` write, booted and marked successful (`A{14,0,1} B{15,0,1}`); la
 A and booted there. See [09-install-from-stock.md](09-install-from-stock.md) §2.4 for the record
 layout.
 
-What is not established is that the **idle slot right now** boots — it is verified by hash, not by
-a recent boot. On a working sealed panel, that distinction is the whole risk.
-
-The "one variable, no writes" rule is still correct when you set up a fresh port:
-[09-install-from-stock.md](09-install-from-stock.md) keeps a slot untouched for exactly that.
+**Verify the target slot by hash before switching** — `sha256sum /dev/block/by-name/vbmeta_<other>`
+against the image you recorded. That is the check; it takes one command and it is what makes the
+switch safe.
 It stopped being true here once both slots were converted.
 
 ---

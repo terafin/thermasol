@@ -1,142 +1,102 @@
-# 13 — Your instruments lie
+# 13 — Gotchas: tools and traps that waste your time
 
-The single most expensive lesson in this project: **most of the time lost went to measurement,
-not to hardware.** Weeks of work produced dozens of cases where a tool returned a clean, confident,
-wrong answer. They all look identical — an empty result, a zero, a pass.
-
-This is the catalogue, so you recognise the shape instead of re-deriving it.
+What does not work, and what it looks like when it doesn't. Each entry is a mechanism, not a story.
+Read this before trusting any empty result.
 
 ---
 
-## 1. Absence is not evidence
+## Searches that find nothing
 
-Five distinct mechanisms produced "nothing found" on things that were there.
-
-| Mechanism | What you see | How to catch it |
+| Trap | What you see | Fix |
 |---|---|---|
-| `grep`/`find` are **shell functions** here wrapping ugrep | `error: unknown option '-G'`, rc=1, or silent zero. Also **honours `.gitignore`** | `type grep`; use `command grep` |
+| `grep`/`find` are **shell functions** wrapping ugrep | `error: unknown option '-G'`, rc=1, or a silent zero; also honours `.gitignore` | `type grep`; use `command grep` |
 | `grep` over a **raw EROFS image** | reports present services as missing — blocks are compressed | `fsck.erofs --extract`, or mount it |
-| `grep` over a file containing a **NUL byte** | "binary file matches", then silent truncation at that point | `grep -a` |
-| **Mis-cased symbol** | searching `MCP251XFD` when the config is `CAN_MCP251XFD` → "24 missing drivers" (real answer: 5) | search a shorter substring, then confirm |
-| **Loose regex** | `allowxperm` matched by a search for `allowx` → "1 match" when an anchored search gives 0 | anchor it: `^…$` |
+| `grep` on a file containing a **NUL byte** | "binary file matches", then silent truncation at that byte | `grep -a` |
+| **Wrong case in a symbol** | searching `MCP251XFD` when the config is `CAN_MCP251XFD` → "24 drivers missing" (real: 5) | search a short substring, then confirm |
+| **Unanchored regex** | `allowxperm` matched by `allowx` → "1 match" where an anchored search gives 0 | anchor it |
+| Matching `.ko` against a list of `.o` | "nothing shipped" when everything shipped | match like against like |
 
-The rule: **a zero needs a positive control.** Before believing "nothing there", prove the same
-mechanism finds something you know exists in the same file.
+**Every zero needs a positive control.** Prove the same mechanism finds something you know exists
+in the same file before believing "nothing there".
 
-## 2. A pass that measured the wrong artifact
+## Builds and gates that pass the wrong thing
 
-`CONTENT-GATES` reported **ALL PASS** while reading `out/…/recovery/`. The file actually on the
-wire was a stale `/tmp/ubflash/boot.img` carrying four stale `.ko`. Two more stale-artifact
-incidents followed in the same session.
+- `./imx-make.sh … 2>&1 | tail -12` **hides a parse-time failure**. A pipeline's exit status is
+  the last command's. `boot.img` gets rebuilt from a stale kernel and reports success.
+- **`make bootimage` never reaches the kernel.** Only `imx-make.sh kernel` does.
+- A gate can pass while reading a different directory than the file you are about to write. Hash
+  the artifact you are writing, and compare it to the device after writing.
+- `# CONFIG_X …` in a Kconfig fragment is a **directive, not a comment**. Writing one to explain a
+  fix disables it.
+- A `#` inside a backslash-continued make list silently truncates `modules.load` (70 entries → 2).
+- A Kconfig symbol compiled out makes its sysfs class directory **empty**, which reads as "no
+  driver". Check the process, not the directory.
 
-Three separate "successful builds" assembled `boot.img` from a **six-hour-old kernel** because
-`./imx-make.sh … 2>&1 | tail -12` hid a parse-time failure — a pipeline's exit status is the
-last command's.
+Gates that fail when the thing is fine are equally bad — they teach you to ignore the gate.
+Common causes: `strings | grep -q` under `pipefail`; `cmp` count units are **longs**; `cmp`
+mismatch output matching no failure word.
 
-And `make bootimage` **never reaches the kernel**; only `imx-make.sh kernel` does.
+## Config that is not what it says
 
-**Check**: hash the artifact you are about to write, not the one you just built. Compare it to
-the hash on the device after writing.
+| Assumption | Reality |
+|---|---|
+| `BOARD_KERNEL_CMDLINE` reaches the kernel | **inert** on this platform — the effective cmdline is `CONFIG_CMDLINE` plus U-Boot's `bootargs` |
+| `setenv bootargs` then `reset` | `reset` reloads env from eMMC and **discards it**. Use `run bootcmd` |
+| `/delete-node/` and `/delete-property/` in an overlay | **silently dropped** by the overlay compiler |
+| `CONFIG_CMDLINE` is empty by default | `gki_defconfig` sets `console=ttynull` with `CMDLINE_EXTEND=y`, so it wins over the DT's `stdout-path` |
+| `avbab` / `avbctl` / `set_active` exist on stock A10 | they do not. `set_active` is a fastboot protocol command |
+| The AOSP `bootloader_control` struct describes this slot record | it does not. This panel uses libavb_ab `AvbABData` (`\0AB0`) |
 
-## 3. A gate that says FAIL when the thing is fine
-
-As corrosive as a false pass, because it teaches you to ignore the gate. Nine were found in one
-night:
-
-- `strings | grep -q` under `pipefail` → two false FAILs
-- `.config` treated as a source file
-- `cmp` count units are **longs**, not bytes
-- `cmp` mismatch output matches no failure word, so a mismatch reads as success
-- a `hash` step that computed but never compared
-- a nested heredoc `SyntaxError` that left the flasher broken
-- a harness whose scratch directory was deleted → three false FAIL counts
-- `mkbootimg.py` forcing `second_addr = 0` unless `--second` is non-empty
-- a chunker that matched `.ko` against a list of `.o`
-
-## 4. The instrument killed the patient
-
-Three separate incidents where the *probe* took the panel off the network, then the outage was
-diagnosed as a hardware fault:
+## Probes that break the thing you are measuring
 
 - `dumpsys SurfaceFlinger`, `dumpsys window`, `logcat -d`, `ps -A --sort=-RSS`, repeated
-  `screencap` — each followed within 50–70 s by load 19–22 and ~70 s of dead adb
-- a 60-second health timer using `ps --sort=-RSS` **was** the load spike it reported
-- a `sysrq-trigger` panic test finished the job
+  `screencap`: each is followed within 50–70 s by load 19–22 and ~70 s of dead adb. Use single
+  spaced reads and `/proc/pressure/memory`.
+- `settings put system screen_brightness 102` kills `system_server` and drops the panel off the
+  network.
+- Raw MMIO on a runtime-suspended GPIO bank, or a weak **input pull-down** on `GPIO1_IO02`, resets
+  the board.
+- Pulling the presumed CHG pin low as a test causes a board reset.
+- Two processes on the serial port: one fakes a read-back failure, the other produces ~45 minutes
+  of phantom `0 bytes`.
 
-A fourth: **`settings put system screen_brightness 102`** killed `system_server` and dropped the
-panel off the network. Not a reboot, not a driver — a brightness write.
+## Output that hides the failure
 
-**Rule**: before diagnosing instability, stop your own sampling and see if it stops.
-
-## 5. Two instrumented opens on one port
-
-A serial helper opened the UART twice (`3u` + `15u`) and produced ~45 minutes of phantom
-`[confirm] 0 bytes`, from which a wrong "console is suspended" conclusion was drawn. Two flashers
-on the serial port faked a read-back failure.
-
-**Rule**: exactly one process on the console, ever.
-
-## 6. More than one boot in a capture
-
-Two milestones were built on **concatenated logs** from different boots. On-device clocks also
-drift — this panel's RTC is dead, so timestamps oscillate between dates mid-file, and host vs
-device clocks differed by ~7 h.
-
-**Rule**: every milestone starts by recording `boot_id`, `slot_suffix` and `vbmeta.digest`, and
-every capture is bounded by a known `boot_id`.
-
-## 7. Config that is not what it says
-
-- **`# CONFIG_X …` in a Kconfig fragment is a directive**, not prose. A comment written to
-  *explain* the clock fix **disabled** it.
-- A `#` inside a backslash-continued make list silently truncated `modules.load` from ~70
-  entries to **2**.
-- `BOARD_KERNEL_CMDLINE` is **inert** on this platform — the effective cmdline is
-  `CONFIG_CMDLINE` plus U-Boot's `bootargs`.
-- `setenv bootargs` is RAM-only; `reset` reloads env from eMMC and discards it. Use `run bootcmd`.
-- `/delete-node/` and `/delete-property/` in a compiled `.dtso` are **silently dropped**.
-- A Kconfig symbol compiled out (`# CONFIG_WATCHDOG_SYSFS is not set`) makes the sysfs class
-  directory empty — which was read as "no driver", and a **correct** prior note was "corrected"
-  away on that basis. The watchdog was bound the whole time.
-
-## 8. The constraint nobody wrote
-
-An agent enforced "never write slot A" for hours. A filtered scan of all six transcripts found
-**7 genuine owner turns mentioning slot A — all authorising, none forbidding. The rule was the
-agent's own sentence**, and it had been quoting itself.
-
-The same thing happened with "no permanent polling", which blocked the correct driver-owned
-polling fix until the transcript was searched.
-
-**Rule**: quote the owner's words, with a call number, or mark the constraint as your own
-inference. A rule with no author is not a rule.
-
-## 9. Debug output that hides the failure
-
-- Without `printk.devkmsg=on`, init's module lines stop at **exactly 10 per 5 s**. Every capture
-  showed 10 `init: Loading module` lines and looked like a hang.
-- `CONFIG_CMDLINE="console=ttynull"` with `CMDLINE_EXTEND=y` put `ttynull` first, overriding the
-  DT's `stdout-path`. **A healthy boot and a hang were indistinguishable by construction.**
-- `console=ttymxc3` sits ahead of ramoops in the console list, so a stuck UART write wedges
-  `console_flush_on_panic`. A dead console proves nothing about CPU state.
+- Without `printk.devkmsg=on`, init's module lines stop at **exactly 10 per 5 s**. It looks like a
+  hang.
+- `console=ttymxc3` precedes ramoops, so a stuck UART write wedges `console_flush_on_panic`. A dead
+  console says nothing about the CPU.
 - `pstore` mounted ≠ functional: no `ramoops` DT node means no `/dev/pmsg0`.
-- `tinyplay` exits **0** while printing `Error playing sample`. Check the SDMA IRQ delta.
-
-## 10. The device is not the only thing that lies
-
-- `dapm/bias_level` reads `Off` and regmap `06`/`0c` read `0000` **during normal working
-  playback**.
-- `CmaFree` is **not** the CMA free bitmap.
+- `tinyplay` exits **0** while printing `Error playing sample`.
+- `dapm/bias_level` reads `Off` and regmap `06`/`0c` read `0000` **during normal playback**.
+- `CmaFree` is not the CMA free bitmap. A healthy boot shows it at 12 MB with zero allocation
+  failures.
 - `ERROR-ACTIVE` on `can0` with all-zero RX/TX counters proves nothing.
-- `sys.usb.state` empty with `adbd` running is normal on this build.
-- An empty watchdog class dir does not mean no watchdog.
+- Two boots concatenated in one capture — bound every capture by a known `boot_id`.
+
+## Privilege and access
+
+- `setprop ctl.start adbd` / `ctl.restart adbd` is received by init and **5555 stays closed**.
+- `stop adbd` / `start adbd` from Termux: `must be root`.
+- `sys.usb.config=adb` on A10 crash-loops adbd (signal 6).
+- `adb push` / `adb pull` cannot create or read `/data/local/*` — adbd runs as shell. Write as root,
+  read with `exec-out`.
+- `su` takes a **uid** here: `su 0 sh -c '…'`, never `su 0 -c`.
+- `su` inside Termux or an app context is Termux's own stub — every `su 0 …` there is dead.
+- `am force-stop com.termux` puts Termux:Boot in the stopped state and suppresses `BOOT_COMPLETED`.
+- A freshly installed Termux:Boot never runs until the package has been launched once.
+
+## Things that look like a defect and are not
+
+- An empty watchdog class directory with the driver bound and running.
+- `sys.usb.state` empty while `adbd` runs normally.
+- A `vbmeta` read-back "mismatch" when you hash the whole partition against a shorter file.
+- `No ion heap of name reserved-uncached exists` is a **heap name** mismatch, not memory
+  exhaustion.
 
 ---
 
-## The habit
+## The rule
 
-Every entry above was caught the same way: **by noticing the result had an impossible shape**,
-not by the result announcing a problem.
-
-So: when a measurement agrees with what you expected, that is the moment to check it a second
-way. This project's worst errors were all *agreeable* results.
+When a measurement agrees with what you expected, check it a second way. The expensive errors in
+this project were all agreeable results.
