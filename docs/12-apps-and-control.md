@@ -146,7 +146,7 @@ completely wrong conclusion that had to be retracted. See [08-lessons.md](08-les
 
 - **Apple TV** sign-in is deferred (issue [#7](https://github.com/terafin/thermasol/issues/7)).
 - **Netflix** works; DRM is fine on this image.
-- **HA dashboard** runs but costs ~82% of the SoC (issue
-  [#5](https://github.com/terafin/thermasol/issues/5)). A lighter dashboard is the fix, not code.
+- **HA dashboard** runs but costs ~82% of the SoC. That is a Home Assistant dashboard problem,
+  not a panel defect — a lighter dashboard is the fix, not code.
 - **Bluetooth audio** is not usable at 115200 baud (issue
   [#4](https://github.com/terafin/thermasol/issues/4)).
