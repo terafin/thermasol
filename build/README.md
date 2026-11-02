@@ -75,14 +75,30 @@ Recorded so you can confirm you have the same thing we ran:
 | vendor | `37f858a16a7d6a1fab25653827111629e2ab898160c5e6e5ec45dc6540ea6fbc` | 536,870,912 |
 | vbmeta | `f9f496c448855b2cbf127ae6cb7b0ec1bbfee23df78529eac18a4015067efbb5` | 1,048,576 |
 
-## Why not the images
+## Availability of the images
 
-Three honest reasons:
+The images are **not committed to git** — 4.4 GB in a repo whose value is the reasoning, and
+`git clone` should stay cheap. They are published as **release assets** instead, so anyone
+can download exactly what ran and flash it.
 
-1. **Proprietary content.** `product.img` and `vendor.img` are Google's and NXP/Variscite's.
-2. **They are device-locked.** The images are signed with the device's AVB key and will only
-   boot on this exact unit; for anyone else they are at best useless, at worst a brick.
-3. **Size.** ~4.4 GB of binaries for a repo whose value is the reasoning.
+Two things to know before you do:
 
-If you own one of these panels and want the images, rebuild from the BSP with the patches
-here — that is reproducible, and it does not depend on trusting a stranger's binary.
+1. **They are signed with the BSP's stock test key.**
+   `device/nxp/common/security/testkey_rsa4096.pem` (byte-identical to
+   `external/avb/test/data/testkey_rsa4096.pem`), which `dart_mx8mm/BoardConfig.mk:228`
+   selects. It is a **public, checked-in key** — not a secret, not per-device. Verify any image
+   you download against it:
+
+   ```sh
+   avbtool verify_image --image vbmeta.raw --key testkey_rsa4096.pem
+   ```
+
+2. **`product.img` contains Google proprietary applications** (GMS, Play Store, Pixel
+   prebuilts — 1.4 GB). It is published here as a **device backup for owners of this hardware**,
+   not as a redistribution licence. If you are not restoring your own panel, build from source
+   using the recipe above.
+
+## Installing onto a stock panel
+
+That is the whole point, so it gets its own guide:
+[`../docs/09-install-from-stock.md`](../docs/09-install-from-stock.md).
