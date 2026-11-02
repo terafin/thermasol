@@ -196,7 +196,7 @@ Stock A10 had used `androidboot.bt_uart=/dev/ttymxc1`, `bt_firmware=BCM43430A1.h
   `vbat` from `WIFI_PWR_3V3`, `vddio` from `WIFI_PWR_1V8`, max speed 115200.
 - **Disable the inherited `sec_rstn` GPIO4_IO31 hog** and drop gpio4's `pinctrl-0` to free the
   BT_RX pad (stock SAI3_TXFS).
-- uart4/console untouched. Wi-Fi SDIO untouched.
+- uart4/console untouched.
 - Vendor: append **three direct `insmod` lines** to `etc/early.init.cfg` after the existing
   modprobe. No SELinux relaxation — the `vendor_file` label is already allowed to
   `init-insmod-sh`. 999 vendor inodes and their metadata preserved.

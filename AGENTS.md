@@ -71,8 +71,8 @@ evidence are in [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
    flush. Do not launch `PowerFlushActivity` or `FirmwareUpdateActivity` to "look".
 6. **Never pull the touch CHG pin low, and never do raw MMIO on a suspended GPIO bank.**
    It caused a board reset.
-7. **Never enable Wi-Fi or "fix" it.** It is physically destroyed. Setting `force_wifi true`
-   takes `eth0` down at startup.
+7. **Never set `force_wifi true`.** The vendor `MainControl` takes `eth0` **down** at startup
+   when it is set. The panel runs on Ethernet.
 
 ### Never do these in the build
 

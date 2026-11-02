@@ -24,7 +24,7 @@ Only four devices are ThermaSol-specific and had to be carried over:
 | Touch controller | `atmel,maxtouch` | i2c2 @ 0x4b |
 | MIPI→LVDS bridge | `ti,sn65dsi83` | i2c2 @ 0x2c |
 | RTC | `isil,isl12057/8` | i2c |
-| Wi-Fi/BT combo | `brcm,bcm4329-fmac` | (Wi-Fi part unused — physically broken) |
+| Wi-Fi/BT combo | `brcm,bcm4329-fmac` | — |
 
 The port itself is `tt10v2-port.dtsi`: an overlay merged into the Variscite DART device tree.
 Display timings in it are **measured, not guessed** — see

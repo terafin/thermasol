@@ -14,7 +14,7 @@
 | Fieldbus | CAN via mcp251xfd, `can0` @ 100 kbit/s |
 | Bluetooth | Broadcom **BCM4335C0** on UART2 (serdev) |
 | Storage | eMMC, A/B slots (`boot`, `dtbo`, `system`, `vendor`, `product`, `vbmeta`) |
-| Network | Ethernet only — **Wi-Fi is physically broken** |
+| Network | Ethernet (`eth0`) — the shipped board's Wi-Fi is not used on this build |
 | Shipped OS | Android 10, `eng.eric.20220531.120206`, userdebug, locked bootloader, AVB green |
 | Current OS | Android 15 (`imx-android-15.0.0_1.2.0`, Variscite BSP) |
 

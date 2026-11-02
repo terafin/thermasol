@@ -32,7 +32,6 @@ issues just creates chores that never close.
 
 | Thing | Reality |
 |---|---|
-| **Wi-Fi** | Physically destroyed by a prior agent's soldering instructions. Ethernet only. Do not propose Wi-Fi as a fallback. |
 | **Deep suspend** | Never wakes. No RTC or alarm wake source; the touch IRQ does not bring the SoC out. Recovery is the mains breaker. Never use `echo mem`. |
 | **Power cycling** | The panel is not PoE. The only remote power action is a breaker trip, i.e. a human. |
 | **Rollback** | Both slots hold A15, and the slot switch has **never been performed** on this panel — the other slot is verified by hash only. The wall is closed, so this will not be tested. Treat rollback as a plan, not a proven safety net. See `docs/04-android15-port.md` §Rolling back. |

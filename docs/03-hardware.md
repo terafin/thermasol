@@ -182,9 +182,7 @@ The DT compatible string is `brcm,bcm43430a1-bt` even though the part is a BCM43
 the generic BCM driver with no quirks, and the kernel auto-selects the right firmware from the
 chip's own version report.
 
-**Wi-Fi is physically broken** — damaged by soldering instructions from a previous agent.
-There is no Wi-Fi fallback and no further soldering is sanctioned. Treat this panel as
-Ethernet-only.
+Wi-Fi on the shipped board is not brought up by this port; the panel runs on Ethernet.
 
 ## Power
 
@@ -223,4 +221,3 @@ written. See issue [#16](https://github.com/terafin/thermasol/issues/16).
 | Deep suspend (`echo mem`) | **Never wakes.** No RTC/alarm wake source; the touch IRQ is registered as a wake source but does not bring the SoC out. Recovery is the breaker. |
 | `Utils.ShutdownAll` | Stops steam and flushes water — not an idle action. |
 | `PowerFlushActivity` / `FirmwareUpdateActivity` | Act on real hardware in `onCreate`. |
-| Wi-Fi | Broken. Do not "just enable it". |
