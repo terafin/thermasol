@@ -26,12 +26,30 @@ documented recovery. Consequences below are not stylistic preferences.
 | How is the image built and flashed? | [`docs/04-android15-port.md`](docs/04-android15-port.md), [`build/README.md`](build/README.md) |
 | Why does X behave like that? | [`docs/05-fixes.md`](docs/05-fixes.md) |
 | I need to do a procedure | [`docs/06-procedures.md`](docs/06-procedures.md) |
-| What is still broken? | [`docs/07-open-issues.md`](docs/07-open-issues.md) |
+| What is still broken? | **[the issue tracker](https://github.com/terafin/thermasol/issues)** — index at [`docs/07-open-issues.md`](docs/07-open-issues.md) |
+| Apps, audio control, adb UI recipes | [`docs/12-apps-and-control.md`](docs/12-apps-and-control.md) |
+| Serving an app store / installing Termux on stock | [`docs/11-vendor-store-mirror.md`](docs/11-vendor-store-mirror.md) |
 | I have a stock panel to convert | [`docs/09-install-from-stock.md`](docs/09-install-from-stock.md) |
 | What should I avoid? | [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md) |
 | How was this written / what went wrong | [`docs/08-lessons.md`](docs/08-lessons.md) |
 
 ---
+
+## Working the open issues
+
+**The GitHub issue tracker is canonical** — <https://github.com/terafin/thermasol/issues>.
+`docs/07-open-issues.md` is a human-readable index of it; if they disagree, the tracker wins.
+
+Labels mean what they say: `needs-operator` means a human has to be physically present — do not
+"close" one from a successful adb command. `unverified` means written down but not proven.
+
+The acceptance blockers, in order: speaker hiss (#1), physical certification (#8), and an
+untested rollback path (#9). Everything else is a real defect that does not block accepting the
+panel. **Only the operator declares the project complete.**
+
+When you fix something, close the issue with the evidence — the command, the output, the
+artifact — not with "done". This repo has been burned repeatedly by claims that had no artifact
+behind them; see [`docs/08-lessons.md`](docs/08-lessons.md).
 
 ## Hard rules — these are not negotiable
 
