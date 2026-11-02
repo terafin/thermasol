@@ -25,6 +25,9 @@ docs/
   06-procedures.md        Runbooks: flash, rollback, recover, verify
   07-open-issues.md       What is still wrong (be honest here)
   08-lessons.md           What I would do differently
+build/                    How OUR Android 15 image is assembled, + its hashes
+devicetree/               Our device-tree additions (ThermaSol port + BT UART2)
+patches/                  Our HAL + vendor-APK patches
 scripts/                  Small, self-contained tools used above
 firmware/README.md        Vendor firmware provenance: URL, size, hash (no binaries)
 ```
@@ -38,4 +41,9 @@ changing anything.
 
 ## License
 
-Documentation: CC BY 4.0. Scripts: MIT. No vendor binaries are redistributed; see `firmware/README.md` for provenance only.
+Documentation, device tree and patches: CC BY 4.0. Scripts: MIT.
+
+**No binaries are redistributed here** — not ThermaSol's speaker firmware, not the Android
+image. Our `product.img` contains 1.4 GB of Google's proprietary apps and `vendor.img` is
+NXP/Variscite content; neither is ours to publish. Image hashes are recorded in
+`build/README.md` so you can verify one you build yourself.
