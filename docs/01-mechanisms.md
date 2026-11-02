@@ -7,33 +7,59 @@ Where something is a reconstruction rather than a measurement, it says so.
 
 ---
 
-## Nothing starts `adbd`, and nothing can
+## `adbd` on stock stops at a shell you do not have yet
 
-This is the fact the whole access model hangs on.
+The whole access model starts here, and the two builds are **not** the same.
 
-`adbd` is `disabled` in `/system/init.usb.rc`, and every `start adbd` in the deployed system is
-gated on a `sys.usb.configfs` value this hardware never holds — the vendor sets it to `2` in
-`on boot`. A full scan of `system.img`, `vendor.img`, `product.img`, `boot.img` and all seven
-APEX payloads found no other `start adbd`.
+### On the shipped Android 10 build — Termux is the only way in
 
-**Consequence:** the only thing that ever brought up `adbd` (and `sshd`) was a **Termux:Boot
-hook** — `00-restore-access` — which requires `BOOT_COMPLETED`. There is no vendor mechanism to
-lean on.
+`adbd` is `disabled` in `/system/init.usb.rc`, and every `start adbd` in that image is gated on
+a `sys.usb.configfs` value this hardware never holds. A scan of `system.img`, `vendor.img`,
+`product.img`, `boot.img` and all seven APEX payloads found no other `start adbd`.
 
-**Recovery mode does give you `adbd`.** Its `init.rc` has no configfs gate. But it brings up
+So on A10, **the only thing that ever brought up `adbd` — or `sshd` — was a Termux:Boot hook**
+(`00-restore-access`), and that hook needs `BOOT_COMPLETED`, which needs Termux installed first.
+
+There is no vendor mechanism to lean on. That is why the install path is
+[09-install-from-stock.md](09-install-from-stock.md): get a shell by redirecting the vendor
+store, and everything else follows.
+
+### On the Android 15 build — Termux is not involved
+
+Observed on the deployed A15 panel:
+
+| | Value |
+|---|---|
+| `init.svc.adbd` | **running**, pid 550, started at **20.94 s** uptime, ppid 1 (init) |
+| `persist.sys.usb.config` | `adb` |
+| `ro.debuggable` | `1` |
+| `ro.boot.usb.debugging` | empty — that trigger never fired |
+| `pm list packages \| grep termux` | **no match** |
+| Termux on the device | **not installed** |
+
+`init.usb.rc` has `on boot && property:persist.sys.usb.config=*` →
+`setprop sys.usb.config ${persist.sys.usb.config}`, which sets `sys.usb.config=adb`.
+
+The most plausible mechanism — **inference, not proven** — is that `on init` sets
+`sys.usb.configfs 0`, the `on boot` above sets `sys.usb.config=adb`, and that pair satisfies
+`property:sys.usb.config=adb && property:sys.usb.configfs=0` → `start adbd`; the vendor's own
+`on boot` then flips `configfs` to `2` afterwards, which is the value visible once the panel is
+up.
+
+**Consequence:** on A15 `adbd` comes up on its own, and `persist.sys.usb.config` is a
+**persistent** property — it survives a `/data` wipe. Do not assume that means access is safe:
+that has only been observed across one 12-day uptime, not across a reboot.
+
+**Recovery mode gives `adbd` regardless.** Its `init.rc` has no configfs gate. But it brings up
 **loopback only** — no `netd`, no DHCP — and binds `adbd` to USB functionfs. With USB excluded,
 that route is unreachable however you enter it.
 
-So the reachable transports are exactly:
+Reachable transports on the current build:
 
 | Path | Notes |
 |---|---|
-| ADB over TCP 5555 | works, root — but depends on `adbd` being started by hand |
-| SSH 8022 (Termux `sshd`) | works, independent of `adbd` |
-| U-Boot console | interrupt autoboot; flash and rollback **without** a shell. Needs the UART adapter. |
-| UART console | 115200 8N1, host `/dev/cu.usbserial-A10OOP3V` — **the adapter is not attached** |
-| USB / fastboot / SDP | **unavailable** — no USB on this panel |
-
+| ADB over TCP 5555 | works, root — self-started on A15 (see above) |
+| SSH 8022 (Termux `sshd`) | **not present on the current A15 image** — Termux is not installed |
 ## Everything remote lives in `/data`, and a system flash destroys it
 
 The access stack is Termux plus boot hooks under `~/.termux/boot/`. All of it is in `/data`.
@@ -127,7 +153,7 @@ isn't repeated.
 | "`/data/local.prop` is a mechanism on Android 10" | the string table of the shipped `init` |
 | "`ALLOW_LOCAL_PROP_OVERRIDE` makes the file inert" | the target property is defined nowhere, so the write-once rule never applies |
 | "`service adbd` is not in the deployed config" | it is — in `/system/init.usb.rc`, which had not been looked in |
-| "`adbd` starts automatically on every boot" | `/vendor/etc/init/hw/init.freescale.usb.rc` sets `sys.usb.configfs 2`, and no deployed action handles it |
+| "`adbd` never starts on its own, so nothing to worry about there" | true on **A10** only. On the **A15** build it starts itself at ~21 s from `persist.sys.usb.config=adb` — see above |
 | "a non-Termux adb path exists" | wrong inference from a true premise; access converges on Termux |
 | "silence on the wire proves the boot stopped before `netd`" | `netd` is native and starts at `zygote-start`; `eth0`'s address comes from the framework |
 | "the logo proves the failure is before Android" | `bootanim` has two possible starters, so it proves only that `bootanim` is running |
