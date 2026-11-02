@@ -4,7 +4,15 @@
 # Refuses to reboot unless the shower controller reports connected and there is no
 # pending deploy arm. Verifies the NEW boot id differs from the old one.
 set -eu
-ADB=${ADB:-adb}; PANEL=${PANEL:-<panel-ip>:5555}; PORT=${PORT:-5038}
+command -v "${ADB:-adb}" >/dev/null 2>&1 || {
+  echo "error: adb not found. Set ADB=/path/to/adb (this repo does not ship one)." >&2
+  exit 127
+}
+ADB=${ADB:-adb}
+# The local control apps are yours, not theirs: set TT_PKG_APP to your package
+# prefix if you built your own helpers. Defaults to the name used here.
+TT_PKG_APP=${TT_PKG_APP:-com.example.heatpanel}
+PANEL=${PANEL:-<panel-ip>:5555}; PORT=${PORT:-5038}
 V6=${V6:-'[fe80::def:7b18:fe:3b4b%ens160]:5555'}
 
 conn() { "$ADB" -P "$PORT" connect "$1" >/dev/null 2>&1 || true; }
@@ -14,7 +22,7 @@ conn "$PANEL"
 OLD=$(sh_ "$PANEL" 'cat /proc/sys/kernel/random/boot_id' | tr -d '\r')
 [ -n "$OLD" ] || { echo "cannot read boot id; aborting" >&2; exit 1; }
 
-CTRL=$(sh_ "$PANEL" 'cat /data/user/0/net.example.ttcontroller/files/controller-keeper-status.json' | command grep -c '"state": "connected"' || true)
+CTRL=$(sh_ "$PANEL" 'cat /data/user/0/${TT_PKG_APP}.ttcontroller/files/controller-keeper-status.json' | command grep -c '"state": "connected"' || true)
 [ "$CTRL" = "1" ] || { echo "controller not connected; NOT rebooting" >&2; exit 1; }
 
 ARM=$(sh_ "$PANEL" 'test ! -e /metadata/tt/pending-deploy; echo $?' | tr -d '\r')

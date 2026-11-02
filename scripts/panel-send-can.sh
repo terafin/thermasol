@@ -1,4 +1,9 @@
 #!/bin/sh
+# Sends a frame that CHANGES LIVE HARDWARE. Guessed frames have killed working
+# speaker audio. Capture the vendor app's own frames with can-capture.sh first,
+# then mirror them exactly.
+#
+# Set TT_ALLOW_CAN=1 to enable. Without it this script refuses and exits 2.
 # Send ONE explicit CAN frame to the shower peripherals.
 #
 #   panel-send-can.sh <opcode-hex> <payload-hex...>
@@ -11,6 +16,11 @@
 # DANGER: this drives real hardware. Before using it, read docs/06-procedures.md §H:
 # capture what the vendor app sends and mirror it. Do not guess.
 set -eu
+[ "${TT_ALLOW_CAN:-0}" = "1" ] || {
+  echo "refusing: this sends a CAN frame to live hardware." >&2
+  echo "set TT_ALLOW_CAN=1 to confirm you captured this frame from the vendor app." >&2
+  exit 2
+}
 [ $# -ge 1 ] || { echo "usage: $0 <opcode-hex> [payload-hex...]" >&2; exit 2; }
 
 ADB=${ADB:-adb}; PANEL=${PANEL:-<panel-ip>:5555}; PORT=${PORT:-5038}

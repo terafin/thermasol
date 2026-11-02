@@ -66,9 +66,14 @@ with the five-descriptor / `flags=0` / no-chain layout, then verify with
 
 Recorded so you can confirm you have the same thing we ran.
 
-> **A note on `dtbo`.** `c9d51989…` appears in no on-panel recovery record; every other hash here
-> matches a witnessed deployment. Treat the release as a host-side assembly of the deployed
-> content, not a byte-for-byte image of what any one flash wrote.
+**These are the hashes of the release assets, not of any single flash.** `product` and `system`
+match the deployed set; `dtbo` (`c9d51989…`) matches no witnessed deployment — several dtbo builds
+were used during bring-up, and the release carries the last good one built on the host. If you
+need the hash the panel actually booted from, read it off the device:
+
+```sh
+adb shell 'su 0 sha256sum /dev/block/by-name/dtbo_$(getprop ro.boot.slot_suffix)'
+```
 
 | Partition | SHA-256 | Bytes |
 |---|---|---|
