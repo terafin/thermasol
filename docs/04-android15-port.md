@@ -22,7 +22,7 @@ Only four devices are ThermaSol-specific and had to be carried over:
 | Device | Compatible | Where |
 |---|---|---|
 | Touch controller | `atmel,maxtouch` | i2c2 @ 0x4b |
-| MIPI→LVDS bridge | `ti,sn65dsi83` | i2c2 @ 0x2c |
+| MIPI→LVDS bridge | `ti,sn65dsi83` | **i2c0** @ 0x2c (`sn65dsi83 0-002c`, `30a20000.i2c`) |
 | RTC | `isil,isl12057/8` | i2c |
 | Wi-Fi/BT combo | `brcm,bcm4329-fmac` | — |
 
@@ -46,6 +46,31 @@ Notes that cost time:
 - The Java used is 21; the host default was 27 and breaks the build.
 - **Verify by timestamp and hash that `boot.img` and `Image` were actually rebuilt.** Treat a
   "build completed successfully" line as a claim, not a result.
+
+## The five things that make a kernel silent, in order
+
+A boot that never reaches userspace on this board fails through this chain. Fix one and the next
+appears. Do them in this order.
+
+1. **`init-on-array` on the CCM node.** 6.6's `imx_clk_init_on()` returns early without it, so no
+   AXI/AHB/NOC/DRAM bus clocks are enabled at all. Symptom: `imx8mm_clk_driver_init` never
+   returns under `initcall_debug`.
+2. **cpufreq parks the cores on the PLL it resets.** `clk-imx8mm.c:648` registers the ARM cpu
+   clock with `step == mux`, so `clk_cpu_set_rate` asserts the ARM PLL reset while the cores are
+   still running on it. `cpufreq.off=1` removes the stall.
+3. **`androidboot.boot_devices=…30b60000.mmc`.** Without it, init polls 10 s for partitions and
+   gives up.
+4. **fstab must name block devices.** Bare `system`/`vendor`/`product` give `Invalid ext4
+   superblock`; write `/dev/block/by-name/…` and set `androidboot.fstab_suffix=nxp`.
+5. **`/data` must be formatted.** Android 10's ext4 userdata blocks the f2fs format. A gated
+   1 MiB zero write at LBA `0x103b800` makes `partition_wiped()` true.
+
+> **Do not reach for `pstore` first.** This board has no `ramoops` node, so `/dev/pmsg0` does not
+> exist and every dump is all zeros. `initcall_debug` on the UART is what names the failure.
+
+**Also required:** a kernel that decompresses to under **32 MiB** (`fb_fsl_boot.c:47
+DST_DECOMPRESS_LEN`). Over that, U-Boot prints `Decompress kernel fail!` and parks in USB
+fastboot.
 
 ## Debugging a boot that never reaches userspace
 
@@ -112,15 +137,16 @@ destination LBA by a **constant** (`0x20000` sectors, say) rather than by the si
 you actually transferred, the cursor drifts past the partition end — and `mmc write` will happily
 write whatever is next:
 
-> `dtbo_b` ended up 60 MiB into `boot_a`; `boot_b` ended up 16 MiB into `system_a`. Both
-> reported **success**.
+> **A fixed-sector write would push `dtbo_b` 60 MiB into `boot_a` and `boot_b` 16 MiB into
+> `system_a`**, and `mmc write` would report success doing it. This was caught before it ran;
+> the per-partition sector counts below are what prevent it.
 
 **Compute sectors per chunk from the panel's own GPT, per partition, and assert before writing:**
 
 ```sh
 # on the panel, for the target partition
 cat /proc/partitions                       # block counts, decimal
-adb shell 'su 0 sgdisk -p /dev/block/mmcblk0'   # or read the partition table directly
+adb shell 'su 0 cat /proc/partitions'    # the eMMC is mmcblk2 on this panel
 ```
 
 ```sh
@@ -137,8 +163,8 @@ lba=...; sectors=...; partition_end=...
 - Do **not** root the server in `/tmp`; it vanishes.
 - U-Boot's TFTP `blksize` is **1468** (~15 s per 64 MiB). Measuring throughput with `curl`
   defaults to 512 and gives a ~3× wrong number — do not size timeouts off it.
-- Set `serverip` **after** `dhcp`. A TFTP-only dnsmasq does not answer DHCP, so `dhcp` alone
-  leaves it unset.
+- A TFTP-only dnsmasq does not answer DHCP, so **set `serverip` after `dhcp`** — `dhcp`
+  overwrites whatever you set before it.
 - A `*.00` glob matches only chunk `00`. Expect 67 files / ~4.1 GB for a full set.
 
 ### Slot discipline
@@ -148,9 +174,36 @@ lba=...; sectors=...; partition_end=...
 - The A/B metadata lives in `misc` at `0x800`: 32 bytes, magic `\0AB0`, version 1, CRC32 over
   the first 28 bytes, big-endian CRC at offset 28.
 
+### Slot selection is by priority only
+
+`get_curr_slot` in the deployed U-Boot reads **priority** and nothing else. It never consults
+`tries_remaining`, so a slot whose tries are exhausted is still selected if its priority is
+highest. And `avb_ab_flow.c:297` compares **strictly `>`**, so equal priorities are a tie that
+can never flip.
+
+**Consequences you must design around:**
+
+- Arming the target at priority 15 against a backup also at 15 **selects the backup**. Set the
+  target strictly higher.
+- An unbootable slot does not drain its tries and fall away. It stays selected.
+
+### The slot record keeps vanishing, and here is why
+
+Two writers share `misc+0x800`:
+
+| Writer | Structure |
+|---|---|
+| NXP U-Boot | libavb_ab `AvbABData` — magic `\0AB0`, CRC32 big-endian at offset 28 |
+| AOSP boot HAL (running Android) | `bootloader_control` — magic `BCAB` |
+
+The AOSP side marks the boot successful by writing **its** structure at the same offset, which
+overwrites the NXP record. That is why slot A has been observed reading `{0,0,0}` while running
+perfectly, and why a record can disappear with no error anywhere.
+
+The build tree's `bootloader_control` header is **not** the format to write. Use `AvbABData`.
+
 Armed-trial discipline, adopted after a **stale approval was hit for real**: a boot-success
 mark written for one boot was later disarmed by the guard because it belonged to an older boot.
-The record is explicit — *"Do not allow a second reboot to inherit stale first-boot approval."*
 
 1. Read the **actual current** slot and boot UUID immediately before writing.
 2. Write the inactive slot.
@@ -232,8 +285,8 @@ pack fails. That is a pre-flash failure, not a device result — treat it as suc
 ### Integrity is not content
 
 The dark-panel post-mortem named a failure class worth its own gate: **every hash and AVB check
-passed while the image was content-wrong.** A stock DART dtbo had been flashed, and 194 of 248
-modules were installed nowhere. Nothing detected it, because nothing checked that the image
+passed while the image was content-wrong.** A stock DART dtbo had been flashed, and only **56 of
+248** kernel modules were shipped. Nothing detected it, because nothing checked that the image
 *describes this panel*.
 
 Run these four gates before flashing, not after:
@@ -250,8 +303,12 @@ built; only these prove the bytes are the *right* bytes.
 ## What flashing destroys
 
 Everything in `/data`: Termux, all boot hooks, SSH keys, the ADB-at-boot config, the panel
-healer, the idle policy. The U-Boot environment survives (it is in eMMC user area, not a
-slot), so the **CMA fix and the UART console survive** a slot flash.
+healer, the idle policy. The U-Boot environment survives (it is in eMMC user area, not a slot),
+so the UART console settings survive a slot flash.
+
+**The CMA size does not survive it, because it is not in the environment.** CMA is sized by the
+`linux,cma` device-tree node inside `dtbo` — a slot partition. Flash a `dtbo` without it and CMA
+falls back to 16 MiB. The `cmaargs` environment variable is a no-op.
 
 Rebuild the access stack *before* declaring the flash done — see
 [06-procedures.md](06-procedures.md).
@@ -312,7 +369,8 @@ and the result it accepted:
  "fallback_A_preserved": "9171719e…"}
 ```
 
-**The panel has been on slot `_b` since.** Every slot read from 2026-10-18 onward returns `_b`.
+**The panel has been on slot `_b` since the swap at 22:34 on 2026-10-18.** Reads before that
+still returned `_a`; the last read returned `_b`.
 
 What has **not** been done since the wall closed is a deliberate switch on a working panel. The
 documented history is real; the current readiness of the idle slot is a hash comparison, not a
