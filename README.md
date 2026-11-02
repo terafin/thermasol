@@ -1,0 +1,41 @@
+# ThermaTouch TT10V2 — Android 15
+
+Field notes from converting a stock ThermaSol ThermaTouch TT10V2 shower panel from its
+shipped Android 10 build to a working Android 15 build, without losing the shower.
+
+This is a record of what actually happened, what was verified, and what is still broken.
+It is written for the next person — including future me — who has to touch this panel.
+
+**Status: operational but not finished.** The shower runs, the display is correct, touch
+works, audio works, Google services work, and the panel is remotely recoverable. The
+ceiling speaker hisses and has not been silenced. Nothing here is certified by ThermaSol.
+
+Start with [docs/00-overview.md](docs/00-overview.md).
+
+## Layout
+
+```
+docs/
+  00-overview.md          What the device is, and the shape of the whole effort
+  01-history.md           Chronological narrative: stock → rooted → Android 15
+  02-access.md            How we get a shell on it (and how we got one the first time)
+  03-hardware.md          SoC, display, touch, audio, CAN, Bluetooth, storage
+  04-android15-port.md    The port itself: device tree, image build, flashing
+  05-fixes.md             Each defect found, its root cause, and its fix
+  06-procedures.md        Runbooks: flash, rollback, recover, verify
+  07-open-issues.md       What is still wrong (be honest here)
+  08-lessons.md           What I would do differently
+scripts/                  Small, self-contained tools used above
+firmware/README.md        Vendor firmware provenance: URL, size, hash (no binaries)
+```
+
+## Safety
+
+The panel is sealed into a finished bathroom wall. There is no reset button, no USB, and the
+only documented connector is behind silicone. Every recovery path therefore depends on a
+software path staying alive. Read [docs/06-procedures.md](docs/06-procedures.md) before
+changing anything.
+
+## License
+
+Documentation: CC BY 4.0. Scripts: MIT. No vendor binaries are redistributed; see `firmware/README.md` for provenance only.
