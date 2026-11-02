@@ -11,6 +11,28 @@ Where something is a reconstruction rather than a measurement, it says so.
 
 The whole access model starts here, and the two builds are **not** the same.
 
+### The first brick: 15 system_server crashes in 75 s
+
+The panel sat on the static logo. The instrument that explained it was `logcat -b crash`:
+
+```
+IllegalStateException: Signature|privileged permissions not in privapp-permissions
+whitelist: {com.google.android.gms: ...}
+```
+
+thrown in `PackageManagerService.systemReady()`, under
+`ro.control_privapp_permissions=enforce`, with GMS installed at `privateFlags="8"`.
+
+**Repair:** clear bit `0x8` on the GMS package record so PackageManager stops enforcing privapp
+rules against a package whose code is no longer in `/system`, and set
+`persist.sys.disable_rescue true`.
+
+> **CAUTION — this incident has four different explanations in the record.** A root-cause brief
+> asserted 800 MB written to ext4, then `local.prop`, then privileged permissions ("cause is
+> ESTABLISHED"), then **retracted the whole chain** when a hash showed the custom image had never
+> been flashed. The crash log above is the only artifact in the chain. Treat the trigger as known
+> and the causal chain as unestablished.
+
 ### On the shipped Android 10 build — Termux is the only way in
 
 `adbd` is `disabled` in `/system/init.usb.rc`, and every `start adbd` in that image is gated on
@@ -145,8 +167,13 @@ Whatever you flash, rebuild the access stack in the same session. See
 
 ## The panel is not PoE-powered
 
-The switch port has `poe_enable=False`. A remote power cycle is impossible. The only power
-action is the mains breaker — a human.
+The switch port has `poe_enable=False`. A remote power cycle is impossible — the only power
+action is the mains breaker, a human.
+
+**But recovery does not always need a human.** The i.MX2 watchdog resets the panel unattended:
+a live test measured uptime 30,628 → 106 with a new `boot_id`, and an accidental `echo mem` was
+observed to heal itself in ~74 s. That is why this project can be debugged without a breaker
+trip per cycle.
 
 ## A Termux adb *server* is mutually exclusive with `adbd`
 

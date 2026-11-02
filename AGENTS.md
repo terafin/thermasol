@@ -59,10 +59,20 @@ evidence are in [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
 ### Never do these to the device
 
 1. **Never suspend the panel** (`echo mem > /sys/power/state`). It does not wake. There is no
-   RTC/alarm wake source, and the touch IRQ does not bring the SoC out. **Recovery is the
-   mains breaker.**
-2. **Never write the running A/B slot.** Write the inactive slot only, and verify you read
-   the slot correctly immediately before the write.
+   RTC/alarm wake source, and the touch IRQ does not bring the SoC out.
+
+   **But do not repeat the old claim that "recovery is the mains breaker."** The i.MX2 watchdog
+   resets this panel unattended (measured: uptime 30,628 → 106, new boot_id), and an accidental
+   `echo mem` has been observed to heal itself in ~74 s. Deep suspend is still not a substitute
+   for an idle policy — but it is not proven fatal.
+2. **Write the inactive A/B slot, never the running one.** Verify you read `ro.boot.slot_suffix`
+   correctly and re-check it inside every write.
+
+   This rule previously also read "never write slot A". **That was wrong and unauthored.** A
+   transcript scan of all six sessions found 7 owner turns mentioning slot A — all authorising,
+   none forbidding. Slot A was written and booted repeatedly. What matters is *inactive*, not
+   *which*.
+
 3. **Never chain `boot` in vbmeta.** A chain descriptor parks the slot in fastboot
    permanently — an AVB I/O error skips the tries decrement, so no reboot can drain it.
 4. **Never send guessed CAN frames** to the shower peripherals. Doing so destroyed working

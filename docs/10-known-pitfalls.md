@@ -7,7 +7,7 @@ wrong, or from an artifact that proves it would.
 
 | Do not | Because |
 |---|---|
-| **Suspend the panel** (`echo mem`) | It never wakes. No RTC/alarm source; the touch IRQ is registered as a wake source but does not bring the SoC out. Recovery is the mains breaker. |
+| **Suspend the panel** (`echo mem`) | No RTC/alarm wake source; touch IRQ does not bring the SoC out. **The i.MX2 watchdog does reset it** (measured, unattended), and one accidental suspend healed in ~74 s — so it is not necessarily fatal, but it is not a sleep policy either. |
 | Set `force_wifi true` | The vendor `MainControl` takes `eth0` **down** at startup. |
 | Use `Utils.ShutdownAll` as an idle action | It stops steam and runs a water flush. |
 | Start `PowerFlushActivity` or `FirmwareUpdateActivity` to "look" | Both act on real hardware in `onCreate`. |
@@ -33,7 +33,7 @@ wrong, or from an artifact that proves it would.
 | Re-derive AVB salt/props/size | Copy them out of `info_image` on the baseline, or the root digest changes silently. |
 | Pack with `mkfs.erofs` without an empty-root `fs_config` entry | The pack fails. |
 | "Fix" `--follow_chain_partitions` on `verify_image` | It is only meaningful when a chain exists — and the assertion right above it forbids one. |
-| Write the running slot | Absolute rule — see [02-access.md](02-access.md) and issue #23 for the one bounded exception that was ever taken. |
+| Write the running slot | Write the **inactive** one. ("Never write slot A" was an unauthored rule — see [AGENTS.md](../AGENTS.md) rule 2.) |
 | Trust a `mmc dev 1 1` habit | `mmc dev` takes **exactly one argument**; `mmc dev 1 1` selects the boot0 hardware partition and **destroys the bootloader**. |
 | Retype the decimal `mmc read` echo | `mmc part` prints hex with no `0x`; `mmc read` parses hex but **echoes decimal**. `738004` echoes as `block # 7569412`. |
 | `reset` after `setenv` to "apply" it | `reset` reloads U-Boot's environment from eMMC and **discards the RAM change**. Use `run bootcmd`. |
