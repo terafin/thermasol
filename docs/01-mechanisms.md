@@ -64,32 +64,59 @@ Observed on the deployed A15 panel:
 `init.usb.rc` has `on boot && property:persist.sys.usb.config=*` →
 `setprop sys.usb.config ${persist.sys.usb.config}`, which sets `sys.usb.config=adb`.
 
-**The mechanism is baked into the image, not runtime state.** Both properties are compiled into
-`/system/build.prop` and `/vendor/build.prop` by this build:
+**`usbd` starts it.** Not init, not a boot hook, not `sys.usb.configfs`.
+
+AOSP `usbd` is a `late_start` oneshot service that reads the persistent property and, if it is
+`adb`, tells init to start `adbd` — no configfs gate anywhere in that path:
+
+```cpp
+// system/core/usbd/usbd.cpp:47-51
+std::string function = GetProperty("persist.sys.usb.config", "");
+if (function == "adb") {
+    LOG(INFO) << "persistent prop is adb";
+    SetProperty("ctl.start", "adbd");
+}
+```
+
+A captured boot log shows the whole sequence in order:
 
 ```
-ro.adb.secure=0
-persist.adb.tcp.port=5555
-persist.sys.usb.config=adb
-ro.debuggable=1
+[   47.928679] init: starting service 'usbd'...
+[   47.950369] init: ... started service 'usbd' has pid 526
+[   48.174162] init: starting service 'adbd'...
+[   48.249285] init: ... started service 'adbd' has pid 530
+[   48.266059] init: Control message: Processed ctl.start for 'adbd' from pid: 526 (/system/bin/usbd)
 ```
 
-So on A15:
+**The properties come from the build, deliberately.** `dart_mx8mm.mk`:
 
-- `persist.sys.usb.config=adb` → the `on boot` trigger in `init.usb.rc` sets `sys.usb.config=adb`,
-  which satisfies the `configfs=0` start-adbd trigger (`on init` sets configfs 0 before the
-  vendor's `on boot` raises it to 2);
-- `persist.adb.tcp.port=5555` → `packages/modules/adb/daemon/main.cpp:270`
-  (`prop_port = GetProperty("persist.adb.tcp.port", "")`) makes the daemon bind TCP;
-- `ro.adb.secure=0` → no key prompt.
+```make
+# ADB over TCP from first boot, no key auth. Baked into /system so it survives a
+# reflash (the old panel's adb-at-boot lived in /data and was lost on flash).
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
+    ro.adb.secure=0 \
+    persist.adb.tcp.port=5555 \
+    persist.sys.usb.config=adb
+```
 
-Because these are **build properties**, a fresh flash of this image gets adb back with no
-Termux, no boot hook and nothing typed at the console. That is a deliberate property of the
-A15 build, and it is why this panel needs nothing but an IP.
+Three properties, three jobs:
 
-**Consequence:** on A15 `adbd` comes up on its own. Verify it after any flash — the observed
-behaviour is from one 12-day uptime plus the build properties, not from a reboot test on this
-exact image.
+| Property | Effect |
+|---|---|
+| `persist.sys.usb.config=adb` | `usbd` issues `ctl.start adbd` |
+| `persist.adb.tcp.port=5555` | `adbd` binds TCP (`daemon/main.cpp:270`) |
+| `ro.adb.secure=0` | no key prompt |
+
+**`/system/build.prop` is the copy that counts.** `/vendor/build.prop` also carries
+`persist.adb.tcp.port`, but init refuses it — `Do not have permissions to set
+'persist.adb.tcp.port' ... property file '/vendor/build.prop'`. Only the `/system` copy loads.
+
+Because these are build properties, **a fresh flash of this image gets adb back with no Termux,
+no boot hook, and nothing typed at a console.**
+
+**Consequence:** on A15 `adbd` comes up on its own. The mechanism is proven on this image; the
+live pid 550 was not captured at boot (the ring buffer had rolled), so treat the timing as
+representative rather than measured on that specific instance.
 
 **Recovery mode gives `adbd` regardless.** Its `init.rc` has no configfs gate. But it brings up
 **loopback only** — no `netd`, no DHCP — and binds `adbd` to USB functionfs. With USB excluded,
