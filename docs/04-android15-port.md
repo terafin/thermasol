@@ -285,9 +285,34 @@ restore as a safety net here.
 
 ### What the safety net actually is — and what it is not
 
-Slot switching **has been done**, and recorded: the A15 image was written to slot B from a
-running Android 10 on slot A, armed by a raw 32-byte `misc+0x800` write, booted, and later the
-same image was written to slot A and booted there. Both slots have run Android 15.
+Slot switching **has been done repeatedly, and the last one is recorded here** because the
+deployed state depends on it.
+
+| Move | Outcome |
+|---|---|
+| A15 → slot B, from Android 10 on A | `dd` each partition, arm via `misc+0x800`, boot — first attempt was a dark panel (oversized kernel), later fixed and booted |
+| A15 → slot A, booted there | `A{15,0,1} B{14,0,1}` |
+| **A15 → back to slot B** (the live swap) | `A{14,0,1} B{15,0,1}`, booted, `core_health_passed`, trial arm removed |
+
+The final swap was a rewritten deploy script, run from slot A with slot B as the inactive
+target. Its own preconditions are the interesting part:
+
+```python
+assert sh('getprop ro.boot.slot_suffix; cat /proc/sys/kernel/random/boot_id; ...').split() == ['_a', BOOT, OLD]
+assert sh('sha256sum /dev/block/by-name/vbmeta_b').split()[0] == R['images']['vbmeta']
+print(sh('/data/local/tmp/tt-bt-drain-arm-b --trial-B-preserve-current-A'))
+print(sh('set -e; avbab arm-deploy b; sync'))
+```
+
+and the result it accepted:
+
+```json
+{"boot": "f6b19389-…", "slot": "_b", "core_health_passed": true,
+ "trial_arm_removed_after_current_boot_approval": true,
+ "fallback_A_preserved": "9171719e…"}
+```
+
+**The panel has been on slot `_b` since.** Every slot read from 2026-10-18 onward returns `_b`.
 
 What has **not** been done since the wall closed is a deliberate switch on a working panel. The
 documented history is real; the current readiness of the idle slot is a hash comparison, not a
