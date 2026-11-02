@@ -202,6 +202,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main(argv=None):
+    # Unbuffered: when stdout is a pipe or a log file — which is how anyone runs a server —
+    # Python block-buffers it, so the operator sees no banner until the process exits. That
+    # makes a working server look hung.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(line_buffering=True)
+        except (AttributeError, ValueError):
+            pass
+
     ap = argparse.ArgumentParser(description="Serve a ThermaSol app-store index + APKs.")
     ap.add_argument("--root", default="store", type=Path, help="content root (apks/, icons/)")
     ap.add_argument("--host", default="0.0.0.0")

@@ -169,9 +169,10 @@ and installs nothing, silently. Use the address the **panel** will reach, not `l
 confirm what the panel actually asks for.
 
 **Verified** (2026-11-02): `scripts/store-mirror/test_serve_store.py` derives the APK URL from
-each advertised icon URL the same way the client does, then fetches it — 38 checks pass, covering
-both listings, absolute icon URLs, derived-APK 200 with the right MIME type, icon serving,
-missing-package 404, and `..` traversal blocked. Run it with `python3 -I test_serve_store.py`.
+each advertised icon URL the same way the client does, then fetches it — 33 checks, all passing,
+covering both listings, absolute icon URLs, derived-APK 200 with the right MIME type, icon
+serving, missing-package 404, `..` traversal blocked, and the startup banner appearing before
+the first request. Run it with `python3 -I test_serve_store.py`.
 
 ## What was actually done (2026-09-13)
 

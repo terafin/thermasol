@@ -9,6 +9,7 @@ Run: python3 -I test_serve_store.py
 """
 import json
 import os
+import select
 import socket
 import subprocess
 import sys
@@ -71,7 +72,7 @@ def main() -> int:
             [sys.executable, "-I", str(HERE / "serve_store.py"),
              "--root", str(root), "--host", "127.0.0.1", "--port", str(port),
              "--base-url", f"http://{base}"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
         try:
             # wait for readiness without a bare sleep
@@ -85,6 +86,13 @@ def main() -> int:
             else:
                 print("FAIL  server never came up")
                 return 1
+
+            # Operators run this redirected to a log; if stdout is block-buffered the banner
+            # only appears at exit, which makes a working server look hung.
+            srv.stdout.flush()
+            ready, _, _ = select.select([srv.stdout], [], [], 2.0)
+            banner = srv.stdout.readline() if ready else ""
+            check("banner printed before any request", "serving" in banner, repr(banner))
 
             def get(path):
                 try:
