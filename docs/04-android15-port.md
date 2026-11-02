@@ -83,7 +83,16 @@ trips from the debug loop. See issue [#13](https://github.com/terafin/thermasol/
 
 Six A/B partitions: `boot`, `dtbo`, `system`, `vendor`, `product`, `vbmeta`.
 
-**There is no USB.** Flashing is U-Boot + TFTP:
+**There is no USB.** There are two ways to write a slot, and they are not equally good:
+
+| Route | Needs | Use when |
+|---|---|---|
+| **`adb` + `dd` to the inactive slot** | only a shell — no UART, no wall | **the default.** This is what [09-install-from-stock.md](09-install-from-stock.md) Stage 2 does, start to finish. |
+| **U-Boot + TFTP** | the UART adapter and the wall open | you have no shell at all — a dark panel, or a slot that will not boot |
+
+The `dd` route is the one that made this whole effort possible on a sealed panel, because it
+needs nothing but Termux. Everything below describes the TFTP route, which is the fallback for
+when no shell exists.
 
 ```
 mmc dev 1

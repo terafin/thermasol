@@ -226,8 +226,27 @@ priority to 15 with 2 tries, and the current slot's to 14.
 
 Expect ~60–90 seconds. The panel will come up on Android 15.
 
-If it does not boot: **switch the active slot back to the old one in U-Boot** (see
-[`06-procedures.md`](06-procedures.md) §D). That is why you left it untouched.
+### If it does not boot
+
+**First, wait for the guard.** The bootloader stamps 2 tries on the new slot. A failed boot
+decrements it, and once it reaches zero the slot is marked unbootable and the other slot — the
+one you did not touch — is selected automatically. This is a reset, not a decision; it does
+not need you.
+
+**If the full 2 tries are consumed and the panel comes back on the old slot**, you are where
+you started and nothing is lost. That is the whole point of writing only the inactive slot.
+
+**If the panel does not come back at all**, you are into `retrial`:
+
+| Path | Needs | When it works |
+|---|---|---|
+| U-Boot console → switch active slot | UART adapter, wall open | always |
+| Fastboot / SDP | USB | **not available on this panel** |
+| Recovery | USB | **not available on this panel** |
+
+So on a sealed panel with no UART adapter, a panel that will not boot on *either* slot is not
+recoverable by software. The guard is what stops you getting there: it will fall back unless
+the boot hangs in a way that never lets the tries decrement.
 
 ### 2.6 Rebuild the access stack
 

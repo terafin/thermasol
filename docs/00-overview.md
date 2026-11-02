@@ -67,6 +67,10 @@ Four things have to be true, in this order. Each one is a whole document.
    [06-procedures.md](06-procedures.md) §I.
 3. **The image has to be built and flashed without breaking the panel.** Device tree, EROFS
    rebuild, A/B slots, vbmeta — [04-android15-port.md](04-android15-port.md).
+
+   **The flash needs no UART.** Write the inactive slot with `dd` over `adb`, arm it, reboot —
+   the whole install runs over the shell from step 1. U-Boot + TFTP is the *fallback*, for a
+   panel with no shell at all.
 4. **The hardware has to actually work.** Display, touch, audio, Bluetooth and CAN each needed
    a real fix — [05-fixes.md](05-fixes.md).
 

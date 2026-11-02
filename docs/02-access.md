@@ -70,9 +70,12 @@ on this path.
 
 ## U-Boot
 
-Interrupt autoboot to reach `u-boot=>`. From there you can `tftpboot` images into RAM and
-`mmc write` them, and you can change the active slot. This is the flash and the rollback
-mechanism, because there is no USB.
+Interrupt autoboot to reach `u-boot=>`. From there you can `tftpboot` images into RAM,
+`mmc write` them, and change the active slot.
+
+**This is the no-shell path.** If the panel has a shell, flash with `dd` over `adb` instead —
+it needs no UART and no wall — see [06-procedures.md](06-procedures.md) §C. U-Boot is the
+fallback for a dark panel or a slot that will not boot.
 
 Useful variables live in the eMMC **user area at 0x400000**, not in any A/B slot — so
 flashing a slot does not touch them. That is where the CMA fix lives.

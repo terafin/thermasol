@@ -30,7 +30,7 @@ So the reachable transports are exactly:
 |---|---|
 | ADB over TCP 5555 | works, root — but depends on `adbd` being started by hand |
 | SSH 8022 (Termux `sshd`) | works, independent of `adbd` |
-| U-Boot console | interrupt autoboot; the flashing and rollback mechanism |
+| U-Boot console | interrupt autoboot; flash and rollback **without** a shell. Needs the UART adapter. |
 | UART console | 115200 8N1, host `/dev/cu.usbserial-A10OOP3V` — **the adapter is not attached** |
 | USB / fastboot / SDP | **unavailable** — no USB on this panel |
 
