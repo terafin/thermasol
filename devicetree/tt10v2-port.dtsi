@@ -1,0 +1,65 @@
+// tt10v2-port.dtsi -- ThermaSol TT10V2 additions for
+//   varigit/linux-imx  branch android-15.0.0_1.2.0-var01
+//   merge target: arch/arm64/boot/dts/freescale/imx8mm-var-dart-dt8mcustomboard.dts
+//
+// Values harvested VERBATIM from the running panel's live device tree.
+// ALREADY PRESENT in Variscite's DTS (do NOT re-add): mcp251xfd CAN, can0_osc,
+//   pwm-backlight, wm8904, gpio-keys, ov5640, ads7846.
+
+/* 1. DSI -> LVDS bridge. This is the display. -- inside &i2c2 { } */
+    sn65dsi84@2c {
+        reg = <44>;
+        ti,dsi-lanes = <4>;
+        ti,lvds-format = <2>;
+        ti,lvds-bpp = <24>;
+        ti,width-mm = <430>;
+        ti,height-mm = <254>;
+        enable-gpios = <31 11 0>;
+        pinctrl-names = "default";
+        pinctrl-0 = <32>;
+        status = "okay";
+        display-timings {
+            lvds {
+                clock-frequency = <51200000>;
+                hactive = <1024>;
+                vactive = <600>;
+                hback-porch = <160>;
+                hfront-porch = <24>;
+                vback-porch = <29>;
+                vfront-porch = <3>;
+                hsync-len = <136>;
+                vsync-len = <6>;
+                hsync-active = <0>;
+                vsync-active = <0>;
+                de-active = <1>;
+                pixelclk-active = <0>;
+            };
+        };
+    };
+
+/* 2. Touchscreen. -- inside &i2c3 { } */
+    touch@4b {
+        reg = <75>;
+        pinctrl-name = "default";
+        pinctrl-0 = <43>;
+        interrupt-parent = <36>;
+        interrupts = <2 0>;
+        atmel,panel-coords = <0 0 1023 599>;
+        atmel,display-coords = <0 0 1023 599>;
+        vdd_ana-supplu = <44>;
+        irq-gpio = <36 2 1>;
+        reset-gpio = <38 9 0>;
+    };
+
+/* 3. RTCs. -- inside &i2c2 { } */
+    rtc@30a30000/rtc {
+        compatible = isil,isl12057;
+        reg = <104>;
+    };
+    rtc@30a30000/rtc {
+        compatible = isil,isl1208;
+        reg = <111>;
+    };
+
+/* NOTE: i2c node labels must be confirmed against Variscite's DTS -
+   the panel's i2c@30a20000/30a30000/30a40000 are i2c2/i2c3/i2c4 by address. */

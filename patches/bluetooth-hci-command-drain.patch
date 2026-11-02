@@ -1,0 +1,87 @@
+--- original/BluetoothHci.h
++++ candidate/BluetoothHci.h
+@@ -22,6 +22,7 @@
+ #include <future>
+ #include <string>
+ 
++#include "CommandDrain.h"
+ #include "async_fd_watcher.h"
+ #include "h4_protocol.h"
+ #include "net_bluetooth_mgmt.h"
+@@ -54,6 +55,7 @@
+   static BluetoothHci* get();
+ 
+  private:
++  CommandDrain mCommands;
+   int mFd{-1};
+   std::shared_ptr<IBluetoothHciCallbacks> mCb = nullptr;
+ 
+--- original/BluetoothHci.cpp
++++ candidate/BluetoothHci.cpp
+@@ -154,7 +154,8 @@
+         ALOGI("Discarding %d bytes with sco type",
+               static_cast<int>(raw_sco.size()));
+       },
+-      [resetPromise](const std::vector<uint8_t>& raw_event) {
++      [this, resetPromise](const std::vector<uint8_t>& raw_event) {
++        mCommands.event(raw_event);
+         std::vector<uint8_t> reset_complete = {0x0e, 0x04, 0x01,
+                                                0x03, 0x0c, 0x00};
+         bool valid = raw_event.size() == 6 &&
+@@ -223,6 +224,7 @@
+     return ndk::ScopedAStatus::ok();
+   }
+ 
++  mCommands.clear();
+   mCb = cb;
+   management_.reset(new NetBluetoothMgmt);
+   mFd = management_->openHci();
+@@ -266,7 +268,14 @@
+         mCb->scoDataReceived(raw_sco);
+       },
+       [this](const std::vector<uint8_t>& raw_event) {
+-        mCb->hciEventReceived(raw_event);
++        mCommands.event(raw_event);
++        std::shared_ptr<IBluetoothHciCallbacks> callback;
++        {
++          std::lock_guard<std::mutex> guard(mStateMutex);
++          if (mState == HalState::CLOSING) return;
++          callback = mCb;
++        }
++        callback->hciEventReceived(raw_event);
+       },
+       [this](const std::vector<uint8_t>& raw_iso) {
+         mCb->isoDataReceived(raw_iso);
+@@ -309,7 +318,13 @@
+     mState = HalState::CLOSING;
+   }
+ 
++  // Keep the reader and HCI user channel alive until accepted commands finish.
++  // Closing earlier can truncate a UART frame and poison the next HCI RESET.
++  if (!mCommands.waitFor(std::chrono::milliseconds(1000))) {
++    ALOGW("close: command drain timed out (%zu pending)", mCommands.pending());
++  }
+   mFdWatcher.StopWatchingFileDescriptors();
++  mCommands.clear();
+ 
+   if (management_) {
+     management_->closeHci();
+@@ -353,11 +368,16 @@
+   }
+ 
+   std::lock_guard<std::mutex> guard(mStateMutex);
+-  if (mH4 == nullptr) {
++  if (mH4 == nullptr ||
++      (mState != HalState::ONE_CLIENT && mState != HalState::INITIALIZING)) {
+     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+   }
+ 
+-  mH4->Send(type, v);
++  uint64_t token = type == PacketType::COMMAND ? mCommands.submit(v) : 0;
++  if (mH4->Send(type, v) != v.size() + 1) {
++    if (token) mCommands.cancel(token);
++    return ndk::ScopedAStatus::fromServiceSpecificError(STATUS_FAILED_TRANSACTION);
++  }
+   return ndk::ScopedAStatus::ok();
+ }
+ 
