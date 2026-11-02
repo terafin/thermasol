@@ -403,34 +403,30 @@ Expect ~60–90 seconds. The panel will come up on Android 15.
 
 ### If it does not boot
 
-**First, wait for the guard.** The bootloader stamps 2 tries on the new slot. A failed boot
-decrements it, and once it reaches zero the slot is marked unbootable and the other slot — the
-one you did not touch — is selected automatically. This is a reset, not a decision; it does
-not need you.
+**There is no automatic fallback. Do not count on one.**
 
-**If the full 2 tries are consumed and the panel comes back on the old slot**, you are where
-you started and nothing is lost. That is the whole point of writing only the inactive slot.
+The deployed U-Boot's `get_curr_slot` is **priority-only** — it never reads `tries_remaining`.
+Exhausting the try counter does **not** select the other slot. The counter is written; it is not
+the selection rule.
 
-**But the guard does not always fire.** It only decrements when the bootloader gets far enough to
-record a failure. A kernel too large for U-Boot's decompress window is the case that bit this
-panel: over 32 MiB, U-Boot prints `Decompress kernel fail!` and jumps to USB fastboot, the try
-counter **never decrements**, and the panel sits dark indefinitely. On the console the record
-still read `B={15,4,0}` — unchanged, proving it never even counted.
+That matters because the failure mode you are most likely to hit does not even decrement it. A
+kernel that decompresses to more than **32 MiB** overflows U-Boot's decompress window
+(`fb_fsl_boot.c:47 DST_DECOMPRESS_LEN`), prints `Decompress kernel fail!`, and jumps to USB
+fastboot — the panel goes dark and sits there with the try counter untouched. It happened here
+with a 36,915,712-byte kernel.
 
-That is a recovery-by-console situation, and it is why §2.6 says verify the image content, not
-just its hash.
+Recovery, in order:
 
-**If the panel does not come back at all**, you are into `retrial`:
-
-| Path | Needs | When it works |
+| Path | Needs | Status |
 |---|---|---|
-| U-Boot console → switch active slot | UART adapter, wall open | always |
-| Fastboot / SDP | USB | **not available on this panel** |
-| Recovery | USB | **not available on this panel** |
+| U-Boot console → rewrite `misc+0x800` | UART adapter, wall open | works; this is how it was actually recovered |
+| **Watchdog** | nothing | **verified** — a live test reset the panel and it returned clean (uptime 30628 → 106, new `boot_id`) |
+| Fastboot / SDP | USB | not available on this panel |
+| Recovery | USB | not available on this panel |
 
-So on a sealed panel with no UART adapter, a panel that will not boot on *either* slot is not
-recoverable by software. The guard is what stops you getting there: it will fall back unless
-the boot hangs in a way that never lets the tries decrement.
+So the honest statement of risk: **writing the inactive slot does not put the running slot at
+risk**, but nothing will rescue you from a non-booting image except the console or the watchdog.
+Check content (§2.6) before you arm, because that is the only control you actually have.
 
 ### 2.6 Check the image CONTENT before you trust a successful boot
 
