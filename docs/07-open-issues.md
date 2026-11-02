@@ -6,14 +6,14 @@
 Only **work items** live there — things someone could actually do. Constraints, known-limitation
 notes and "we decided not to" belong in this file, not in the tracker.
 
-As of 2026-11-02 there are two open items.
+There are two open items.
 
 | # | Work item | Who |
 |---|---|---|
 | [1](https://github.com/terafin/thermasol/issues/1) | **Ceiling speaker hiss** — power-cycle the speaker's own supply and listen | operator |
 | [22](https://github.com/terafin/thermasol/issues/22) | **Re-test the store mirror on A15** — the original success was on Android 10 | operator |
 
-**Everything else physical has been confirmed working** by the operator: speaker, light, touch,
+**Everything else physical is confirmed working** on the device: speaker, light, touch,
 steam, tap-to-wake, navigation and the seal.
 
 **The hiss, in one paragraph.** Nine distinct CAN controls, the whole Android audio chain idle,

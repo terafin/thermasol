@@ -65,7 +65,8 @@ The only true out-of-band path, and the only one that survives a bad flash.
 | Prompt | `imx8mm-var-dart:/ $`, then `su 0` for root |
 | U-Boot | interrupt autoboot → `u-boot=>` |
 
-**As of 2026-10 the adapter is not attached.** Do not assume it is available.
+**The UART adapter is not attached.** Do not assume it is available; find one before you plan
+on this path.
 
 ## U-Boot
 

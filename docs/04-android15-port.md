@@ -45,9 +45,7 @@ Notes that cost time:
   gitconfig that did not exist.
 - The Java used is 21; the host default was 27 and breaks the build.
 - **Verify by timestamp and hash that `boot.img` and `Image` were actually rebuilt.** Treat a
-  "build completed successfully" line as a claim, not a result. *(Note: an earlier draft of
-  this document asserted we had observed exactly this failure. The evidence set does not
-  support that — it is recorded here as a precaution, not as something that happened.)*
+  "build completed successfully" line as a claim, not a result.
 
 ## Debugging a boot that never reaches userspace
 

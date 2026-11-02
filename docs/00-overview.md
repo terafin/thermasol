@@ -54,18 +54,21 @@ continuously, and no control the panel owns changes it. That is
 [07-open-issues.md §1](07-open-issues.md#1-the-ceiling-speaker-hisses-and-nothing-we-control-silences-it),
 and it is unresolved. Everything else on the list was verified on the device.
 
-## The five phases
+## The shape of the work
 
-1. **2026-09-13 — Bricked, then recovered.** An earlier attempt (previous agent) left the
-   panel unable to boot. Recovered by quarantining Google Mobile Services.
-2. **2026-09-28 — Lost access entirely.** The panel stopped answering on the network. This
-   produced the long forensic brief that established *why* and what the access model is.
-3. **2026-10-11 → 10-14 — Rooted, then rebuilt the access stack.** UART found, U-Boot
-   reached, TFTP flashing proven, a Termux-based supervision stack built.
-4. **2026-10-15 → 10-18 — Android 15 port.** Device tree port, image build, A/B flash,
-   then a long tail of hardware defects (display, touch, audio, Bluetooth).
-5. **2026-10-18 → 10-20 — Behaviour and polish.** Volume curve, fullscreen/navigation,
-   idle policy, Google sign-in, and the unresolved ceiling-speaker hiss.
+Four things have to be true, in this order. Each one is a whole document.
 
-Read [01-history.md](01-history.md) for the narrative, and [02-access.md](02-access.md) if
-you need to get a shell on this thing right now.
+1. **You need a shell on a stock, sealed panel.** There is no adb and no USB. The way in is
+   the panel's own app store, redirected at a mirror you control — see
+   [09-install-from-stock.md](09-install-from-stock.md) and
+   [11-vendor-store-mirror.md](11-vendor-store-mirror.md).
+2. **The access stack has to survive reboots.** Termux + Termux:Boot hooks over SSH, with adb
+   started by hand. This is the only remote path once the wall is closed —
+   [06-procedures.md](06-procedures.md) §I.
+3. **The image has to be built and flashed without breaking the panel.** Device tree, EROFS
+   rebuild, A/B slots, vbmeta — [04-android15-port.md](04-android15-port.md).
+4. **The hardware has to actually work.** Display, touch, audio, Bluetooth and CAN each needed
+   a real fix — [05-fixes.md](05-fixes.md).
+
+Read [01-mechanisms.md](01-mechanisms.md) for *why* the panel behaves the way it does, and
+[02-access.md](02-access.md) if you need a shell right now.

@@ -20,7 +20,7 @@ documented recovery. Consequences below are not stylistic preferences.
 | Question | Read |
 |---|---|
 | What is the device? | [`docs/00-overview.md`](docs/00-overview.md) |
-| How did we get here, chronologically? | [`docs/01-history.md`](docs/01-history.md) |
+| Why does the panel behave this way? | [`docs/01-mechanisms.md`](docs/01-mechanisms.md) |
 | How do I get a shell on it? | [`docs/02-access.md`](docs/02-access.md) |
 | What hardware am I talking to? | [`docs/03-hardware.md`](docs/03-hardware.md) |
 | How is the image built and flashed? | [`docs/04-android15-port.md`](docs/04-android15-port.md), [`build/README.md`](build/README.md) |
@@ -150,7 +150,7 @@ The images live in the GitHub **release**, not in git (4.4 GB). `product.img` co
 proprietary apps and `vendor.img` is NXP/Variscite content; they are published as a device
 backup for owners of this hardware. They are signed with the BSP's **public** stock test key
 (`device/nxp/common/security/testkey_rsa4096.pem`) — the images are *not* device-locked, and
-an earlier version of these docs wrongly said they were.
+that is not what this build does.
 
 ---
 

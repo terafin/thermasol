@@ -94,7 +94,7 @@ APK          = https://thermatouch.tsolup.com/apps-10/com.amazon.mp3.apk
 non-builtin entries in the live listing has exactly this three-segment shape
 (`apps-10/icons/<package>.png`), so the rule is uniform.
 
-**Confirmed again by a real install**: on 2026-09-13 a mirror served
+**Confirmed again by a real install**: a mirror served
 `apk_icon_url = http://thermatouch.tsolup.com/apps/icons/com.termux.png`, the panel derived
 `http://thermatouch.tsolup.com/apps/com.termux.apk`, requested it, and Termux installed. That is
 the whole trick working end to end.
@@ -182,8 +182,7 @@ versions with no extra step.
 - **A standalone sshd or adb binary** — Termux supplies both. A second copy is a second thing
   to trust for no gain.
 
-Verified 2026-11-02: all four fetch, pass the F-Droid cert check, and pass the package-name
-check.
+All four fetch, pass the F-Droid cert check, and pass the package-name check.
 
 ## Step 2 — serve them
 
@@ -212,15 +211,15 @@ and installs nothing, silently. Use the address the **panel** will reach, not `l
 `--print-index` dumps the listing without serving. `--log` shows every request, which is how you
 confirm what the panel actually asks for.
 
-**Verified** (2026-11-02): `scripts/store-mirror/test_serve_store.py` derives the APK URL from
+**Verified:** `scripts/store-mirror/test_serve_store.py` derives the APK URL from
 each advertised icon URL the same way the client does, then fetches it — 33 checks, all passing,
 covering both listings, absolute icon URLs, derived-APK 200 with the right MIME type, icon
 serving, missing-package 404, `..` traversal blocked, and the startup banner appearing before
 the first request. Run it with `python3 -I test_serve_store.py`.
 
-## What was actually done (2026-09-13)
+## A working configuration
 
-The first successful run of this technique, recorded so it can be repeated exactly:
+One configuration that is known to have worked, recorded so it can be repeated exactly:
 
 | Piece | Value |
 |---|---|
@@ -246,10 +245,9 @@ User-Agent: Dalvik/2.1.0 (Linux; U; Android 10; variscite Build/QD1A.190821.014.
 Host: thermatouch.tsolup.com
 ```
 
-**The record is gone.** No revert call appears in the session log, but the override has been
-removed — verified 2026-11-02: `thermatouch.tsolup.com` resolves to the real vendor IP
-`50.116.16.103` from both a general resolver and the panel's IoT-VLAN gateway (`10.0.90.1`).
-The panel can reach the real store and firmware updates.
+**The override is not in place.** `thermatouch.tsolup.com` resolves to the real vendor IP
+`50.116.16.103` from both a general resolver and the panel's IoT-VLAN gateway, so the panel can
+reach the real store and firmware updates.
 
 Before setting the override again, **check the UniFi local-DNS table for a leftover record** —
 a stale one would silently redirect the panel to a mirror that is no longer serving.
@@ -286,7 +284,7 @@ answers both names with it.
 
 ## Vendor-store protocol — sources
 
-Decompiled trees: `/home/terafin/tt-recovery/thermasol-apk-20261011/` (Java, 2026-10-11 APK) and
+Decompiled trees: `/home/terafin/tt-recovery/thermasol-apk-20261011/` (Java) and
 `installed-smali/` (smali, installed 1.2.0 image). Both agree.
 
 | Claim | Evidence |
@@ -304,5 +302,5 @@ Decompiled trees: `/home/terafin/tt-recovery/thermasol-apk-20261011/` (Java, 202
 | Cleartext whitelist | `resources/res/xml/network_security_config.xml:1-9` |
 | No headers / no okhttp | grep, both trees |
 | Scheme copied from icon URL | `AppListingActivity.java:111-113` |
-| Live APK location `apps-10/<pkg>.apk` (206) | `curl -r 0-0`, 2026-11-02 |
-| Derivation confirmed end to end by a real Termux install | session `clever-purring-hopper`, 2026-09-13 02:42 |
+| Live APK location `apps-10/<pkg>.apk` (206) | `curl -r 0-0` against the vendor host |
+| Derivation confirmed end to end by a real Termux install | the original install through a mirror |

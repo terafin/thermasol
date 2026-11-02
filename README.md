@@ -19,7 +19,7 @@ rules and the map. Otherwise start with [docs/00-overview.md](docs/00-overview.m
 AGENTS.md                 Agent guidance: hard rules, orientation, what not to try
 docs/
   00-overview.md          What the device is, and the shape of the whole effort
-  01-history.md           Chronological narrative: stock → rooted → Android 15
+  01-mechanisms.md        Why the panel behaves as it does: access, boot, CAN, failure modes
   02-access.md            How we get a shell on it (and how we got one the first time)
   03-hardware.md          SoC, display, touch, audio, CAN, Bluetooth, storage
   04-android15-port.md    The port itself: device tree, image build, flashing

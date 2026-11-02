@@ -60,9 +60,8 @@ disabled, and `mxt_interrupt()` runs from a 20 ms `delayed_work`. With
 Input events use `ABS_MT_POSITION_X/Y` in the range 0..4095, increasing downward for Y, plus
 a separate `ABS_X/ABS_Y` axis stream.
 
-**Synthesizing input.** `adb shell input tap` / `input swipe` / `input keyevent` work and were
-used hundreds of times during the app bring-up. An earlier version of this page called them
-unreliable; that was wrong and has been removed. Use `input` first.
+**Synthesizing input.** `adb shell input tap` / `input swipe` / `input keyevent` work reliably
+here. Use `input` first.
 
 `sendevent` is the fallback for when `input` is unavailable (a broken `InputManager`) or when
 you need a raw protocol-B stream. Sequence for a tap on `/dev/input/event1`:

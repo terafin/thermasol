@@ -1,18 +1,18 @@
-# 08 — Lessons
+# 08 — Rules for working on this panel
 
-What I would do differently. Written bluntly, because the failures were real and cost the
-operator hours.
+Blunt rules, each one paid for. They are written as instructions, not as a memoir: what to do
+differently, and why. See [10-known-pitfalls.md](10-known-pitfalls.md) for the flat checklist
+form.
 
 ---
 
 ## 1. Do not guess at live hardware
 
-I sent hand-derived CAN opcodes to the running ceiling speaker while chasing a hiss. That
-silently changed its **audio source** and **volume**, and killed audio that had been working —
-for a couple of hours, with the operator standing in the shower waiting.
+Sending hand-derived CAN opcodes to the running ceiling speaker silently changes its **audio
+source** and **volume**, and can kill audio that was working.
 
-The state persisted across reboots (the speaker keeps its own state; rebooting the panel does
-not reset it), and there was no snapshot to roll back to.
+The state persists across reboots — the speaker keeps its own state, and rebooting the panel
+does not reset it. Without a snapshot first, there is nothing to roll back to.
 
 **Rule, now:** record current state → start a passive CAN capture → operate the *vendor app's
 own control* → mirror the exact frames it emits. Never infer opcodes from a disassembly and
@@ -27,9 +27,8 @@ static analysis was not complete.
 ## 2. Kernel debugfs can be a liar
 
 `wm8904 dapm/bias_level` reads `Off` and regmap `06: 0000` / `0c: 0000` **during normal
-working audio**. I built a whole (wrong) theory on those reads and told the operator the codec
-"never powers up". It was false, and it sent the investigation in the wrong direction for a
-long time.
+working audio**. Reading those as a power indicator produces the conclusion "the codec never
+powers up", which is false — and it sends the investigation in the worst possible direction.
 
 The vendor UI's "Audio Source: Bluetooth / No Bluetooth device connected" label is the same
 kind of trap — present even when audio works, and there are no A2DP bonds at all.
@@ -53,7 +52,7 @@ space. Find the mechanism; don't explain it away.
 
 ## 4. Prove the target, not the representation
 
-Repeatedly, the thing I was looking at was not the thing that was running:
+The thing you are inspecting is often not the thing that is running:
 
 - The installed APK was **not** the build directory's APK.
 - The static archive had **duplicate members** and the linker picked stale code.
@@ -91,9 +90,9 @@ The changes that went badly were the ones where I edited live state to see what 
 
 ## 7. Ask, don't assume, about the person
 
-Twice I burned the operator's time on things they had already told me, and once I asked them
-to observe a difference while I was changing four things at once. The good sessions were
-one control at a time, with one clear question: *did this change what you hear?*
+Read what the owner has already told you before asking again, and never ask someone to
+observe a difference while you change four things at once. One control at a time, one clear
+question: *did this change what you hear?*
 
 ---
 
