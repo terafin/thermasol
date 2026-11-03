@@ -36,7 +36,7 @@ issues just creates chores that never close.
 | **Power cycling** | The panel is not PoE. The only power action is a physical power cycle, i.e. a human. |
 | **Rollback** | Both slots hold A15. Switching is proven and the panel was deliberately moved to slot `_b` as the last action before the wall closed. The **idle slot's current bootability** is a hash comparison, not a recent boot. See `docs/04-android15-port.md` §Rolling back. |
 | **Bluetooth audio** | Bring-up baud is 115200 — enough to connect, not enough for A2DP. Not being chased. Pairing, range and accessory audio need a real peer and have not been tested. |
-| **WebView** | Chromium 74 (2019); modern web UIs fail. Mitigated with native apps and Chrome's own engine. Not replacing the WebView provider on a sealed panel. |
+| **WebView** | The **A10** image ships Chromium 74. **A15 ships 128 and takes 155 as a normal data update** (signer-verified, survives reboot), which runs the modern HA frontend. No system flash needed. |
 | **Home Assistant dashboard** | ~82% of the SoC. That is a **dashboard** problem, not a panel defect — a lighter dashboard is the fix, and it belongs in the HA repo. |
 | **Apple TV** | Deferred by the operator. Not work until they say it is. |
 | **Heavy adb probes** | `dumpsys SurfaceFlinger`, `dumpsys window`, `logcat -d`, `ps -A --sort=-RSS`, repeated `screencap` each cost ~70 s of dead adb. An operating rule, not a bug to fix. |
