@@ -32,7 +32,7 @@ issues just creates chores that never close.
 
 | Thing | Reality |
 |---|---|
-| **Deep suspend** | Do not use it as a sleep policy: no RTC/alarm wake source. But the i.MX2 watchdog *does* reset the panel unattended (measured), and one accidental `echo mem` healed in ~74 s. Not proven fatal — not proven safe either. |
+| **Deep suspend** | Not a sleep policy — there is no RTC/alarm wake source. If one is suspended, wait ~90 s before power cycling: the i.MX2 watchdog resets the panel unattended. |
 | **Power cycling** | The panel is not PoE. The only power action is a physical power cycle, i.e. a human. |
 | **Rollback** | Both slots hold A15. Switching is proven and the panel was deliberately moved to slot `_b` as the last action before the wall closed. The **idle slot's current bootability** is a hash comparison, not a recent boot. See `docs/04-android15-port.md` §Rolling back. |
 | **Bluetooth audio** | Bring-up baud is 115200 — enough to connect, not enough for A2DP. Not being chased. Pairing, range and accessory audio need a real peer and have not been tested. |
