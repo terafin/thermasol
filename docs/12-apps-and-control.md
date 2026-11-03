@@ -29,9 +29,9 @@ cat /data/user/0/net.example.ttaudiosource/files/silence-status.json
 
 | code | meaning |
 |---|---|
-| 104 | source select — `1` = local analog |
+| 104 | source select. The only verified value is **0** (`A5 B7 7B 00` restores audio); the library swaps 1↔2 by Bluetooth capability, so do not assume 1 is "analog" |
 | 100 | master volume |
-| 111 | silence / mute hold |
+| 111 | `hvlsr_bluetooth_power_off` — **not** a mute |
 
 `am force-stop` between codes is **required**. The activity reads the extras once at start; a
 second `am start` without a force-stop reuses the existing instance and drops the new values.
@@ -68,7 +68,8 @@ exactly like a broken service.
 
 ```sh
 # what is on screen, with bounds
-su 0 sh -c "uiautomator dump /data/local/tmp/tt-fw.xml >/dev/null; cat /data/local/tmp/tt-fw.xml"
+su 0 uiautomator dump /sdcard/ui.xml
+su 0 cat /sdcard/ui.xml
 
 # tap the centre of a bounds="[x1,y1][x2,y2]"
 input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 ))
@@ -90,7 +91,8 @@ input keyevent KEYCODE_WAKEUP
 ```
 
 `input` is reliable here — see the correction in [03-hardware.md](03-hardware.md).
-`uiautomator dump` needs the `>/dev/null`; the path chatter on stdout corrupts naive parsing.
+`uiautomator dump` must run **directly as `su 0`**. Wrapping it in `su 0 sh -c` breaks on
+redirect quoting and yields empty dumps.
 
 ## 4. Installed apps and entry points
 
@@ -111,9 +113,18 @@ am start -W -n com.plexapp.android/com.plexapp.plex.activities.SplashActivity
 am start -W -a android.intent.action.VIEW -d 'https://m.youtube.com/' -p com.android.chrome
 ```
 
-**Chrome is for browsing only.** The panel WebView is Chromium 74 (2019) and modern web UIs fail
-in it — see [07-open-issues.md](07-open-issues.md) and issue
-[#6](https://github.com/terafin/thermasol/issues/6). Chrome carries its own engine and works.
+### Browsers on this panel
+
+| | Status |
+|---|---|
+| **Cromite** | works |
+| **Firefox** | works (YouTube playback verified) |
+| **Chrome** | **does not run** — `GLES3 is unsupported and ES version fallback is disabled`; both 128 and 155 die |
+
+**WebView versions.** The Android 10 image shipped **Chromium 74**. The A15 image ships
+**Trichrome WebView 128**, and **155.0.8059.44** installs as a normal **data update** — signer-
+verified, survives reboot, and runs the modern HA frontend (`legacyResources: 0,
+modernResources: 109`). Replacing the WebView provider does not need a system flash.
 
 ## 5. Audio forensics for the hiss work
 

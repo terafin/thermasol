@@ -55,7 +55,8 @@ it resolves to. Renaming the host in a hosts file instead would lose that permis
 | `package_name` | yes | yes — identity, matching, install state |
 | `apk_icon_url` | yes | yes — and the download path is derived from it (below) |
 | `app_name`, `current_version`, `updated` | no | display only |
-| `min_core_req`, `min_service_version` | no | **parsed and never read** |
+| `min_core_req` | no | parsed, never read |
+| `min_service_version` | no | **read and enforced** — see below |
 
 `hidden` appears in the **live vendor data** (2 of 47 entries, both vendor-internal) but has no
 corresponding field in `AppDetail` and is read nowhere — Gson drops it. It is inert; do not rely
@@ -69,8 +70,15 @@ already-installed packages are hidden, and the grid caps at 24.
 This is the part that matters, and it is not what you would guess — but it **is** confirmed,
 twice: against the live vendor server and against a real Termux install that used it.
 
-There is **no `apps-10/` literal in the download path** — `SystemConstants.APPS_FOLDER` is a dead
-constant, referenced only at its declaration. Instead:
+**The app-grid path derives the folder; the hardware service uses a literal.** Two code paths exist:
+
+- the grid (`Utils.getAppDetails`) derives the APK folder from the icon URL, below;
+- the hardware service self-updates through `SystemConstants.APPS_FOLDER`
+  (`http://thermatouch.tsolup.com/apps-10/`) directly.
+
+If you list the built-in packages, serve them under `apps-10/` as well as on the derived path.
+
+The derived-folder rule:
 
 ```java
 File icon   = new File(apkIconUrl);
@@ -104,10 +112,14 @@ the whole trick working end to end.
 1. `apk_icon_url` must be absolute with a host and **exactly the depth you want to name the
    folder**. Fewer than two path segments and the client returns early — the install silently
    does nothing. The icon file itself is cosmetic; its *string* is load-bearing.
-2. No query strings — `java.io.File` parses them into the folder name.
+2. **No slashes after `?`.** A query like `?q=1` is harmless; `?a=/b` corrupts the derived folder
+   because `java.io.File` splits on `/` before the query is stripped.
 3. The APK filename is `<package_name>.apk` verbatim. No version suffix.
-4. The folder is whatever the **second-to-last** path segment is. So pick your layout and keep
-   it: `<prefix>/icons/<pkg>.png` → APKs at `<prefix>/<pkg>.apk`.
+4. **The client walks two directory levels up from the file** — that is what
+   `new File(icon).getParent()` then `.getParentFile()` then `.getName()` does. So
+   `<prefix>/icons/<pkg>.png` → the folder is `<prefix>`, and the APK is `<prefix>/<pkg>.apk`.
+   Do not reason about "the second-to-last segment": in that example that is `icons`, which is
+   wrong. Reproduce the two `getParent()` calls literally.
 5. **The scheme is copied from the icon URL.**
 
    ```java
@@ -136,8 +148,11 @@ is a bare `URL.openStream()` with no status check, no length check, no headers, 
 
 - **100 KB hard cap.** `ByteBuffer.allocate(102400)`; the 102401st byte throws, the exception is
   swallowed, and you get truncated JSON → an empty list. Keep each listing under 100 000 bytes.
-- **HTTP status is ignored.** A 404 produces a silent empty app grid. There is no error dialog.
-  If the store appears blank, it is almost always a 404 or a parse failure, not the network.
+- **A 404 is fatal to the whole update, not just to that file.** `openStream()` throws, the
+  exception is swallowed, the buffer is empty, `Gson.fromJson("")` returns **null**, and
+  `Utils.getAppDetails()` dereferences it — an uncaught `NullPointerException`. Because
+  `index.json` is fetched first, one missing listing aborts the merge before `cached` is written,
+  and the grid stays stale or empty with no error on screen.
 
 A parse failure anywhere also yields a silent empty list — there is no logging on that path.
 
