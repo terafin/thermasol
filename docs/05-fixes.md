@@ -7,7 +7,17 @@ is a patch to the vendor APK, the technique is described in [06-procedures.md](0
 
 ## 1. Blank / black display on Android 15
 
-Two separate faults, in sequence.
+**Three distinct causes, each sufficient on its own.** Identify which before fixing — the fixes
+are unrelated.
+
+| # | Cause | Signal | Fix |
+|---|---|---|---|
+| 1a | heap **name** mismatch | `No ion heap of name reserved-uncached exists` | publish the node under the names NXP gralloc asks for |
+| 1b | **pinctrl conflict** | `30660000.pwm` probe returns `-22`; `backlight` and `panel-lvds` defer forever | `bt-buffer` hogs `MX8MM_IOMUXC_SPDIF_EXT_CLK`; move it off that pad |
+| 1c | **`NoSuchMethodError`** | `freezeRotation(I)V` at `HardwareService.onBind` | the vendor catches `Exception`; this is an `Error`. `.catch` → `.catchall` |
+
+Each is written up below. A fourth fault — a **colour mapping**, on a screen that *is* lit — is
+not a blank screen and is covered in §1d.
 
 ### 1a. The allocator could not find its heap
 
@@ -30,7 +40,7 @@ about 12 MiB, not the whole 320 MiB.
 **Trap found on the way:** a very dark panel at one point was a **stale `out/dtbo.img`**
 being flashed, not a code problem.
 
-### 1b. The LVDS colour mapping
+### 1d. The LVDS colour mapping (a lit screen, not a blank one)
 
 **Symptom.** The panel displays, but colours are wrong — reported physically as "the colours
 on the bottom bar are all messed up, green and random crap".
@@ -38,12 +48,50 @@ on the bottom bar are all messed up, green and random crap".
 **Root cause.** The panel's device tree declared `data-mapping = "jeida-24"`; this panel is
 **VESA-24**.
 
-**Fix.** One semantic value in the `panel-lvds` node: `jeida-24` → `vesa-24`. The dtbo was
-repacked and re-signed with the same key and salt (public key sha1 `2597c218…`, identical to
-baseline) into a 4,194,304-byte slot. Baseline dtb 68,820 B → fixed dtb 68,816 B.
+**Fix.** Rename the device-tree node so it publishes **both** heap names NXP gralloc requests —
+`reserved` and `reserved-uncached`. The kernel was publishing `linux,cma`.
 
-**Verified** by physical operator acceptance — the sharpness and colour complaints both
-cleared after this and the resolution fix landed.
+**Colour fault (1d), separately.** On a screen that *is* lit but pixelated with colour
+corruption, the fix is one semantic value in the `panel-lvds` node: `jeida-24` → `vesa-24`. The
+dtbo was repacked and re-signed with the same key and salt (public key sha1 `2597c218…`,
+identical to baseline) into a 4,194,304-byte slot; the fixed artifact is **68,880 bytes**
+(a `avbtool verify_image` measures it).
+
+**Verified** by operator acceptance: the sharpness and colour complaints both cleared.
+
+### 1b. A pinctrl conflict starves the backlight
+
+**Symptom.** Black screen with the system plainly running. Log:
+
+```
+imx8mm-pinctrl 30330000.pinctrl: could not request pin 124 (MX8MM_IOMUXC_SPDIF_EXT_CLK)
+  ... already requested by bt-buffer; cannot claim for 30660000.pwm
+probe of 30660000.pwm returned -22
+probe of backlight returned -517
+panel-lvds 17.805 STILL DEFERRING
+```
+
+**Root cause.** The stock Variscite **Bluetooth regulator hog** claims
+`MX8MM_IOMUXC_SPDIF_EXT_CLK`, which is also the backlight's `PWM1_OUT` pad. The PWM never
+probes, so `backlight` and `panel-lvds` defer forever.
+
+**Fix.** Move the BT buffer off that pad. Nothing else changes.
+
+### 1c. `HardwareService.onBind` dies on an `Error`
+
+**Symptom.** Black screen, screencap 3,867 bytes. The CAN service never reports ready either.
+
+**Root cause.** `NoSuchMethodError: No interface method freezeRotation(I)V` in
+`com.thermasol.thermatouchservice`, thrown at `HardwareService.onBind`. The vendor wrapped the
+call in `catch (java.lang.Exception)` — but `NoSuchMethodError` is an `Error`, so it escapes and
+kills `onBind`.
+
+**Fix.** One smali token: `.catch Ljava/lang/Exception;` → `.catchall`. Re-sign with the platform
+key, install as `UPDATED_SYSTEM_APP`.
+
+**Verified.** Screencap 3,867 → **934,068** bytes, and the service binds.
+
+---
 
 ## 2. Touch does not work (the long one)
 
@@ -55,11 +103,15 @@ Three distinct faults, each with its own fix.
 
 **Diagnosis.** The maXTouch itself is fine — bus 2, address `0x4b`,
 `Family: 164 Variant: 3 Firmware V2.0.AA Objects: 41`, `Touchscreen size X4095 Y4095`.
-But `/proc/interrupts` shows **zero hardware IRQs** on the CHG line while messages queue:
+**Nothing arrives from the controller until you poll it.** A live tap-and-drag test shows the
+controller's own message count stays at zero, and the IRQ line does not move:
 
 ```
-24: 0 49486 236240 0 gpio-mxc 2 Edge maxtouch
+24: 0 0 0 0 gpio-mxc 2 Edge maxtouch
 ```
+
+After the polled driver is installed the same line reads `0 49486 236240 0` — those counts are
+the *driver draining messages on a timer*, with `unhandled 0`, not the hardware delivering them.
 
 The artifact's own sentence: *"The CHG line on this panel (gpio1 io2, EDGE_FALLING) no longer
 delivers usable edges, so the threaded handler never runs though the controller is fully
@@ -78,9 +130,9 @@ behaviour.** Deployed with 20 ms.
 - The exact stock driver ported to A15: hardware IRQ still fails.
 - T18 MODE/RETRIGEN/forced-level: no sampled GPIO response at all.
 - **A GPIO pull-down test is what caused a board reset.** Never drive the presumed CHG pin as
-  an output, and never do raw MMIO on a runtime-suspended GPIO bank.
+  a **pull-down**, and never do raw MMIO on a runtime-suspended GPIO bank.
 
-The old vendor workaround (`irq65` always returning `IRQ_HANDLED`, idle IRQ rate 389–538/s)
+The old vendor workaround (`irq65` always returning `IRQ_HANDLED`, idle IRQ rate 389–610/s)
 is *"an intentional workaround, not proof of a valid CHG route."*
 
 ### 2b. A finger is dropped after a stylus contact
@@ -88,14 +140,15 @@ is *"an intentional workaround, not proof of a valid CHG route."*
 **Symptom.** After using a stylus, finger input stops working — reported as the UI freezing in
 ThermaSol and Plex.
 
-**Root cause.** In framework `InputState`, `trackMotion`'s stylus-priority pre-check dropped
-finger DOWN/MOVE/UP permanently for that connection, and
-`shouldCancelPreviousStream`'s same-device branch returned false without inspecting the
-pointer tools.
+**Root cause.** `InputState::shouldCancelPreviousStream`'s **same-device branch returns false
+without inspecting the pointer tool types**, so a stylus stream is never cancelled and every
+following finger DOWN is rejected as inconsistent.
 
-**Fix.** Six lines in `libinput.so`: on a same-device `ACTION_DOWN` where the previous stream
-was a stylus and the new pointer is not, return true so the old stream is cancelled before the
-new finger is tracked. Only `InputState.o` changed.
+**Fix.** Six lines in **`libinputflinger.so`**: on a same-device `ACTION_DOWN` where the previous
+stream was a stylus and the new pointer is not, return true. Only `InputState.o` changed.
+
+**`trackMotion` was deliberately left alone** — a candidate patch there was rejected because it
+would have "passed" by suppressing the rejection without ever emitting a CANCEL.
 
 **Verified.** Baseline replay `failures=4` (no CANCEL, no finger events); patched `failures=0`;
 device-level **27 checks pass on two boots**; Activity replay 5/5 showing the exact sequence
@@ -108,6 +161,19 @@ finger-drop but produced no CANCEL and failed on the device. Rejected.
 
 **Limit:** the original physical first-stylus packet was never captured, so the exact
 real-world trigger is not attributed — only that the sequence above reproduces it.
+
+### 2d. The polled helper dies at the kernel's spurious-IRQ limit
+
+**Symptom.** Touch works, then stops after a while with no message anywhere.
+
+**Root cause.** A userspace poll loop calling `generic_handle_irq_safe` burns through the kernel's
+spurious-IRQ allowance — `irq 24: nobody cared` / `Disabling IRQ #24` at **100,003** unhandled
+calls — after which the kernel disables the line.
+
+**Fix.** Set `IRQ_IS_POLLED` on **IRQ 24 only**, so the kernel stops counting it as spurious.
+Soaked to 135,850 calls with zero spurious.
+
+---
 
 ## 3. Audio: three separate faults
 
@@ -136,7 +202,8 @@ re-signed with the same key and salt, five vbmeta descriptors, flags 0, no chain
 
 **Verified.** Kernel: `imx-sdma 302c0000.dma-controller: loaded firmware 4.6`, all engines.
 Then real playback: an active AudioFlinger track of **824,320 frames**, SAI5 DMA IRQ advanced
-**931**, no trigger error, and two frame captures 4 s apart differ.
+**931**, and no SAI trigger error. The movie was visibly playing in two captures 4 s apart — that
+is a **picture** check; `physical_audibility_verified` is `false` in the same record.
 
 **A rejected theory worth naming:** an earlier agent claimed the driver lacked ROM script
 addresses. It does not — the driver carries them; the fault was the missing
@@ -211,7 +278,8 @@ driver with no quirks and no `.data`, so relabelling it would churn a working bi
 nothing.
 
 **Verified.** Host tests 10 pass against a real baseline that fails 4; `hci0_registered: true`;
-Android **ON** with zero aborts for 300 s, then **5 min 40 s** on the first boot, and zero
+Android **ON** with zero aborts — a 300 s window, with `time since enabled: 00:05:40` in the same
+run on the first boot — and zero
 aborts after a normal automatic reboot with no manual enable and no module load.
 
 **Review claims that were false, and how they died** — worth keeping, because each looked
@@ -266,8 +334,9 @@ you cannot leave the app.
 
 **Root cause.** The vendor app sets `SYSTEM_UI_FLAG_IMMERSIVE_STICKY | FULLSCREEN |
 HIDE_NAVIGATION` (`0x1006`) in `Utils.applyFullscreenOptions`, re-applied on resume and on a
-periodic refresh. `policy_control` does not work on this A15 build — AOSP's `PolicyControl`
-parser is not present, and the CarSystemUI implementation is not built in.
+periodic refresh. **`policy_control` cannot fix it:** `immersive.off` is not a valid
+`PolicyControl` mode — it can only force immersive *on*, so setting it has no effect on an app
+that already is.
 
 **Fix.** One instruction in the vendor APK: `0x1006` → `0x4`. Status bar stays hidden,
 navigation bar is not requested hidden, no immersive sticky. Global
@@ -314,7 +383,8 @@ both the speaker and wired-headphone stream types:
 | accepted maximum | raw 15/15 = **0.0 dB** | raw 18/18 = **0.0 dB** |
 
 All ten new levels are distinct in dB (−16.575 at raw 11 through 0.0 at raw 18). A real
-hardware-button sweep confirmed the clamps: 11,10,9,**9** then 10…18,**18**.
+an on-screen sweep using the overlay's own minus/plus buttons confirmed the clamps: 11,10,9,**9**
+then 10…18,**18**. (There is no volume keyevent on this panel.)
 
 Codec gain 63/63 is persisted as one added property in the WM8904 config
 (`{"name":"Headphone Volume","type":"int","val":63}`), applied by the HAL at boot.
@@ -331,12 +401,11 @@ hides itself when **both** status and navigation insets are absent, and becomes
 non-touchable at the same time (so it cannot swallow a tap meant for the player).
 
 Recall path: the foreground-service notification (id **1726**, channel `shower_volume`,
-ONGOING) carries an **immutable** `PendingIntent` that opens the strip for **6 seconds**, then
-it auto-rehides. `POST_NOTIFICATIONS` is declared and granted, and survives reboot.
+ONGOING) carries a `PendingIntent` that opens the strip for **6 seconds**, then it auto-rehides. `POST_NOTIFICATIONS` is declared and granted, and survives reboot.
 
 Verified: Plex, Netflix and YouTube players all measure **1024×600** with `hidden=true` and
 `windowTouchable=false`; notification recall and re-hide happen for real; the process is
-`START_STICKY` and restored itself in 7.98 s mid-fullscreen.
+`START_STICKY` and restored itself mid-fullscreen.
 
 **Explicit non-promise:** the bottom swipe reveals only the transient 3-button bar, *not* the
 volume bubble — InsetsPolicy filters that visibility. The notification is the reliable path.
@@ -348,7 +417,11 @@ volume bubble — InsetsPolicy filters that visibility. The notification is the 
 **Symptom.** No media, no touch — display stays awake and the speaker keeps making noise.
 
 **Fix.** An idle supervisor, **300 s** of no physical touch *and* no media, then lights off,
-speaker mute and backlight 0.
+`slsr_request_sls_standby` (`A5 5F 7B FF`) and backlight 0.
+
+> **Mute is not enough.** HV mute (98) plus light-off (97) left the speaker buzzing. Only
+> `slsr_request_sls_standby` silences it — recorded in the pass artifact as
+> `physical-idle-standby`.
 
 Three rules that matter:
 
@@ -421,3 +494,59 @@ was nothing to fix).
 
 Investigated to conclusion but **unresolved** — see
 [07-open-issues.md](07-open-issues.md). Listed here only so the numbering is complete.
+
+---
+
+## 12. CAN: the denial spin (~52,000/s, burns a core)
+
+
+**Symptom.** ~52,000 `avc: denied { read } ... tclass=can_socket` per second; one core pinned;
+the kernel log overwritten so completely that only 8 lines of 887 survive.
+
+**Root cause.** A15 grants `can_socket` to `hal_can_socketcan` only. The vendor service runs as
+`system_app` and is denied. The denial is on **`read`**, which is why `tx` stays at zero while
+`rx` climbs: the app is blind before it is mute.
+
+**Fix.** A vendor policy copied from `hal_can_socketcan.te` minus `net_admin`, granting
+`socket` plus the ioctl xperms `0x8913`, `0x8914` and `0x8933`.
+
+---
+
+## 13. Audio source changed under the app
+
+**Symptom.** Speaker audio dies and does not come back after a reboot.
+
+**Root cause.** The speaker keeps **its own** state. Sending a CAN source or volume frame changes
+it persistently; the panel rebooting does not reset it.
+
+**Fix.** Three frames, in this order:
+
+```
+A5 B7 7B 00    # source 0 (local analog)
+A5 B6 7B 8A    # volume 138
+A5 B5 7B 00    # unmute LAST
+```
+
+**Never guess these.** Capture the vendor app's own frames with `scripts/can-capture.sh` and
+mirror them.
+
+---
+
+## 14. `adbd` loops in a `cpuacct` cgroup
+
+**Symptom.** ADB dies and cannot be restarted; `sshd` dies with it.
+
+**Root cause.** `adbd` runs in `cpuacct:/uid_0/pid_<adbd>`, and **init SIGKILLs that whole cgroup**
+when `adbd` stops or restarts — taking with it anything the hook tree spawned.
+
+**Fix.** Every supervised long-lived process must escape at start:
+
+```sh
+echo $$ > /acct/cgroup.procs
+```
+
+Verified: `ctl.restart adbd` returns ADB in ~9 s; `ctl.stop adbd` lets the healer restore it in
+~15 s.
+
+---
+
