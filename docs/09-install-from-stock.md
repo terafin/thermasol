@@ -549,7 +549,43 @@ kernel time, with no Termux and no boot hook. `adbd` then binds TCP from
 > `/vendor/build.prop` carries two of those properties and init **rejects both**
 > (`SELinux permission check failed`, `scontext=u:r:vendor_init:s0`). Only `/system` loads.
 
-## 6.1 Termux and SSH do not survive
+## 6.1 Make Chrome work
+
+The image ships a Vulkan ICD labelled so that apps can open it, but Chrome still needs to be
+told to use it. **This lives on `/data`, so a flash wipes it — redo this step after every
+install.**
+
+```sh
+adb shell 'echo "_ --use-gl=angle --use-angle=vulkan --enable-features=Vulkan" \
+  > /data/local/tmp/chrome-command-line'
+adb shell 'chmod 644 /data/local/tmp/chrome-command-line'
+```
+
+The leading `_` is required. Prove Chrome read it:
+
+```sh
+adb logcat | grep 'COMMAND-LINE FLAGS'
+# I cr_CommandLine: COMMAND-LINE FLAGS: [_, --use-gl=angle, --use-angle=vulkan, --enable-features=Vulkan] (from /data/local/tmp/chrome-command-line)
+```
+
+Without this, Chrome dies with `GLES3 is unsupported and ES version fallback is disabled`
+followed by `GPU process isn't usable` — the panel's GPU is an ES 2.0 part and Chrome requires
+GLES3. The full explanation is in [12-apps-and-control.md](12-apps-and-control.md).
+
+**Wait for the panel to settle before the first launch.** Chrome can ANR with
+`Input dispatching timed out` while post-boot load is still high. Measured settle is 291–334 s:
+
+```sh
+until awk -v l="$(adb shell cut -d' ' -f1 /proc/loadavg)" 'BEGIN{exit !(l<1.0)}'; do sleep 5; done
+adb shell 'am start -n com.android.chrome/com.google.android.apps.chrome.Main -d about:blank'
+```
+
+The flag file stays put across ordinary reboots — `init.rc` only `mkdir`s `/data/local/tmp` and
+never clears it. It is the flash that removes it.
+
+---
+
+## 6.2 Termux and SSH do not survive
 
 `/data` is wiped. If you want SSH back as a second, independent path, redo Stage 1. On the
 deployed panel this was never done: `pm list packages | grep -c termux` → `0`, `init.svc.sshd`
@@ -566,6 +602,7 @@ failure.
 - adb on 5555, root via `adb shell su 0 …`
 - display, touch, audio, Ethernet, CAN and Bluetooth working
 - the shower app running, with a navigable UI
+- Chrome launching and rendering, after the flags in §6.1 and once load has settled
 
 Known defects that remain are tracked as issues, not described here —
 [07-open-issues.md](07-open-issues.md).
