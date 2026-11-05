@@ -153,6 +153,81 @@ A write-up of one such patch is in [05-fixes.md](05-fixes.md) §6.
 
 ---
 
+## G2. Repacking a vendor image and keeping AVB valid
+
+This is how a `/vendor` change (a file added, a label changed, a binary replaced) becomes a
+flashable image. Verified by flashing variants of it four times.
+
+**1. Extract the current image.** Never edit an image in place.
+
+```sh
+fsck.erofs --extract=staging vendor.erofs
+```
+
+Run it as root or the extracted uid/gid are your own, not the image's — that makes the metadata
+look wrong when it is fine. Check the real values with a root extraction, not the first one.
+
+**2. Make the change in `staging/`.**
+
+**3. Rebuild the erofs with the image's own metadata.** `-C4096` and `lz4hc,level=9` reproduce
+this build's parameters; a different cluster size changes the file size by megabytes and makes
+the diff look enormous.
+
+```sh
+mkfs.erofs -zlz4hc,level=9 -C4096 --mount-point=/vendor \
+  --fs-config-file=fs_config --file-contexts=file_contexts \
+  vendor.erofs staging/
+```
+
+`fs_config` carries uid/gid/mode. A new file with no entry takes the parent directory's mode.
+Add one: `vendor/bin/foo 0 2000 0755 capabilities=0x0`.
+
+`file_contexts` carries SELinux labels — **last match wins**, and the match is a regex anchored
+at the start, so `/vendor/lib64/hw/vulkan\.imx\.so` must escape its dots. Verify the effective
+label by simulating the lookup against the finished file, not by grepping for one line.
+
+**4. Add the verity footer.** Parameters must match the existing descriptor or AVB fails:
+
+```sh
+avbtool add_hashtree_footer --image vendor.raw --partition_name vendor \
+  --partition_size 536870912 --hash_algorithm sha256 --salt "$(cat vendor.salt)" \
+  --rollback_index 0 --algorithm NONE
+```
+
+`--do_not_generate_fec` takes no value. `fec` must be on `PATH` (`out/host/linux-x86/bin`).
+
+**5. Rebuild vbmeta from the ACTUAL images, not from the old vbmeta.**
+
+```sh
+avbtool make_vbmeta_image --output vbmeta.img \
+  --algorithm SHA256_RSA4096 --key testkey_rsa4096.pem \
+  --flags 0 --rollback_index 0 --padding_size 1048576 \
+  --include_descriptors_from_image boot.raw \
+  --include_descriptors_from_image dtbo.raw \
+  --include_descriptors_from_image system.raw \
+  --include_descriptors_from_image product.raw \
+  --include_descriptors_from_image vendor.raw
+```
+
+**The trap:** `--include_descriptors_from_image path/to/old_vbmeta.img` copies descriptor values
+verbatim, including the *old* root digest and image size. The result signs cleanly and describes
+the wrong partition. Always point it at the partition images themselves.
+
+**6. Verify the whole chain, not just the vbmeta signature.**
+
+```sh
+avbtool verify_image --image vbmeta.img --key testkey_rsa4096.pem --follow_chain_partitions
+```
+
+Expect one line per partition and `EXIT_STATUS=0`. A pass that stops after `vbmeta:` means the
+partition images were not found — check the filenames (`boot.img`, not `boot_b.img`) before
+believing anything else.
+
+**7. Confirm the diff is only what you meant.** Extract the old and new images and compare path,
+mode, uid, gid and sha256 for every file. A correct vendor change is usually one or two files.
+
+---
+
 ## H. Sending CAN frames safely
 
 **Never guess opcodes at live hardware.** The rule, after breaking audio doing exactly that:

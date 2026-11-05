@@ -119,7 +119,74 @@ am start -W -a android.intent.action.VIEW -d 'https://m.youtube.com/' -p com.and
 |---|---|
 | **Cromite** | works |
 | **Firefox** | works (YouTube playback verified) |
-| **Chrome** | **does not run** — `GLES3 is unsupported and ES version fallback is disabled`; both 128 and 155 die |
+| **Chrome** | works — see "Making Chrome run" below |
+
+### Making Chrome run
+
+Chrome 155 dies on the stock image with `GLES3 is unsupported and ES version fallback is
+disabled`, then `GPU process isn't usable`. The cause is not the GPU: **Chrome requires GLES3
+and the Vivante GC7000NanoUltra is an ES 2.0 part with no ES3 fallback.** Chrome must be routed
+through ANGLE → Vulkan → SwiftShader instead of the hardware GL driver.
+
+**Two changes, both required.**
+
+**1. Ship a Vulkan ICD, labelled `same_process_hal_file`.** Chrome runs in `untrusted_app`,
+which may read `same_process_hal_file` but **not** `vendor_file`:
+
+```
+/vendor/lib64/hw/vulkan.imx\.so u:object_r:same_process_hal_file:s0
+```
+
+With the wrong label the app fails with
+`avc: denied { read } for name="vulkan.imx.so" scontext=u:r:untrusted_app:s0
+tcontext=u:object_r:vendor_file:s0`, ANGLE then reports
+`Internal Vulkan error (-3)` and the GPU process exits.
+
+**2. Route Chrome at it with a command-line file.**
+
+```sh
+adb shell 'echo "_ --use-gl=angle --use-angle=vulkan --enable-features=Vulkan" \
+  > /data/local/tmp/chrome-command-line'
+adb shell 'chmod 644 /data/local/tmp/chrome-command-line'
+```
+
+The leading `_` is required. Confirm Chrome consumed it:
+
+```sh
+adb logcat | grep 'COMMAND-LINE FLAGS'
+# I cr_CommandLine: COMMAND-LINE FLAGS: [_, --use-gl=angle, --use-angle=vulkan, --enable-features=Vulkan] (from /data/local/tmp/chrome-command-line)
+```
+
+**The file survives reboots.** `init.rc` only does `mkdir /data/local/tmp 0771 shell shell` —
+idempotent, never clears. The comment there saying the directory "should always be empty" is a
+policy statement, not an action. Verified: 539 files in that directory predated the boot.
+
+**Launch timing matters more than the flags.** The first Chrome launch after boot can ANR with
+`Input dispatching timed out (waited 5001ms for FocusEvent)` while system load is still high.
+Wait for load to fall before launching:
+
+```sh
+until awk -v l="$(adb shell cut -d' ' -f1 /proc/loadavg)" 'BEGIN{exit !(l<1.0)}'; do sleep 5; done
+adb shell 'am start -n com.android.chrome/com.google.android.apps.chrome.Main -d about:blank'
+```
+
+Settle takes **291–334 s** from kernel start across three measured boots. Pending broadcasts go
+empty at ~20 s and are not a useful signal — load average is.
+
+**Do not mistake the linker message for a fault.** Chrome logs
+`dlopen failed: reserved address space 6148096 smaller than 207474688 bytes needed for
+libchrome.so` on every launch, including successful ones. The first number is the *shortfall*,
+not the reservation made: 197.9 MB needed, 192.0 MB reserved, short by 5.9 MB. Chrome retries
+`relroMode=2 → 0` and loads. It is noise.
+
+**Verifying it actually works:**
+
+```sh
+adb shell 'ls -lZ /vendor/lib64/hw/vulkan.imx.so'   # same_process_hal_file:s0
+adb shell 'for p in $(pgrep -f com.android.chrome); do
+  n=$(grep -c vulkan /proc/$p/maps 2>/dev/null); [ "$n" != 0 ] && echo "$p vulkan=$n"; done'
+# the GPU process should show 8 vulkan mappings
+```
 
 **WebView versions.** The Android 10 image shipped **Chromium 74**. The A15 image ships
 **Trichrome WebView 128**, and **155.0.8059.44** installs as a normal **data update** — signer-

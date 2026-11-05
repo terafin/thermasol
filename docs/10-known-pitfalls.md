@@ -48,6 +48,10 @@ wrong, or from an artifact that proves it would.
 |---|---|
 | Use bare `grep` / `find` here | They are shell **functions** and fail quietly. Use `command grep` / `command find`, or Python. A silent zero-result has produced false conclusions. |
 | Treat a model's review as artifact proof | One whole review was adjudicated as decoding errors; several claims were literally misread hex. |
+| Label a HAL `vendor_file` and expect apps to load it | `untrusted_app` cannot read `vendor_file`. HALs a normal app opens directly (Vulkan ICDs, gralloc) need `same_process_hal_file`. The failure surfaces as `avc: denied { read }` plus a downstream "Internal Vulkan error (-3)", which reads like a GPU fault and is not. |
+| Trust a `file_contexts` grep over the effective label | The lookup is an anchored regex and the **last** match wins. One stale line later in the file overrides an earlier correct one — check the resolved label, not the presence of a rule. |
+| Rebuild vbmeta with `--include_descriptors_from_image old_vbmeta.img` | It copies descriptor values verbatim, including the **old** root digest and image size, and signs cleanly. Point it at the partition images instead. |
+| Read `reserved address space N smaller than M` as "N was reserved" | N is the **shortfall**. Chrome logs this on every launch, including successful ones, then falls back to `relroMode=0` and loads. It is not the reason Chrome fails. |
 | Believe "the tests never compiled" from an empty log | Check the deployed artifact and run it. |
 | Count a killed run as a RED | Only a controlled assertion failure is a RED. |
 | Trust a chip identity from a bootarg or DT string | The kernel probe decided BCM4335C0, not the BCM43430 bootarg. |
