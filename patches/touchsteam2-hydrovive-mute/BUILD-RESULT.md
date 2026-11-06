@@ -43,3 +43,19 @@ both `mute` calls in `ShutdownAll`.
 
 Never installed, never run. Buzz silencing and audio restoration remain
 **unverified**.
+
+## Final structural validation
+
+* `dexdump -f` on the patched `classes2.dex`: **exit 0, zero warnings**
+* `d8 --min-api 30` accepts it with no diagnostics (a malformed dex fails here)
+* class count parity: patched **3,563** = installed **3,563** — no classes added,
+  removed or renamed
+* `dexdump -d` still shows `sget-boolean … sShutdownMuted` as instruction 0 of
+  `OverheadLight.unmute`
+
+## Side note for the operator
+
+The host root volume filled to 100% (96 KB free of 503 GB) during the d8 run.
+That was not caused by this work alone, but the build scratch contributed
+~370 MB; the regenerable intermediates were deleted and free space recovered to
+21 GB. The artifact hash was re-checked afterwards and is unchanged.
