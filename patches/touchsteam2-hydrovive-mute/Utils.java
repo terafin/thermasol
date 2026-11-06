@@ -537,6 +537,14 @@ public class Utils {
     }
 
     private static void delayMusicVolume(final Context context, final int volume, final int delay) {
+        /* During shutdown this thread would outlive the decision: it sleeps up to
+         * 2 s and then calls setMasterVolume, whose B6 unmutes the ceiling unit.
+         * The shutdown flag suppresses that send anyway, so do not spawn a thread
+         * that could still be asleep when the user starts a new session and the
+         * flag is cleared -- it would then unmute into a live session. */
+        if (OverheadLight.sShutdownMuted) {
+            return;
+        }
         new Thread(new Runnable() { // from class: com.thermasol.touchsteam2.util.-$$Lambda$Utils$q_hQ287_rT8SvwrN8-OgSwqt7yA
             @Override // java.lang.Runnable
             public final void run() {
@@ -550,6 +558,12 @@ public class Utils {
             Thread.sleep(i);
         } catch (Exception e) {
             handleException(e);
+        }
+        /* setMasterVolume already no-ops while the shutdown flag is set; this
+         * second check also covers the window where shutdown began after the
+         * thread was spawned. */
+        if (OverheadLight.sShutdownMuted) {
+            return;
         }
         OverheadLight.setMasterVolume(context, i2);
     }

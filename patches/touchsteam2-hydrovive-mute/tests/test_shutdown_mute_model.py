@@ -67,12 +67,34 @@ class App:
     def set_routed_volume(self, v):
         self.ol_set_master_volume(max(0, min(15, v)))
 
+    # Utils.delayMusicVolume -> spawns a thread sleeping `delay`, then setMasterVolume
+    def delay_music_volume(self, volume, delay, queue):
+        # returned immediately; the caller continues. `queue` is the pending
+        # thread list so the test can decide when it wakes.
+        if self.patched and self.shutdown_muted:
+            return                           # patched: do not even spawn
+        queue.append((delay, volume))
+
+    def wake(self, queue):
+        queue.sort()
+        out = []
+        for delay, volume in queue:
+            if self.patched and self.shutdown_muted:
+                continue                     # patched: guarded at wake too
+            self.ol_set_master_volume(volume)
+            out.append(volume)
+        return out
+
     # Utils.toggleMusicAndSource
-    def toggle_music_and_source(self):
+    def toggle_music_and_source(self, pending=None):
         self.ol_mute()
         self.ol_unmute()                     # waitForHardwareReaction
         # setMusicSource -> B7 (no-op in firmware), then delayMusicVolume
-        self.ol_set_master_volume(15)
+        self.delay_music_volume(15, 2000, pending if pending is not None else [])
+        if pending is None:
+            self.ol_set_master_volume(15)
+        else:
+            self.ol_set_master_volume(15)
 
     # Utils.loadUserSettings  (RESUME path)
     def load_user_settings(self):
