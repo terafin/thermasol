@@ -89,35 +89,41 @@ implementations — the installed app, the rejected latch, and the shipped desig
 `tests/test_delayed_volume_race.py` covers the two timer windows: a timer
 scheduled before power-off, and a timer woken while the panel is off.
 
-## Known gap: starting a shower does not restore audio
+## Starting a shower does not restore audio -- and why nothing is lost
 
-The gate is on `unmute()` and `setMasterVolume()`, so audio comes back when the
-user does something **audio-shaped**: a music/source control, the guest button,
-a profile selection, or launching an app. Those all reach `toggleMusicAndSource`.
+Shower and steam start make no audio call at all. Checked in the installed dex:
 
-Starting a shower or steam does not. Checked in the installed dex:
+* `DigitalShowerScreenFragment.handleTap` -> `esv_turn_on()` -- no audio call
+* `SteamFragment.onSlide` -> `Utils.TurnOnSteam` -> `toggleSteam` +
+  `resetLightSettings` -- no audio call
+* `DateTimeFragment.onSlide` -> `login()` -- lock pattern only
 
-* `DigitalShowerScreenFragment.handleTap` → `esv_turn_on()` — no audio call
-* `SteamFragment.onSlide` → `Utils.TurnOnSteam` → `toggleSteam` + `resetLightSettings` — no audio call
-* `DateTimeFragment.onSlide` → `login()` — lock pattern only
+That looks like a hole in "restore audio when the user starts it", but it is
+not, because **no audio source survives a power-off**. `ShutdownAll` ends with
+`PersistPauseAndKillBluetooth`, which persists bluetooth off, sends an AVRCP
+pause and calls `KillBluetooth`; `KillBluetooth` takes the non-Android-BT
+branch on this panel and calls `powerOffBluetooth`. After that there is nothing
+playing to restore.
 
-So after a power-off, a user who comes back and starts a shower, with no other
-audio action, gets no sound from the ceiling unit until they touch a music
-control.
+Every path that can re-establish a source unmutes:
 
-This is left as-is deliberately. The alternative — unmuting on shower/steam
-start — would restore audio that may not be there to restore, and since the
-buzz is present whenever the unit is unmuted and idle, it would put the buzz
-back for the whole shower. Staying muted is the failure mode that matches the
-stated priority.
+| resume action | path |
+|---|---|
+| music button | `MusicController.hardwareStartBluetooth` -> `Utils.StartBluetooth` -> `toggleMusicAndSource(2)` |
+| source change | `MusicController.hardwareSourceChange` -> `toggleMusicAndSource` |
+| external app | `ExternalAppsScreenFragment` / app launch -> `toggleMusicAndSource` |
+| guest button | `MenusMgr.handleGuestButton` -> `toggleMusicAndSource` |
+| profile select | `loadUserSettings` -> `toggleMusicAndSource` |
 
-In practice the gap is narrow: the daemon mutes/mutes-on-idle and unmutes on
-wake, and the panel returns to the slide-to-relax screen on power-off, so a
-return after the 300 s idle timeout unmutes on the first touch. The uncovered
-case is a return inside that window with no music interaction.
+So by the time a shower can have music, the user has already taken an action
+that unmuted the unit. Starting the shower alone has nothing to restore.
 
-Closing it properly is a separate decision: either unmute on shower start, or
-couple the daemon to the app's power state instead of only the backlight.
+Deliberately not unmuting on shower start: it would unmute with no source
+playing and, since the unit buzzes whenever it is unmuted and idle, put the
+buzz back for the whole shower.
+
+Residual risk: a source path that does not go through `toggleMusicAndSource`
+would stay silent. Every caller in the installed dex was enumerated; none does.
 
 ## Remaining uncertainty
 
