@@ -24,20 +24,50 @@ Captured on 2026-11-06, id `0x131`:
 
 First mute to unmute is 1.03 s, which is the dip the operator hears.
 
+The chain is confirmed against the **installed** `classes2.dex` (the copy pulled
+off the panel, not a recovery-tree copy): `ShutdownAll` calls `mute`, `mute`,
+`PersistPauseAndKillBluetooth`, and `mute`; `PersistPauseAndKillBluetooth` calls
+`KillBluetooth`; `KillBluetooth` calls `toggleMusicAndSource`; and
+`toggleMusicAndSource` is the one that does `mute → unmute → delayMusicVolume`.
+
 ## The fix
 
-A single flag, `OverheadLight.sShutdownMuted`:
+Two static fields on `OverheadLight`, both written only by `Utils.ShutdownAll`:
 
-* set at the top of `ShutdownAll()`
-* checked in `OverheadLight.unmute()` and `OverheadLight.setMasterVolume()` —
-  both become no-ops while it is set
-* cleared at the top of `Utils.loadUserSettings()`, which is what a user tap on
-  the user-select screen runs, so normal audio restoration is untouched
-* `ShutdownAll()` mutes once more as its final statement
+| field        | meaning                                                        |
+|--------------|----------------------------------------------------------------|
+| `sInShutdown`| true **only** for the span of `PersistPauseAndKillBluetooth()` |
+| `sAudioGen`  | bumped once per power-off; invalidates timers already queued   |
+
+* `OverheadLight.unmute()` and `OverheadLight.setMasterVolume()` return early
+  while `sInShutdown`.
+* `Utils.delayMusicVolume()` does not spawn while `sInShutdown`, and stamps the
+  thread it does spawn with the current `sAudioGen`.
+* `lambda$delayMusicVolume$1` drops itself if `sAudioGen` moved while it slept.
 
 Guarding at the two send sites rather than only reordering matters: the volume
-restore is **delayed** (`delayMusicVolume`), so a trailing mute alone could be
-undone by a B6 that fires afterwards.
+restore is **delayed** (`delayMusicVolume`, up to 2 s), so a trailing mute alone
+could be undone by a B6 that fires afterwards.
+
+Nothing is latched. `sInShutdown` is false again as soon as the bluetooth
+teardown returns, so the user's next audio action restores sound normally.
+
+### Why not a flag cleared on resume (the rejected first design)
+
+The first candidate used one `sShutdownMuted` flag, set by `ShutdownAll` and
+cleared by `Utils.loadUserSettings()`. It silences the power-off, but it is
+wrong for the panel:
+
+`loadUserSettings` is reachable only from the two user-profile buttons in
+`UserFragment` and from `handleExternalLogin` (dead: `EXTERNAL_LOGIN_KEY` is only
+written by the MQTT service and was `-1`). It is **not** the resume path. The
+real resume paths — `MusicController`, `MenusMgr`, the external-app launcher and
+the external-app teardown — all go through `toggleMusicAndSource()`, and the
+latch made every one of them silent. A user who powered off mid-shower and then
+pressed play would have got nothing back until they opened the user screen.
+
+`tests/test_shutdown_mute_model.py` keeps the latch in the model and asserts
+that it strands audio on that path, so a regression back to it fails loudly.
 
 ## What is not changed
 
@@ -46,17 +76,21 @@ timeout, `--dim 0`, shower/steam/light controls, and the WM8904 gain 63.
 
 ## Verification
 
-`tests/test_shutdown_mute_model.py` replays the recovered call order with and
-without the patch:
+`tests/test_shutdown_mute_model.py` replays the recovered call order under three
+implementations — the installed app, the rejected latch, and the shipped design:
 
 * baseline reproduces the capture exactly — 3 mutes, 1 unmute, B6 `0F`
-* patched power-off: **no unmute, no B6, ends muted**, last frame is a mute
-* patched resume: unmute/volume sent, ends audible, volume 15 restored
-* an ordinary mute/unmute is unaffected
-* three shutdown/resume cycles do not latch the flag
+* shipped power-off: **no unmute, no B6, ends muted**, last frame is a mute
+* shipped resume via `toggleMusicAndSource` (music controller) and via
+  `loadUserSettings` (user select): both send the unmute and end audible
+* an ordinary mute/unmute and an ordinary volume change are unaffected
+* three shutdown/resume cycles do not latch
+
+`tests/test_delayed_volume_race.py` covers the two timer windows: a timer
+scheduled before power-off, and a timer woken while the panel is off.
 
 ## Remaining uncertainty
 
 The model is a faithful replay of the decompiled call order, not a run of the
-app. Not yet verified on the panel; that needs a build, an install and a
+app. Not yet verified on the panel; that needs an install and a
 power-off/listen cycle.

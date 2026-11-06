@@ -83,3 +83,74 @@ So `mute` → `unmute` → delayed `setMasterVolume(15)` all run *inside*
 `ShutdownAll`, which is exactly what the `sShutdownMuted` flag guards. The
 sequence recorded in `tests/test_shutdown_mute_model.py` (`B5 01` ×3, `B5 00`,
 `B6 0F`) is reproduced by this installed code, not by an assumed one.
+
+# Build v3 — the shipped candidate
+
+`touchsteam2-patched-v3.apk`
+sha256 `4096849d69de20f11400d00a8262e302d209342f369e9b77536ed45ba4a5f6c8`,
+25,519,008 B.
+
+## What changed from v2, and why
+
+v2 was never installed. Re-reading the installed dex killed its premise:
+
+1. **The latch stranded audio.** v2 cleared `sShutdownMuted` only in
+   `loadUserSettings`, which the installed dex reaches from two places: the
+   `UserFragment` profile buttons, and `handleExternalLogin` (dead —
+   `EXTERNAL_LOGIN_KEY` is written only by the MQTT service and was `-1`). The
+   real resume paths — `MusicController`, `MenusMgr`, the external-app launcher
+   and its teardown — all call `toggleMusicAndSource`, which the latch silenced.
+2. **v2's "final mute" was dead code.** `Utils.smali:793` was `return-void` and
+   the added `mute` sat on the next line, unreachable. The model test asserted
+   four mutes; the app would have sent three.
+3. **v2's APK was malformed for install.** `resources.arsc` was deflated.
+   Apps targeting SDK 30 must ship it stored and 4-byte aligned, so the install
+   would have been rejected. The archive also carried a stray
+   `work/classes2.dex` entry, which is inert but not something to ship.
+
+v3 replaces the latch with `sInShutdown` (scoped to the bluetooth teardown) plus
+`sAudioGen` (invalidates timers scheduled before the power-off). See
+`README.md` for the design and for why the latch is kept in the model as a
+failing case.
+
+## How v3 was built
+
+Reproducible from a pristine disassembly, not hand-edited blobs:
+
+```
+unzip -o installed-base.apk classes2.dex -d pristine/     # 686e1086…3265e, matches the device
+java -jar tools/baksmali.jar d pristine/classes2.dex -o pristine/smali
+cp -a pristine/smali work/smali
+python3 apply_patch.py work/smali                         # 3 files edited
+java -jar tools/smali.jar a work/smali -o work/classes2.dex
+cp installed-base.apk built-v3-unsigned.apk               # copy the REAL apk
+cd stage && zip -X ../built-v3-unsigned.apk classes2.dex  # replace ONE entry
+zipalign -p -f 4 … && apksigner sign --key device/nxp/common/security/platform.pk8 …
+```
+
+## Gates passed
+
+* `smali` reassembles to DEX **035**, the same version as the installed dex
+* re-disassembly of the assembled dex differs from pristine in **exactly 3
+  files** — `OverheadLight.smali`, `Utils.smali`, and the delayed-volume lambda
+  class — and the diff is only the intended instructions (labels renumber)
+* class count **3,563**, unchanged; no classes added, removed or renamed
+* `dexdump -f`: exit 0, **zero** warnings
+* `d8 --min-api 30` accepts the dex
+* `classes2.dex` inside the signed APK is byte-identical to the validated dex
+  (`b0f53e68…96c9`)
+* `resources.arsc` **Stored**, CRC `b5a069c7` — identical to the installed APK
+* **869** zip entries, same count as the installed APK; no stray paths
+* `zipalign -c -p 4` passes
+* signer **`7fbae817b7db24642d8959c347b561c003c6cfde2cb10f909c932f21a4d6d804`**
+  — the installed APK's own signer, taken from `device/nxp/common/security/`.
+  (v2 was signed with the same correct key. An earlier note here claimed v2
+  used the vanilla AOSP key in `build/make/target/product/security/`
+  (`c8a2e9bc…`) — that was wrong, and was corrected after verifying v2's
+  signature directly.)
+* v3-scheme only, matching the installed APK (minSdk 29)
+
+## Not verified
+
+Never installed, never run. Buzz silencing and audio restoration remain
+**unverified** until the runbook is executed on the panel.

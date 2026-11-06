@@ -6,14 +6,16 @@ changes, then delayMusicVolume() spawns a detached thread that sleeps and calls
 OverheadLight.setMasterVolume(). That B6 unmutes the ceiling unit.
 
 Two windows matter:
-  A) shutdown -> user resumes within 2 s -> flag cleared -> stale B6 fires into
-     a LIVE session (unmutes what the user is listening to: harmless but wrong)
-  B) a thread spawned during shutdown waking AFTER a later shutdown began
-Both must be inert with the patch.
+  A) a timer scheduled in a live session, then power off, then a resume before
+     the timer wakes  -> the timer is from the OLD session and must be dropped
+  B) a thread spawned before shutdown waking AFTER a later resume -> same
+Both must be inert under the shipped (gen) design. The rejected latch design
+handled B by suppressing forever, which is what stranded audio.
 """
 import sys
 
 MUTE, UNMUTE = "B5:01", "B5:00"
+LATCH, GEN, NONE = "latch", "gen", "none"
 fails = 0
 def check(c, w):
     global fails
@@ -22,93 +24,105 @@ def check(c, w):
 
 
 class Spk:
-    def __init__(self): self.muted = False; self.bus = []
-    def mute(self):   self.muted = True;  self.bus.append(MUTE)
-    def unmute(self): self.muted = False; self.bus.append(UNMUTE)
-    def volume(self, v): self.muted = False; self.bus.append(f"B6:{v:02X}")
+    def __init__(self): self.muted = False; self.volume = 10; self.bus = []
+    def mute(self):      self.muted = True;  self.bus.append(MUTE)
+    def unmute(self):    self.muted = False; self.bus.append(UNMUTE)
+    def set_volume(self, v): self.muted = False; self.volume = v; self.bus.append(f"B6:{v:02X}")
 
 
 class App:
-    def __init__(self, spk, patched):
-        self.spk, self.patched = spk, patched
-        self.flag = False
-        self.pending = []                      # (delay, volume) threads
+    def __init__(self, spk, mode):
+        self.spk, self.mode = spk, mode
+        self.in_shutdown = False
+        self.gen = 0
+        self.latched = False
+        self.pending = []                       # (delay, volume, gen-at-spawn)
+
+    def _suppressed(self):
+        return self.latched if self.mode == LATCH else (self.in_shutdown if self.mode == GEN else False)
 
     def ol_unmute(self):
-        if self.patched and self.flag: return
+        if self._suppressed(): return
         self.spk.unmute()
 
     def ol_volume(self, v):
-        if self.patched and self.flag: return
-        self.spk.volume(v)
+        if self._suppressed(): return
+        self.spk.set_volume(v)
 
     def delay_music_volume(self, v, d):
-        if self.patched and self.flag:
-            return                             # do not spawn
-        self.pending.append((d, v))
+        if self._suppressed(): return           # do not spawn
+        self.pending.append((d, v, self.gen))
 
     def wake(self):
-        """Every spawned thread reaches its setMasterVolume call."""
         woke = []
-        for d, v in sorted(self.pending):
-            if self.patched and self.flag:
-                continue                       # guarded at wake
+        for d, v, stamp in sorted(self.pending):
+            if self.mode == GEN and stamp != self.gen:
+                continue                        # stale: a shutdown intervened
+            if self.mode == LATCH and self.latched:
+                continue
             self.ol_volume(v); woke.append(v)
         self.pending.clear()
         return woke
 
+    def toggle_music_and_source(self, d=2000):
+        self.spk.mute(); self.ol_unmute(); self.delay_music_volume(15, d)
+
     def shutdown(self):
-        if self.patched: self.flag = True
-        self.spk.mute()
-        self.spk.mute()
-        self.ol_unmute()
-        self.delay_music_volume(15, 2000)
-        self.spk.mute()
-        if self.patched: self.spk.mute()
+        if self.mode == GEN: self.gen += 1
+        if self.mode == LATCH: self.latched = True
+        self.spk.mute(); self.spk.mute()
+        prev, self.in_shutdown = self.in_shutdown, True
+        try:
+            self.toggle_music_and_source()      # via KillBluetooth
+        finally:
+            self.in_shutdown = prev
 
     def resume(self):
-        if self.patched: self.flag = False
-        self.ol_volume(10)
-        self.ol_unmute()
-        self.delay_music_volume(15, 2000)
+        self.toggle_music_and_source()
 
 
-print("-- window A: shutdown, resume inside the 2 s delay --")
-# The question is HOW MANY threads are pending: shutdown must contribute none.
-spk = Spk(); app = App(spk, patched=False)
+print("-- window A: timer scheduled, power off, resume, timer wakes --")
+spk = Spk(); app = App(spk, NONE)
+app.toggle_music_and_source()      # user changes source; timer scheduled
 app.shutdown(); app.resume()
-check(len(app.pending) == 2, f"UNPATCHED: shutdown AND resume each queued one: {app.pending}")
 woke = app.wake()
-check(15 in woke, f"UNPATCHED stale B6 fires into the live session: woke={woke}")
+check(woke.count(15) >= 2, f"UNPATCHED: stale timers fire into the session: woke={woke}")
 
-spk = Spk(); app = App(spk, patched=True)
-app.shutdown(); app.resume()
-check(len(app.pending) == 1, f"PATCHED: only resume's own volume is queued: {app.pending}")
+spk = Spk(); app = App(spk, GEN)
+app.toggle_music_and_source()      # timer stamped with the live generation
+app.shutdown()                     # generation moves on
+app.resume()                       # new session schedules its own timer
 woke = app.wake()
-check(woke == [15], f"PATCHED: exactly one B6, from resume, not shutdown: woke={woke}")
-check(app.spk.bus.count("B5:01") == 4, f"shutdown's mutes all present: {app.spk.bus}")
-check(not app.flag, "flag cleared on resume")
+check(woke == [15], f"PATCHED: only the post-resume timer fires: woke={woke}")
+check(not spk.muted, "PATCHED: resume still restores audio")
+check(spk.volume == 15, f"PATCHED: volume applied once: {spk.volume}")
 
-print("\n-- window B: thread spawned before shutdown, wakes during it --")
-spk = Spk(); app = App(spk, patched=False)
-app.delay_music_volume(15, 2000)          # spawned in a live session
-app.shutdown()                             # shutdown begins before it wakes
-bus_before = list(spk.bus)
-woke = app.wake()
-check(15 in woke, f"UNPATCHED: the pre-shutdown thread still fires: woke={woke}")
+print("\n-- window B: timer spawned before shutdown, wakes while powered off --")
+for mode in (NONE, GEN):
+    spk = Spk(); app = App(spk, mode)
+    app.delay_music_volume(15, 2000)   # spawned in a live session
+    app.shutdown()                     # power off before it wakes
+    woke = app.wake()
+    if mode == NONE:
+        check(15 in woke, f"UNPATCHED: pre-shutdown timer still fires: woke={woke}")
+    else:
+        check(woke == [], f"PATCHED: stale timer dropped: woke={woke}")
+        check(spk.muted, "PATCHED: remains muted")
+        check(UNMUTE not in spk.bus and "B6:0F" not in spk.bus,
+              f"PATCHED: nothing unmuting on the bus: {spk.bus}")
 
-spk = Spk(); app = App(spk, patched=True)
-app.delay_music_volume(15, 2000)
+print("\n-- a fresh timer after a resume is still honoured --")
+spk = Spk(); app = App(spk, GEN)
 app.shutdown()
+app.resume()
 woke = app.wake()
-check(not woke, f"PATCHED: guarded at wake while flag set: woke={woke}")
-check(spk.muted, "PATCHED: remains muted after the delayed wake")
+check(woke == [15], f"post-resume timer fires exactly once: woke={woke}")
+check(not spk.muted, "audio is live")
 
-print("\n-- patched: shutdown with no resume leaves it muted --")
-spk = Spk(); app = App(spk, patched=True)
-app.shutdown(); app.wake()
-check(spk.muted, "still muted")
-check(UNMUTE not in spk.bus, f"no unmute on the bus: {spk.bus}")
+print("\n-- the shutdown teardown itself never schedules a timer --")
+spk = Spk(); app = App(spk, GEN)
+app.shutdown()
+check(app.pending == [], f"no timer queued by shutdown: {app.pending}")
 
 print("\n" + (f"FAILED ({fails})" if fails else "PASSED"))
 sys.exit(1 if fails else 0)

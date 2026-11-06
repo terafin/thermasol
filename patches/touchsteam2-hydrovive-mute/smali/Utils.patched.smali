@@ -693,11 +693,6 @@
 
 .method public static ShutdownAll(Landroid/content/Context;)V
     .registers 3
-
-    const/4 v0, 0x1
-
-    sput-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
-
     .annotation system Ldalvik/annotation/MethodParameters;
         accessFlags = {
             0x0
@@ -706,6 +701,12 @@
             "context"
         }
     .end annotation
+
+    sget v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sAudioGen:I
+
+    add-int/lit8 v0, v0, 0x1
+
+    sput v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sAudioGen:I
 
     .line 478
     move-object v0, p0
@@ -732,7 +733,7 @@
     invoke-virtual {v0}, Lcom/thermasol/touchsteam2/comm/HardwareServicePersist;->psb_turn_off_power_flush()V
 
     .line 487
-    :try_start_16
+    :try_start_1c
     invoke-virtual {v0}, Lcom/thermasol/touchsteam2/comm/HardwareServicePersist;->getNative()Lcom/thermasol/thermatouchservice/IHardwareService;
 
     move-result-object v1
@@ -752,19 +753,19 @@
     move-result-object v1
 
     invoke-interface {v1}, Lcom/thermasol/thermatouchservice/IHardwareService;->hvlsr_bluetooth_disconnect()V
-    :try_end_2b
-    .catch Ljava/lang/Exception; {:try_start_16 .. :try_end_2b} :catch_2c
+    :try_end_31
+    .catch Ljava/lang/Exception; {:try_start_1c .. :try_end_31} :catch_32
 
-    goto :goto_30
+    goto :goto_36
 
-    :catch_2c
+    :catch_32
     move-exception v1
 
     .line 492
     invoke-static {v1}, Lcom/thermasol/touchsteam2/util/Utils;->handleException(Ljava/lang/Exception;)V
 
     .line 494
-    :goto_30
+    :goto_36
     invoke-static {}, Lcom/thermasol/utils/Utility;->waitForHardwareReaction()V
 
     .line 496
@@ -783,7 +784,30 @@
     invoke-virtual {v0}, Lcom/thermasol/touchsteam2/comm/HardwareServicePersist;->psb_turn_off_steam()V
 
     .line 501
+    const/4 v0, 0x1
+
+    sput-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sInShutdown:Z
+
+    :try_start_4b
     invoke-static {p0}, Lcom/thermasol/touchsteam2/util/Utils;->PersistPauseAndKillBluetooth(Landroid/content/Context;)V
+    :try_end_4e
+    .catchall {:try_start_4b .. :try_end_4e} :catchall_4f
+
+    goto :goto_54
+
+    :catchall_4f
+    move-exception v1
+
+    const/4 v0, 0x0
+
+    sput-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sInShutdown:Z
+
+    throw v1
+
+    :goto_54
+    const/4 v0, 0x0
+
+    sput-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sInShutdown:Z
 
     const/4 v0, 0x0
 
@@ -791,8 +815,6 @@
     invoke-static {p0, v0}, Lcom/thermasol/touchsteam2/util/Utils;->ToggleBluetooth(Landroid/content/Context;Z)V
 
     return-void
-    invoke-static {p0}, Lcom/thermasol/touchsteam2/util/OverheadLight;->mute(Landroid/content/Context;)V
-
 .end method
 
 .method public static StartBluetooth(Landroid/content/Context;)V
@@ -1710,16 +1732,7 @@
 .end method
 
 .method private static delayMusicVolume(Landroid/content/Context;II)V
-    .registers 5
-
-    sget-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
-
-    if-nez v0, :tt_hv_spawn
-
-    return-void
-
-    :tt_hv_spawn
-
+    .registers 6
     .annotation system Ldalvik/annotation/MethodParameters;
         accessFlags = {
             0x10,
@@ -1733,12 +1746,21 @@
         }
     .end annotation
 
+    sget-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sInShutdown:Z
+
+    if-eqz v0, :cond_5
+
+    return-void
+
+    :cond_5
+    sget v2, Lcom/thermasol/touchsteam2/util/OverheadLight;->sAudioGen:I
+
     .line 566
     new-instance v0, Ljava/lang/Thread;
 
     new-instance v1, Lcom/thermasol/touchsteam2/util/-$$Lambda$Utils$q_hQ287_rT8SvwrN8-OgSwqt7yA;
 
-    invoke-direct {v1, p2, p0, p1}, Lcom/thermasol/touchsteam2/util/-$$Lambda$Utils$q_hQ287_rT8SvwrN8-OgSwqt7yA;-><init>(ILandroid/content/Context;I)V
+    invoke-direct {v1, p2, p0, p1, v2}, Lcom/thermasol/touchsteam2/util/-$$Lambda$Utils$q_hQ287_rT8SvwrN8-OgSwqt7yA;-><init>(ILandroid/content/Context;II)V
 
     invoke-direct {v0, v1}, Ljava/lang/Thread;-><init>(Ljava/lang/Runnable;)V
 
@@ -2732,17 +2754,8 @@
     return-void
 .end method
 
-.method static synthetic lambda$delayMusicVolume$1(ILandroid/content/Context;I)V
-    .registers 5
-
-    sget-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
-
-    if-nez v0, :tt_hv_wake
-
-    return-void
-
-    :tt_hv_wake
-
+.method static synthetic lambda$delayMusicVolume$1(ILandroid/content/Context;II)V
+    .registers 6
 
     int-to-long v0, p0
 
@@ -2761,6 +2774,13 @@
 
     .line 568
     :goto_9
+    sget v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sAudioGen:I
+
+    if-ne p3, v0, :cond_e
+
+    return-void
+
+    :cond_e
     invoke-static {p1, p2}, Lcom/thermasol/touchsteam2/util/OverheadLight;->setMasterVolume(Landroid/content/Context;I)V
 
     return-void
@@ -3091,11 +3111,6 @@
 
 .method public static loadUserSettings(Landroid/content/Context;I)V
     .registers 9
-
-    const/4 v0, 0x0
-
-    sput-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
-
     .annotation system Ldalvik/annotation/MethodParameters;
         accessFlags = {
             0x0,

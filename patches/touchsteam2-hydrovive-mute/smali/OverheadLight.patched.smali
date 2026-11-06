@@ -95,8 +95,6 @@
 
 
 # static fields
-.field public static volatile sShutdownMuted:Z
-
 .field public static final BASS_FORMAT_KEY:Ljava/lang/String; = "bassVolumeUser"
 
 .field public static final DEFAULT_VOLUME:I = 0xa
@@ -124,6 +122,10 @@
 .field private static final SUPPRESSED_MAX_VOLUME:I = 0xe
 
 .field public static final TREBLE_FORMAT_KEY:Ljava/lang/String; = "trebleVolumeUser"
+
+.field public static volatile sAudioGen:I
+
+.field public static volatile sInShutdown:Z
 
 
 # direct methods
@@ -1555,17 +1557,16 @@
 
 .method public static final setMasterVolume(Landroid/content/Context;I)V
     .registers 5
-
-    sget-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
-
-    if-nez v0, :tt_hv_ok
-
-    return-void
-
-    :tt_hv_ok
     .annotation runtime Lkotlin/jvm/JvmStatic;
     .end annotation
 
+    sget-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sInShutdown:Z
+
+    if-eqz v0, :cond_5
+
+    return-void
+
+    :cond_5
     const-string v0, "context"
 
     invoke-static {p0, v0}, Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object;Ljava/lang/String;)V
@@ -1594,34 +1595,34 @@
 
     const/4 v2, 0x1
 
-    if-eq v1, v2, :cond_29
+    if-eq v1, v2, :cond_2e
 
     const/4 v2, 0x2
 
-    if-eq v1, v2, :cond_25
+    if-eq v1, v2, :cond_2a
 
     const/4 v2, 0x3
 
-    if-eq v1, v2, :cond_25
+    if-eq v1, v2, :cond_2a
 
     const/4 v2, 0x4
 
-    if-eq v1, v2, :cond_25
+    if-eq v1, v2, :cond_2a
 
-    goto :goto_2c
+    goto :goto_31
 
     .line 313
-    :cond_25
+    :cond_2a
     invoke-virtual {v0, p1}, Lcom/thermasol/touchsteam2/comm/HardwareServicePersist;->slsr_set_music_volume(I)V
 
-    goto :goto_2c
+    goto :goto_31
 
     .line 308
-    :cond_29
+    :cond_2e
     invoke-virtual {v0, p1}, Lcom/thermasol/touchsteam2/comm/HardwareServicePersist;->hvlsr_master_volume(I)V
 
     .line 319
-    :goto_2c
+    :goto_31
     invoke-static {p0}, Landroidx/preference/PreferenceManager;->getDefaultSharedPreferences(Landroid/content/Context;)Landroid/content/SharedPreferences;
 
     move-result-object p0
@@ -2291,17 +2292,16 @@
 
 .method public static final unmute(Landroid/content/Context;)V
     .registers 4
-
-    sget-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
-
-    if-nez v0, :tt_hv_ok
-
-    return-void
-
-    :tt_hv_ok
     .annotation runtime Lkotlin/jvm/JvmStatic;
     .end annotation
 
+    sget-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sInShutdown:Z
+
+    if-eqz v0, :cond_5
+
+    return-void
+
+    :cond_5
     const-string v0, "context"
 
     invoke-static {p0, v0}, Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object;Ljava/lang/String;)V
@@ -2328,32 +2328,32 @@
 
     const/4 v1, 0x1
 
-    if-eq v0, v1, :cond_28
+    if-eq v0, v1, :cond_2d
 
     const/4 v2, 0x2
 
-    if-eq v0, v2, :cond_24
+    if-eq v0, v2, :cond_29
 
     const/4 v2, 0x3
 
-    if-eq v0, v2, :cond_24
+    if-eq v0, v2, :cond_29
 
     const/4 v2, 0x4
 
-    if-eq v0, v2, :cond_24
+    if-eq v0, v2, :cond_29
 
-    goto :goto_2b
+    goto :goto_30
 
     .line 295
-    :cond_24
+    :cond_29
     invoke-virtual {p0, v1}, Lcom/thermasol/touchsteam2/comm/HardwareServicePersist;->slsr_music_on_off(Z)V
 
-    goto :goto_2b
+    goto :goto_30
 
     .line 290
-    :cond_28
+    :cond_2d
     invoke-virtual {p0}, Lcom/thermasol/touchsteam2/comm/HardwareServicePersist;->hvlsr_unmute()V
 
-    :goto_2b
+    :goto_30
     return-void
 .end method

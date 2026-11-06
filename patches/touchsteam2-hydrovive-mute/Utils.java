@@ -466,10 +466,10 @@ public class Utils {
     /* JADX WARN: Multi-variable type inference failed */
     public static void ShutdownAll(Context context) {
         HardwareServicePersist iHardwareTouchingContext = ((IHardwareTouchingContext) context).getInstance();
-        /* From here until loadUserSettings() runs again, no unmute and no B6
-         * volume frame may leave the panel: the ceiling unit unmutes on both,
-         * and the point of shutting down is that the speaker goes quiet. */
-        OverheadLight.sShutdownMuted = true;
+        /* Any volume timer scheduled before the user pressed power off is now
+         * stale: it would wake up inside the powered-off session and send a B6
+         * frame, which unmutes the ceiling unit. */
+        OverheadLight.sAudioGen++;
         iHardwareTouchingContext.slsr_voice_mute();
         OverheadLight.mute(context);
         iHardwareTouchingContext.esv_turn_off();
@@ -488,12 +488,18 @@ public class Utils {
         OverheadLight.mute(context);
         iHardwareTouchingContext.slsr_request_sls_standby();
         iHardwareTouchingContext.psb_turn_off_steam();
-        PersistPauseAndKillBluetooth(context);
+        /* The bluetooth teardown runs KillBluetooth -> toggleMusicAndSource,
+         * which mutes, then UNMUTES, then restores volume through a delayed
+         * B6 frame. Suppress exactly that span: no unmute, no B6. Suppression
+         * ends the moment the teardown returns, so the user's next action
+         * restores audio normally. */
+        OverheadLight.sInShutdown = true;
+        try {
+            PersistPauseAndKillBluetooth(context);
+        } finally {
+            OverheadLight.sInShutdown = false;
+        }
         ToggleBluetooth(context, false);
-        /* Last word: everything above may have re-selected source or volume,
-         * and any of those would have unmuted. Mute once more, now that nothing
-         * further can run. */
-        OverheadLight.mute(context);
     }
 
     private static String buildSteamPreferenceKey(HardwareServicePersist ThermaCan, String key) {
@@ -537,33 +543,32 @@ public class Utils {
     }
 
     private static void delayMusicVolume(final Context context, final int volume, final int delay) {
-        /* During shutdown this thread would outlive the decision: it sleeps up to
-         * 2 s and then calls setMasterVolume, whose B6 unmutes the ceiling unit.
-         * The shutdown flag suppresses that send anyway, so do not spawn a thread
-         * that could still be asleep when the user starts a new session and the
-         * flag is cleared -- it would then unmute into a live session. */
-        if (OverheadLight.sShutdownMuted) {
+        /* During the shutdown teardown this timer exists only because the
+         * teardown re-selected the source; it must never fire, because its B6
+         * frame unmutes the ceiling unit. */
+        if (OverheadLight.sInShutdown) {
             return;
         }
+        /* Capture the shutdown generation on this thread. If the user presses
+         * power off while it sleeps, the generation moves on and the timer
+         * discards itself instead of unmuting into the powered-off session. */
+        final int gen = OverheadLight.sAudioGen;
         new Thread(new Runnable() { // from class: com.thermasol.touchsteam2.util.-$$Lambda$Utils$q_hQ287_rT8SvwrN8-OgSwqt7yA
             @Override // java.lang.Runnable
             public final void run() {
-                Utils.lambda$delayMusicVolume$1(delay, context, volume);
+                Utils.lambda$delayMusicVolume$1(delay, context, volume, gen);
             }
         }).start();
     }
 
-    static /* synthetic */ void lambda$delayMusicVolume$1(int i, Context context, int i2) {
+    static /* synthetic */ void lambda$delayMusicVolume$1(int i, Context context, int i2, int gen) {
         try {
             Thread.sleep(i);
         } catch (Exception e) {
             handleException(e);
         }
-        /* setMasterVolume already no-ops while the shutdown flag is set; this
-         * second check also covers the window where shutdown began after the
-         * thread was spawned. */
-        if (OverheadLight.sShutdownMuted) {
-            return;
+        if (gen != OverheadLight.sAudioGen) {
+            return;   /* a shutdown happened after this timer was scheduled */
         }
         OverheadLight.setMasterVolume(context, i2);
     }
@@ -601,9 +606,6 @@ public class Utils {
     /* JADX WARN: Multi-variable type inference failed */
     public static void loadUserSettings(Context context, int user) {
         HardwareServicePersist iHardwareTouchingContext = ((IHardwareTouchingContext) context).getInstance();
-        /* A user session is starting: release the shutdown mute so the volume
-         * and source calls below can restore normal audio. */
-        OverheadLight.sShutdownMuted = false;
         SharedPreferences defaultSharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
         GV.ActiveUser = BoundsCheck(user, 0, 2);
         setRoutedVolume(context, defaultSharedPreferences.getInt(OverheadLight.MUSIC_VOLUME_KEY + GV.ActiveUser, 10));

@@ -34,8 +34,8 @@ the log carries **no** `hv:` lines (stock daemon has no B5 coupling).
 ## Step 1 — install the patched APK
 
 ```
-adb push touchsteam2-patched-v2.apk /data/local/tmp/
-adb shell su 0 sh -c "pm install --no-incremental -r /data/local/tmp/touchsteam2-patched-v2.apk"
+adb push touchsteam2-patched-v3.apk /data/local/tmp/
+adb shell su 0 sh -c "pm install --no-incremental -r /data/local/tmp/touchsteam2-patched-v3.apk"
 ```
 Expect `Success`. A platform-key mismatch would fail with
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` — the signer was verified to match.
@@ -43,14 +43,14 @@ Expect `Success`. A platform-key mismatch would fail with
 Confirm the running package is the new one:
 ```
 pm path com.thermasol.touchsteam2      # new base.apk path
-sha256sum <that path>/base.apk         # 10be1fb1...4b270f
+sha256sum <that path>/base.apk         # 4096849d...a5f6c8
 ```
 
 ## Step 2 — power off (operator listens)
 
 Start `tcpdump -i can0 -tttt -n` first, then press power-off.
 
-Expect on the bus: **four** `131#A5B57B01` mutes and **no** `A5B57B00`,
+Expect on the bus: **three** `131#A5B57B01` mutes and **no** `A5B57B00`,
 **no** `A5B67B8F`.
 Expect audibly: the buzz stops and **stays** stopped.
 
@@ -59,9 +59,15 @@ Failure signatures:
 * `B6` present → the `setMasterVolume` guard did not hold
 * buzz returns ~1 s later → a path we have not found
 
-## Step 3 — tap a user button (operator listens)
+## Step 3 — resume audio (operator listens)
 
-Expect: `B6` and `B5 00` on the bus, and audio returns at the stored volume.
+Tap a music/source control (the path `MusicController` and `MenusMgr` take), or
+start playback. Expect `B5 00` and a `B6` frame on the bus, and audio returns at
+the stored volume.
+
+Repeat with the user-profile screen if you want the second resume path covered
+(`loadUserSettings`); both must restore audio. That is the cell the rejected
+latch design failed.
 
 ## Rollback of the APK
 
@@ -70,6 +76,15 @@ Reinstall the pre-patch APK pulled from the device
 ```
 pm install --no-incremental -r /data/local/tmp/installed-base.apk
 ```
+
+## Superseded artifact
+
+`touchsteam2-patched-v2.apk` must NOT be installed. It carries an earlier design
+whose latch stranded audio on the music-resume path, and it additionally
+compressed `resources.arsc` (targetSdk 30 requires it stored) and contained a
+stray `work/classes2.dex` entry. v3 fixes all three; it is built by replacing
+only the `classes2.dex` entry of the installed APK, so all 869 other entries are
+byte-identical to what is on the panel.
 
 ## What this runbook does NOT establish
 
