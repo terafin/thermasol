@@ -378,6 +378,11 @@ public class Utils {
 
     /* JADX WARN: Multi-variable type inference failed */
     public static void TurnOnSteam(Context context) {
+        /* A steam session is starting, so audio must be live: this is the only
+         * thing that lifts the power-off mute, and it fires when the user
+         * actually starts something rather than when they merely wake the
+         * screen. */
+        OverheadLight.unmute(context);
         HardwareServicePersist iHardwareTouchingContext = ((IHardwareTouchingContext) context).getInstance();
         toggleSteam(iHardwareTouchingContext, true);
         FirebaseAnalyticEvents.logEvent(context, MainControl.ANALYTICS_STEAM_SESSION_EVENT, "initial_temperature_set_point", Integer.valueOf(iHardwareTouchingContext.psb_get_psb_temperature_setpoint()));

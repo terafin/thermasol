@@ -127,6 +127,16 @@ class App:
     def toggle_bluetooth(self, on):
         pass                             # no unmute/volume on this path
 
+    # -- session start -----------------------------------------------------
+    def esv_turn_on(self):
+        """HardwareServicePersist.esv_turn_on -- every shower start funnels here
+        (screen tap, management thread, remote request)."""
+        self.ol_unmute()
+
+    def turn_on_steam(self):
+        """Utils.TurnOnSteam -- every steam start funnels here."""
+        self.ol_unmute()
+
     # -- resume paths ------------------------------------------------------
     def resume_via_music(self, delay=2000):
         """MusicController / MenusMgr / external-app launch."""
@@ -195,6 +205,29 @@ for label, resume in (("music controller", lambda a: a.resume_via_music()),
     woke = app.wake()
     check(bool(woke) or spk.volume == 10, f"{label}: volume restored: {woke}")
     check(not spk.muted, f"{label}: ends AUDIBLE")
+
+print("\n-- starting a shower from the powered-off state restores audio --")
+for mode, expect in ((GEN, True), (LATCH, False)):
+    spk, app, _ = powered_off(mode)
+    check(spk.muted, f"{mode}: muted after power-off")
+    spk.bus.clear()
+    app.esv_turn_on()
+    check((UNMUTE in spk.bus) == expect,
+          f"{mode}: shower start {'sends' if expect else 'swallows'} the unmute: {spk.bus}")
+    check(spk.muted != expect,
+          f"{mode}: speaker {'live' if expect else 'still dead'} after shower start")
+
+print("\n-- starting steam from the powered-off state restores audio --")
+for mode, expect in ((GEN, True), (LATCH, False)):
+    spk, app, _ = powered_off(mode)
+    spk.bus.clear()
+    app.turn_on_steam()
+    check((UNMUTE in spk.bus) == expect,
+          f"{mode}: steam start {'sends' if expect else 'swallows'} the unmute: {spk.bus}")
+
+print("\n-- the unmute is not premature: idling after power-off sends nothing --")
+spk, app, _ = powered_off(GEN)
+check(spk.bus == [MUTE, MUTE, MUTE], f"no later frame on the bus: {spk.bus}")
 
 print("\n-- ordinary audio is untouched outside a shutdown --")
 spk = Speaker(); app = App(spk, GEN)

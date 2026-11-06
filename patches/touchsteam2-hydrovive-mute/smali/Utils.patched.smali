@@ -1042,6 +1042,8 @@
         }
     .end annotation
 
+    invoke-static {p0}, Lcom/thermasol/touchsteam2/util/OverheadLight;->unmute(Landroid/content/Context;)V
+
     .line 377
     move-object v0, p0
 

@@ -154,3 +154,62 @@ zipalign -p -f 4 … && apksigner sign --key device/nxp/common/security/platform
 
 Never installed, never run. Buzz silencing and audio restoration remain
 **unverified** until the runbook is executed on the panel.
+
+# Build v4 — session start restores audio
+
+`touchsteam2-patched-v4.apk`
+sha256 `341e68be0ca6280f92a008d29e309dd90aa341e25aa83c43256ee5a4e0ee0bfe`,
+25,519,008 B. Supersedes v3.
+
+## Why v4
+
+v3 suppressed the power-off unmute but left nothing to lift it again until an
+audio-shaped action. Starting a shower or steam made no audio call at all
+(`DigitalShowerScreenFragment.handleTap` -> `esv_turn_on`;
+`SteamFragment.onSlide` -> `Utils.TurnOnSteam` -> `toggleSteam` +
+`resetLightSettings`), so a user who powered off and came back to shower had a
+dead speaker. That does not meet "restore normal audio when the user resumes or
+starts it".
+
+v4 unmutes at the two session-start chokepoints, which are the only places the
+power-off mute is lifted:
+
+* `HardwareServicePersist.esv_turn_on()` calls `OverheadLight.unmute(mContext)`.
+  This one method covers every shower start: the screen tap
+  (`DigitalShowerScreenFragment.handleTap`), the management thread
+  (`DigitalShowerScreenFragment$ManagementThread`), and the remote request
+  (`AwsMqttConnectionService`).
+* `Utils.TurnOnSteam(Context)` calls `OverheadLight.unmute(context)`, covering
+  `SteamFragment.onSlide` and `MainControl$MainControlRequestMonitor`.
+
+Deliberately not hooked: `DateTimeFragment.login()` (slide-to-unlock). Unmuting
+on unlock would fire for a user who unlocks and walks away, which is the
+premature case.
+
+## Files changed from the installed dex
+
+Four, and only these four:
+
+* `util/OverheadLight.smali` — two fields, guards on `unmute`/`setMasterVolume`
+* `util/Utils.smali` — generation bump and teardown bracket in `ShutdownAll`,
+  guards in `delayMusicVolume`, stale-timer check in the lambda body, unmute in
+  `TurnOnSteam`
+* `comm/HardwareServicePersist.smali` — unmute in `esv_turn_on`
+* `util/-$$Lambda$Utils$q_hQ287_rT8SvwrN8-OgSwqt7yA.smali` — generation field
+
+## Gates passed
+
+* assembles to DEX 035; re-disassembly differs from pristine in exactly 4 files
+* class count 3,563; `dexdump -f` exit 0, zero warnings
+* `classes2.dex` inside the signed APK is byte-identical to the validated dex
+  (`75a20a41…3177`)
+* `resources.arsc` stored, CRC `b5a069c7`, unchanged
+* 869 entries, same as the installed APK
+* `zipalign -c -p 4` passes
+* signer `7fbae817…a4d6d804` — the installed APK's own key; v3 scheme only,
+  matching the installed app (minSdk 29)
+
+## Not verified
+
+Never installed, never run. Buzz silencing, session-start restoration and all
+resume paths remain unverified until the runbook is executed on the panel.

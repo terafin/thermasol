@@ -16,6 +16,12 @@ Design (see README.md for the reasoning and the rejected latch):
   thread it does spawn with sAudioGen; the thread drops itself if a shutdown
   happened after it was scheduled.
 
+  Session start restores audio: HardwareServicePersist.esv_turn_on() (the one
+  chokepoint for every shower start -- screen tap, management thread, remote)
+  and Utils.TurnOnSteam() (every steam start) both call OverheadLight.unmute.
+  That is the only thing that lifts the power-off mute, so it is not premature:
+  it fires when the user actually starts a session.
+
 Nothing survives the shutdown.  Audio restoration is untouched because
 sInShutdown is false for every user-initiated call.
 """
@@ -173,6 +179,36 @@ u = u[:s] + body + u[e:]
 
 save(root, UTL, u)
 
+# ------------------------------------------------- session start restores audio
+# Every shower start funnels through HardwareServicePersist.esv_turn_on().
+HSP = "com/thermasol/touchsteam2/comm/HardwareServicePersist.smali"
+h = load(root, HSP)
+sig = "public final esv_turn_on()V"
+s, e = method_bounds(h, sig)
+body = h[s:e]
+body = sub(body, "    .registers 4\n",
+           "    .registers 4\n\n"
+           "    # tt-hydrovive-mute: a shower session is starting -- audio is live\n"
+           "    iget-object v0, p0, Lcom/thermasol/touchsteam2/comm/HardwareServicePersist;->mContext:Landroid/content/Context;\n\n"
+           "    invoke-static {v0}, Lcom/thermasol/touchsteam2/util/OverheadLight;->unmute(Landroid/content/Context;)V\n",
+           "esv_turn_on unmute")
+h = h[:s] + body + h[e:]
+save(root, HSP, h)
+
+# Every steam start funnels through Utils.TurnOnSteam().
+u = load(root, UTL)
+sig = "public static TurnOnSteam(Landroid/content/Context;)V"
+s, e = method_bounds(u, sig)
+body = u[s:e]
+body = sub(body,
+           '        names = {\n            "context"\n        }\n    .end annotation\n\n',
+           '        names = {\n            "context"\n        }\n    .end annotation\n\n'
+           "    # tt-hydrovive-mute: a steam session is starting -- audio is live\n"
+           "    invoke-static {p0}, Lcom/thermasol/touchsteam2/util/OverheadLight;->unmute(Landroid/content/Context;)V\n\n",
+           "TurnOnSteam unmute")
+u = u[:s] + body + u[e:]
+save(root, UTL, u)
+
 # ------------------------------------------------------------------- lambda class
 l = load(root, LMB)
 l = sub(l,
@@ -199,4 +235,4 @@ l = sub(l,
         "lambda run body")
 save(root, LMB, l)
 
-print("patched: OverheadLight.smali, Utils.smali, lambda class")
+print("patched: OverheadLight.smali, Utils.smali, HardwareServicePersist.smali, lambda class")
