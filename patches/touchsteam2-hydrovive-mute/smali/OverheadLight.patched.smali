@@ -1556,15 +1556,13 @@
 .method public static final setMasterVolume(Landroid/content/Context;I)V
     .registers 5
 
-    # HydroVive: shutdown owns the mute; both unmute() and the B6 volume frame
-    # would restore the buzz, so neither may send while the flag is set.
     sget-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
 
-    if-nez v0, :tt_hv_continue
+    if-nez v0, :tt_hv_ok
 
     return-void
 
-    :tt_hv_continue
+    :tt_hv_ok
     .annotation runtime Lkotlin/jvm/JvmStatic;
     .end annotation
 
@@ -2294,15 +2292,13 @@
 .method public static final unmute(Landroid/content/Context;)V
     .registers 4
 
-    # HydroVive: shutdown owns the mute; both unmute() and the B6 volume frame
-    # would restore the buzz, so neither may send while the flag is set.
     sget-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
 
-    if-nez v0, :tt_hv_continue
+    if-nez v0, :tt_hv_ok
 
     return-void
 
-    :tt_hv_continue
+    :tt_hv_ok
     .annotation runtime Lkotlin/jvm/JvmStatic;
     .end annotation
 

@@ -1,56 +1,45 @@
 # Build result — 2026-11-06
 
+## CORRECTION: the first build used the wrong base
+
+The patch was first applied to `/home/terafin/tt-recovery/apks/com.thermasol.touchsteam2.apk`
+(the recovery-tree copy). That is **not** what is installed:
+
+| | recovery copy | installed base.apk |
+|---|---|---|
+| size | 28,652,204 | 25,580,448 |
+| sha256 | a047b21d… | 8ad27395… |
+| `classes.dex` | 91ed83bd… | 91ed83bd… (same) |
+| `classes2.dex` | 09fd113e… | **686e1086… (different)** |
+
+`classes2.dex` is exactly where `Utils` and `OverheadLight` live, so the first
+APK would have delivered the patch to a stale dex. Rebuilt against the pulled
+installed `base.apk`.
+
 ## Artifact
 
-`touchsteam2-patched.apk`, 18,900,176 B
-sha256 `7192b190063465449626426d66cb023d6fa2f05e358bb335eab2577217d565c9`
+`touchsteam2-patched-v2.apk`, 23,663,997 B
+sha256 `10be1fb19731d19a7231d6b2beaed79860ee42bc861a003e234c0cdd7b4b270f`
 
-Signed with `device/nxp/common/security/platform.{pk8,x509.pem}` —
-`apksigner verify --print-certs` reports
-`EMAILADDRESS=android@freescale.com, CN=Android` (the panel's platform key).
-v1 + v2 + v3 all enabled.
+Signed `platform.pk8` / `platform.x509.pem` — cert SHA-256
+`7fbae817b7db24642d8959c347b561c003c6cfde2cb10f909c932f21a4d6d804`,
+**identical to the signer of the installed `base.apk`**, so `install -r` will
+be accepted as an update. v1 + v2 + v3.
 
-Built on the host from the **installed** APK
-(`/home/terafin/tt-recovery/apks/com.thermasol.touchsteam2.apk`), not a build tree.
+## Scope verification (re-disassembled the candidate)
 
-## Method
+Diff against the installed dex: **2 files, and only those 2** —
+`OverheadLight.smali` and `Utils.smali`. Every other one of the 3,563 classes is
+byte-identical. (The first build spread 23 cosmetic diffs across unrelated
+classes; this one does not, because it round-trips the same input.)
 
-1. `baksmali 2.5.2` on `classes.dex` and `classes2.dex` (11,298 smali files)
-2. five guards added to `com/thermasol/touchsteam2/util/Utils.smali` and three to
-   `OverheadLight.smali` (see `smali/*.patched.smali`)
-3. `smali 2.5.2` reassembly, `zipalign -p 4`, `apksigner`
+## Bytecode checks to repeat after install
 
-## Scope verification
-
-Re-disassembled the **candidate** and diffed against the original disassembly:
-
-* 25 files differ in total
-* **23 of them are cosmetic**: smali drops redundant default initialisers
-  (`= false`, `= null`). No instruction, method or field changes.
-* **2 are the patch**: `OverheadLight.smali` (62 diff lines) and `Utils.smali`
-  (121 diff lines)
-* label renaming from `:tt_hv_*` to `:cond_*` is automatic on reassembly and is
-  not a semantic change
+`dexdump -d classes2.dex`, expect `sget-boolean … sShutdownMuted` as the first
+instruction of both `unmute` and `setMasterVolume`, and `sput-boolean` before
+both `mute` calls in `ShutdownAll`.
 
 ## Not verified
 
-Never installed or run. The buzz and audio restoration have **not** been
-observed with this APK. Install requires approval.
-
-## Bytecode verification (dexdump, on the APK's own classes2.dex)
-
-The guards are present in the **compiled** artifact, not just the smali source:
-
-```
-ShutdownAll:  36cb1a  sput-boolean v0, OverheadLight;.sShutdownMuted:Z
-ShutdownAll:  36cb32  invoke-static {v2}, OverheadLight;.mute(...)   <- final mute
-ShutdownAll:  36cb90  invoke-static {v2}, OverheadLight;.mute(...)   <- pre-existing
-unmute:       36c4e8  sget-boolean v0, OverheadLight;.sShutdownMuted:Z  <- instr 0
-setMasterVolume: 36bfec sget-boolean v0, OverheadLight;.sShutdownMuted:Z <- instr 0
-```
-
-The flag write precedes both mutes in `ShutdownAll`, and each guard is the first
-instruction of its method, so neither can send before the check.
-
-Manifest intact: `com.thermasol.touchsteam2`, versionCode 1019, versionName
-10.1.9, targetSdk 30 — identical to the installed build.
+Never installed, never run. Buzz silencing and audio restoration remain
+**unverified**.

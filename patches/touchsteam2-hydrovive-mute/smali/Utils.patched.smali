@@ -388,6 +388,7 @@
     .end annotation
 
     .line 357
+    :try_start_0
     move-object v0, p0
 
     check-cast v0, Lcom/thermasol/touchsteam2/shared/IHardwareTouchingContext;
@@ -395,6 +396,8 @@
     invoke-interface {v0}, Lcom/thermasol/touchsteam2/shared/IHardwareTouchingContext;->getInstance()Lcom/thermasol/touchsteam2/comm/HardwareServicePersist;
 
     move-result-object v0
+    :try_end_7
+    .catch Ljava/lang/Exception; {:try_start_0 .. :try_end_7} :catch_23
 
     .line 359
     :try_start_7
@@ -411,7 +414,7 @@
 
     invoke-interface {p0}, Lcom/thermasol/thermatouchservice/IHardwareService;->killBluetooth()V
 
-    goto :goto_27
+    goto :goto_29
 
     .line 362
     :cond_15
@@ -419,7 +422,7 @@
 
     move-result v0
 
-    if-eqz v0, :cond_27
+    if-eqz v0, :cond_29
 
     .line 365
     invoke-static {p0}, Lcom/thermasol/touchsteam2/util/OverheadLight;->powerOffBluetooth(Landroid/content/Context;)V
@@ -429,18 +432,23 @@
     .line 366
     invoke-static {p0, v0}, Lcom/thermasol/touchsteam2/util/Utils;->toggleMusicAndSource(Landroid/content/Context;I)V
     :try_end_22
-    .catch Ljava/lang/Exception; {:try_start_7 .. :try_end_22} :catch_23
+    .catch Ljava/lang/Exception; {:try_start_7 .. :try_end_22} :catch_25
 
-    goto :goto_27
+    goto :goto_29
 
     :catch_23
+    move-exception v0
+
+    return-void
+
+    :catch_25
     move-exception p0
 
     .line 369
     invoke-static {p0}, Lcom/thermasol/touchsteam2/util/Utils;->handleException(Ljava/lang/Exception;)V
 
-    :cond_27
-    :goto_27
+    :cond_29
+    :goto_29
     return-void
 .end method
 
@@ -686,9 +694,6 @@
 .method public static ShutdownAll(Landroid/content/Context;)V
     .registers 3
 
-    # HydroVive: from here until loadUserSettings() runs again, no unmute and
-    # no B6 volume frame may leave the panel -- the ceiling unit unmutes on
-    # both, and shutdown is supposed to end with the speaker quiet.
     const/4 v0, 0x1
 
     sput-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
@@ -786,8 +791,6 @@
     invoke-static {p0, v0}, Lcom/thermasol/touchsteam2/util/Utils;->ToggleBluetooth(Landroid/content/Context;Z)V
 
     return-void
-    # Last word: everything above may have re-selected source or volume,
-    # and any of those would have unmuted.
     invoke-static {p0}, Lcom/thermasol/touchsteam2/util/OverheadLight;->mute(Landroid/content/Context;)V
 
 .end method
@@ -1226,7 +1229,7 @@
 
     move-result-object p0
 
-    const/16 v0, 0x1006
+    const/16 v0, 0x4
 
     invoke-virtual {p0, v0}, Landroid/view/View;->setSystemUiVisibility(I)V
 
@@ -3089,8 +3092,6 @@
 .method public static loadUserSettings(Landroid/content/Context;I)V
     .registers 9
 
-    # A user session is starting: release the shutdown mute so the volume and
-    # source calls below can restore normal audio.
     const/4 v0, 0x0
 
     sput-boolean v0, Lcom/thermasol/touchsteam2/util/OverheadLight;->sShutdownMuted:Z
@@ -4820,7 +4821,20 @@
         }
     .end annotation
 
+    invoke-virtual {p0}, Landroid/app/Activity;->getPackageManager()Landroid/content/pm/PackageManager;
+
+    move-result-object v1
+
+    invoke-virtual {v1}, Landroid/content/pm/PackageManager;->canRequestPackageInstalls()Z
+
+    move-result v1
+
+    if-eqz v1, :cond_b
+
+    return-void
+
     .line 899
+    :cond_b
     new-instance v0, Landroid/content/Intent;
 
     invoke-direct {v0}, Landroid/content/Intent;-><init>()V
@@ -4863,20 +4877,20 @@
     const/4 v1, 0x1
 
     .line 904
-    :try_start_29
+    :try_start_34
     invoke-virtual {p0, v0, v1}, Landroid/app/Activity;->startActivityForResult(Landroid/content/Intent;I)V
-    :try_end_2c
-    .catch Ljava/lang/Exception; {:try_start_29 .. :try_end_2c} :catch_2d
+    :try_end_37
+    .catch Ljava/lang/Exception; {:try_start_34 .. :try_end_37} :catch_38
 
-    goto :goto_31
+    goto :goto_3c
 
-    :catch_2d
+    :catch_38
     move-exception p0
 
     .line 905
     invoke-static {p0}, Lcom/thermasol/touchsteam2/util/Utils;->handleException(Ljava/lang/Exception;)V
 
-    :goto_31
+    :goto_3c
     return-void
 .end method
 
