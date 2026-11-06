@@ -1,0 +1,5 @@
+idle_dim
+hv_build
+tests/test_idle_logic
+tests/test_playback_control
+__pycache__/
