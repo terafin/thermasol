@@ -55,7 +55,8 @@ static long long g_boot_id;
 static int hv_enabled = 1;
 static int hv_fd = -1;
 static const char *hv_iface_arg = NULL;
-static unsigned long hv_mutes, hv_unmutes;   /* /proc/sys/kernel/random/boot_id, this boot */
+static unsigned long hv_mutes, hv_unmutes;
+static unsigned long hv_mute_fail, hv_unmute_fail;   /* failed dispatches */
 static void on_signal(int sig) { (void)sig; g_stop = 1; }
 
 static long long now_ms(void) {
@@ -135,7 +136,9 @@ static void write_status(const char *path, const char *state, long long lvl,
                          int bright_known, int restore, int dim, int max_bright,
                          int running_bright, int input_open,
                          unsigned long long evcount, const char *input,
-                         const char *playback, long long pb_heartbeat) {
+                         const char *playback, long long pb_heartbeat,
+                         unsigned long hv_m, unsigned long hv_u,
+                         unsigned long hv_mf, unsigned long hv_uf) {
     char tmp[256];
     if (snprintf(tmp, sizeof tmp, "%s.tmp", path) >= (int)sizeof tmp) return;
     int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
@@ -156,10 +159,15 @@ static void write_status(const char *path, const char *state, long long lvl,
         "boot_id=%016llx\n"
         "heartbeat_ms=%lld\n"
         "playback=%s\n"
-        "playback_heartbeat_ms=%lld\n",
+        "playback_heartbeat_ms=%lld\n"
+        "hv_mutes=%lu\n"
+        "hv_unmutes=%lu\n"
+        "hv_mute_fail=%lu\n"
+        "hv_unmute_fail=%lu\n",
         state, lvl, bright_known, restore, dim, max_bright,
         running_bright, evcount, input, input_open, (int)getpid(), g_boot_id,
-        now_ms(), playback, pb_heartbeat);
+        now_ms(), playback, pb_heartbeat,
+        hv_m, hv_u, hv_mf, hv_uf);
     if (n > 0) { ssize_t w = write(fd, b, (size_t)n); (void)w; }
     close(fd);
     if (rename(tmp, path) != 0) unlink(tmp);
@@ -250,6 +258,7 @@ static void hv_after_brightness_change(int going_dim)
     if (!hv_enabled || hv_fd < 0) return;
     int ok = (hv_can_send_b5(hv_fd, going_dim) == 0);
     if (ok) { if (going_dim) hv_mutes++; else hv_unmutes++; }
+    else    { if (going_dim) hv_mute_fail++; else hv_unmute_fail++; }
     fprintf(stderr, "tt-idle-dim: hv: panel %s -> B5 %s %s\n",
             going_dim ? "dimmed" : "restored",
             going_dim ? "mute" : "unmute", ok ? "sent" : "FAILED");
@@ -571,7 +580,8 @@ int main(int argc, char **argv) {
                             : (state == IDLE_ST_DIM ? "dim" : "active");
             write_status(st_path, st, last_act, bright_known, restore, dim, max_bright,
                          running_bright, ifd >= 0, evcount, in_path,
-                         playback_lease_name(&pb), pb.heartbeat_ms);
+                         playback_lease_name(&pb), pb.heartbeat_ms,
+                 hv_mutes, hv_unmutes, hv_mute_fail, hv_unmute_fail);
             last_status = t;
         }
     }
@@ -587,7 +597,8 @@ int main(int argc, char **argv) {
     }
     write_status(st_path, "exiting", last_act, bright_known, restore, dim, max_bright,
                  running_bright, ifd >= 0, evcount, in_path,
-                 playback_lease_name(&pb), pb.heartbeat_ms);
+                 playback_lease_name(&pb), pb.heartbeat_ms,
+                 hv_mutes, hv_unmutes, hv_mute_fail, hv_unmute_fail);
     if (ifd >= 0) close(ifd);
     close(ep);
     fprintf(stderr, "tt-idle-dim: exiting\n");
