@@ -86,6 +86,13 @@ stray `work/classes2.dex` entry. v3 fixes all three; it is built by replacing
 only the `classes2.dex` entry of the installed APK, so all 869 other entries are
 byte-identical to what is on the panel.
 
+## Step 4 covers only audio-shaped resumes
+
+Step 3 tests a music control. Starting a shower or steam does not call
+`unmute()`/`setMasterVolume()`, so the speaker stays muted on that path (see
+README "Known gap"). If the operator wants that case changed, it is a separate
+decision, not a failed test.
+
 ## What this runbook does NOT establish
 
 Nothing here has been executed. The expected frame lists are predictions from

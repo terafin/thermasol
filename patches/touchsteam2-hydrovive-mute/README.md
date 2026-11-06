@@ -89,6 +89,36 @@ implementations — the installed app, the rejected latch, and the shipped desig
 `tests/test_delayed_volume_race.py` covers the two timer windows: a timer
 scheduled before power-off, and a timer woken while the panel is off.
 
+## Known gap: starting a shower does not restore audio
+
+The gate is on `unmute()` and `setMasterVolume()`, so audio comes back when the
+user does something **audio-shaped**: a music/source control, the guest button,
+a profile selection, or launching an app. Those all reach `toggleMusicAndSource`.
+
+Starting a shower or steam does not. Checked in the installed dex:
+
+* `DigitalShowerScreenFragment.handleTap` → `esv_turn_on()` — no audio call
+* `SteamFragment.onSlide` → `Utils.TurnOnSteam` → `toggleSteam` + `resetLightSettings` — no audio call
+* `DateTimeFragment.onSlide` → `login()` — lock pattern only
+
+So after a power-off, a user who comes back and starts a shower, with no other
+audio action, gets no sound from the ceiling unit until they touch a music
+control.
+
+This is left as-is deliberately. The alternative — unmuting on shower/steam
+start — would restore audio that may not be there to restore, and since the
+buzz is present whenever the unit is unmuted and idle, it would put the buzz
+back for the whole shower. Staying muted is the failure mode that matches the
+stated priority.
+
+In practice the gap is narrow: the daemon mutes/mutes-on-idle and unmutes on
+wake, and the panel returns to the slide-to-relax screen on power-off, so a
+return after the 300 s idle timeout unmutes on the first touch. The uncovered
+case is a return inside that window with no music interaction.
+
+Closing it properly is a separate decision: either unmute on shower start, or
+couple the daemon to the app's power state instead of only the backlight.
+
 ## Remaining uncertainty
 
 The model is a faithful replay of the decompiled call order, not a run of the
