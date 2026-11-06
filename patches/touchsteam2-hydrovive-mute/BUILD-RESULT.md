@@ -36,3 +36,21 @@ Re-disassembled the **candidate** and diffed against the original disassembly:
 
 Never installed or run. The buzz and audio restoration have **not** been
 observed with this APK. Install requires approval.
+
+## Bytecode verification (dexdump, on the APK's own classes2.dex)
+
+The guards are present in the **compiled** artifact, not just the smali source:
+
+```
+ShutdownAll:  36cb1a  sput-boolean v0, OverheadLight;.sShutdownMuted:Z
+ShutdownAll:  36cb32  invoke-static {v2}, OverheadLight;.mute(...)   <- final mute
+ShutdownAll:  36cb90  invoke-static {v2}, OverheadLight;.mute(...)   <- pre-existing
+unmute:       36c4e8  sget-boolean v0, OverheadLight;.sShutdownMuted:Z  <- instr 0
+setMasterVolume: 36bfec sget-boolean v0, OverheadLight;.sShutdownMuted:Z <- instr 0
+```
+
+The flag write precedes both mutes in `ShutdownAll`, and each guard is the first
+instruction of its method, so neither can send before the check.
+
+Manifest intact: `com.thermasol.touchsteam2`, versionCode 1019, versionName
+10.1.9, targetSdk 30 — identical to the installed build.
