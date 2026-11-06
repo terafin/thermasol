@@ -59,3 +59,27 @@ The host root volume filled to 100% (96 KB free of 503 GB) during the d8 run.
 That was not caused by this work alone, but the build scratch contributed
 ~370 MB; the regenerable intermediates were deleted and free space recovered to
 21 GB. The artifact hash was re-checked afterwards and is unchanged.
+
+## Call-chain verification against the INSTALLED dex
+
+The chain the patch depends on was re-read from the **installed** `classes2.dex`
+(the one pulled off the panel, `09fd113e…` — not the stale recovery-tree copy).
+Every link is present, in this order:
+
+```
+Utils.ShutdownAll
+  OverheadLight.mute          (1st)
+  OverheadLight.mute          (2nd)
+  Utils.PersistPauseAndKillBluetooth
+      Utils.KillBluetooth
+          Utils.toggleMusicAndSource
+              OverheadLight.mute
+              OverheadLight.unmute      <-- the unmute the patch suppresses
+              Utils.delayMusicVolume    <-- the delay that later sends B6
+  OverheadLight.mute          (3rd)
+```
+
+So `mute` → `unmute` → delayed `setMasterVolume(15)` all run *inside*
+`ShutdownAll`, which is exactly what the `sShutdownMuted` flag guards. The
+sequence recorded in `tests/test_shutdown_mute_model.py` (`B5 01` ×3, `B5 00`,
+`B6 0F`) is reproduced by this installed code, not by an assumed one.
