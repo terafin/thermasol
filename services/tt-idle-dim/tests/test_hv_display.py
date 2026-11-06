@@ -99,5 +99,33 @@ if "DIM write failed" in log:
 else:
     print("skip failed-dim: host wrote a 0444 file (running as root?)")
 
+# --- clean shutdown from the dimmed state must restore AND unmute ------------
+print("-- clean shutdown from dimmed --")
+w3 = tempfile.mkdtemp(prefix="hv-exit-")
+br3 = os.path.join(w3, "brightness"); open(br3, "w").write(f"{RESTORE}\n")
+_rx3 = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+_rx3.bind((IFACE,)); _rx3.settimeout(0.2)
+p3, m3 = run(b, br3)
+p3.stdin.write("IDLE\n"); p3.stdin.flush()
+time.sleep(2.6)                      # let it dim and mute under the open listener
+f4, _end = [], time.time() + 0.8
+while time.time() < _end:
+    try: _b = _rx3.recv(16)
+    except socket.timeout: continue
+    _c, _d = struct.unpack("=IB3x", _b[:8]); f4.append((_c & 0x1FFFFFFF, _b[8:8+_d].hex()))
+ok(f4.count((0x131, "a5b57b0100000000")) == 1, f"shutdown case: dimmed and muted once: {f4}")
+p3.terminate()                       # SIGTERM -> clean exit path
+_shutdown = []
+_end = time.time() + 1.0
+while time.time() < _end:
+    try: _b = _rx3.recv(16)
+    except socket.timeout: continue
+    _c, _d = struct.unpack("=IB3x", _b[:8]); _shutdown.append((_c & 0x1FFFFFFF, _b[8:8+_d].hex()))
+p3.communicate(timeout=5)
+_rx3.close()
+ok(open(br3).read().strip() == str(RESTORE), "shutdown restored the backlight")
+ok((0x131, "a5b57b0000000000") in _shutdown,
+   f"clean shutdown from dimmed sent the B5 unmute: {_shutdown}")
+
 print("\n" + (f"FAILED ({fails})" if fails else "PASSED"))
 sys.exit(1 if fails else 0)

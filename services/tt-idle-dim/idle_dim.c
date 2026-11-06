@@ -577,8 +577,14 @@ int main(int argc, char **argv) {
     }
 
     /* --- SIGTERM/SIGINT: leave the panel bright, then exit --- */
-    if (state == IDLE_ST_DIM && bright_known && idle_bright_valid(restore, max_bright))
-        write_int_file(br_path, restore);
+    if (state == IDLE_ST_DIM && bright_known && idle_bright_valid(restore, max_bright)) {
+        /* Same rule as every other restore path: the speaker follows a
+         * brightness transition that actually succeeded. If the write fails the
+         * panel stays dim, so the speaker must stay muted -- leaving it alone is
+         * the pre-existing behaviour and is preserved here. */
+        if (write_int_file(br_path, restore) == 0)
+            hv_after_brightness_change(0);
+    }
     write_status(st_path, "exiting", last_act, bright_known, restore, dim, max_bright,
                  running_bright, ifd >= 0, evcount, in_path,
                  playback_lease_name(&pb), pb.heartbeat_ms);
