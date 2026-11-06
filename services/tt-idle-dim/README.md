@@ -39,6 +39,9 @@ tt_idle_dim --parent-death --input-name "Atmel maXTouch Touchscreen" \
 ## Verification
 
 * import reproduced the deployed hash exactly: `e1ff56f2…f66fd28c`
+* the HV build is reproducible from this tree: `./build-android.sh` emits
+  `83e2bbe1…c1ef7`, byte-identical to the binary running as the RAM trial on
+  the panel (`/data/local/tmp/tt_idle_dim_new`)
 * `make test` — 85 logic assertions + 48 playback assertions, 0 failures
 * `make hosttest` — 9 playback/daemon host tests, OK
 * `tests/test_hv_display.py` — real deployed args (`--dim 0`, `--playback-stdin`),
@@ -48,6 +51,10 @@ tt_idle_dim --parent-death --input-name "Atmel maXTouch Touchscreen" \
 ## What is NOT verified
 
 * the frames were observed on a **host vcan interface**, never on `can0`
-* whether the ceiling unit applies B5 is unverified — the protocol has no ACK
+* that the daemon's **own** B5 frames reach the unit is unverified — they have
+  only been exercised against a host vcan. (The unit does apply a hand-sent
+  `131#A5B57B0100000000`: sent 2026-11-06 14:22:47, operator reported "muted
+  and stayed". So the frame semantics are established; only this daemon's
+  delivery is not.)
 * `hv_can_open` failing at startup retries on the existing 1 Hz tick; a dim that
   happens while the interface is absent is **not** replayed later
