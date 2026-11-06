@@ -1,5 +1,14 @@
 # touchsteam2: keep the HydroVive muted through shower shutdown
 
+> **NOT THE CHOSEN APPROACH — do not install this APK.**
+> The desired behaviour is linked to the panel's **display state**, not to the
+> app's power button or to shower/steam start. That belongs entirely to the
+> idle daemon (`services/tt-idle-dim`), which already owns the dim/restore
+> transitions and now re-asserts the mute when the app lifts it while dimmed.
+> This patch is kept as the record of the app-side investigation — the
+> shutdown chain, the B6 volume-15 origin, and the paths that restore audio —
+> not as a candidate.
+
 ## The defect
 
 Powering the panel off leaves the ceiling speaker **buzzing**, and silences it

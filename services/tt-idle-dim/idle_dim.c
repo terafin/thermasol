@@ -57,6 +57,9 @@ static int hv_fd = -1;
 static const char *hv_iface_arg = NULL;
 static unsigned long hv_mutes, hv_unmutes;
 static unsigned long hv_mute_fail, hv_unmute_fail;   /* failed dispatches */
+static unsigned long hv_reasserts;                   /* app unmuted, we re-muted */
+static long long hv_last_reassert_ms;
+#define HV_REASSERT_MS 1000   /* collapse one app action's B5+B6 burst */
 static void on_signal(int sig) { (void)sig; g_stop = 1; }
 
 static long long now_ms(void) {
@@ -163,11 +166,12 @@ static void write_status(const char *path, const char *state, long long lvl,
         "hv_mutes=%lu\n"
         "hv_unmutes=%lu\n"
         "hv_mute_fail=%lu\n"
-        "hv_unmute_fail=%lu\n",
+        "hv_unmute_fail=%lu\n"
+        "hv_reasserts=%lu\n",
         state, lvl, bright_known, restore, dim, max_bright,
         running_bright, evcount, input, input_open, (int)getpid(), g_boot_id,
         now_ms(), playback, pb_heartbeat,
-        hv_m, hv_u, hv_mf, hv_uf);
+        hv_m, hv_u, hv_mf, hv_uf, hv_reasserts);
     if (n > 0) { ssize_t w = write(fd, b, (size_t)n); (void)w; }
     close(fd);
     if (rename(tmp, path) != 0) unlink(tmp);
@@ -404,8 +408,18 @@ int main(int argc, char **argv) {
      * daemon starts at sys.boot_completed, so the interface may not exist yet;
      * the loop below retries on its existing 1 Hz tick. */
     hv_fd = hv_can_open(hv_iface_arg);
-    if (hv_fd >= 0)
-        fprintf(stderr, "tt-idle-dim: hv: %s attached\n", hv_iface_arg ? hv_iface_arg : "can0");
+    if (hv_fd >= 0) {
+        struct epoll_event eh;
+        memset(&eh, 0, sizeof eh);
+        eh.events = EPOLLIN;
+        eh.data.fd = hv_fd;
+        if (epoll_ctl(ep, EPOLL_CTL_ADD, hv_fd, &eh) != 0) {
+            fprintf(stderr, "tt-idle-dim: hv: epoll add failed (%s); "
+                            "re-mute disabled\n", strerror(errno));
+        }
+        fprintf(stderr, "tt-idle-dim: hv: %s attached\n",
+                hv_iface_arg ? hv_iface_arg : "can0");
+    }
     else
         fprintf(stderr, "tt-idle-dim: hv: %s unavailable (%s), retrying\n",
                 hv_iface_arg ? hv_iface_arg : "can0", strerror(errno));
@@ -475,6 +489,31 @@ int main(int argc, char **argv) {
                         sfd = -1;
                         playback_lease_fault(&pb);
                         fprintf(stderr, "tt-idle-dim: playback stdin EOF/error -> UNKNOWN\n");
+                    }
+                    continue;
+                }
+                /* HydroVive: the app can lift the mute while the panel sits
+                 * dimmed (an MQTT "user one"/"user two" voice command reaches
+                 * loadUserSettings -> toggleMusicAndSource). Nothing touches
+                 * the backlight in that case, so there is no transition to
+                 * follow: re-assert the mute ourselves. One frame per stray
+                 * unmute, rate-limited so a single app action (B5 then B6)
+                 * collapses into one. Our own frames are never received. */
+                if (hv_fd >= 0 && out[i].data.fd == hv_fd) {
+                    if (hv_can_recv_wake(hv_fd)) {
+                        long long tt = now_ms();
+                        if (state == IDLE_ST_DIM &&
+                            tt - hv_last_reassert_ms >= HV_REASSERT_MS) {
+                            hv_last_reassert_ms = tt;
+                            if (hv_can_send_b5(hv_fd, 1) == 0) {
+                                hv_reasserts++;
+                                fprintf(stderr, "tt-idle-dim: hv: app lifted the mute "
+                                                "while dim -> B5 mute re-sent\n");
+                            } else {
+                                hv_mute_fail++;
+                                fprintf(stderr, "tt-idle-dim: hv: re-mute FAILED\n");
+                            }
+                        }
                     }
                     continue;
                 }
