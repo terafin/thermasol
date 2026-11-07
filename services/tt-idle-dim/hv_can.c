@@ -69,10 +69,28 @@ int hv_can_recv_wake(int fd)
         ssize_t n = recv(fd, &f, sizeof f, MSG_DONTWAIT);
         if (n < 0) break;                      /* EAGAIN: queue drained */
         if (n < (ssize_t)(offsetof(struct can_frame, data) + 4)) continue;
+        if (f.can_id & (CAN_EFF_FLAG | CAN_RTR_FLAG | CAN_ERR_FLAG)) continue;
         if ((f.can_id & CAN_SFF_MASK) != HV_CAN_ID) continue;
+        if (f.can_dlc < 4) continue;           /* data[3] is not on the wire */
         if (f.data[0] != 0xA5 || f.data[2] != 0x7B) continue;
-        if (f.data[1] == 0xB5 && f.data[3] == 0x00) woke = 1;   /* unmute */
-        else if (f.data[1] == 0xB6)                woke = 1;   /* unmutes, then gain */
+
+        /* Firmware semantics, read from latest.bin:
+         *   B5 (0x1512): ldrb data[3]; bl 0x1714 -> 0x1714(0)=unmute,
+         *                anything else = mute.
+         *   B6 (0x151a): ldrsb data[3]; if signed >= 0 the master block is
+         *                SKIPPED entirely (no mute, no unmute). If signed < 0:
+         *                v = data[3] & 0x7f; 0x1778(v) -> v==0 calls
+         *                0x1714(1)=mute; v>0 calls 0x173c(v), which calls
+         *                0x1714(0)=unmute before writing gain.
+         *                data[4..6] are bass/mid/treble, each gated on its own
+         *                bit 7, and none of them touches the mute cell.
+         * So exactly one B6 shape lifts the mute: bit 7 set and index != 0. */
+        unsigned op = f.data[1], v = f.data[3];
+        if (op == 0xB5) {
+            if (v == 0x00) woke = 1;
+        } else if (op == 0xB6) {
+            if ((v & 0x80) && (v & 0x7F)) woke = 1;
+        }
     }
     return woke;
 }

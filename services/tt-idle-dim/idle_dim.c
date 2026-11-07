@@ -57,9 +57,10 @@ static int hv_fd = -1;
 static const char *hv_iface_arg = NULL;
 static unsigned long hv_mutes, hv_unmutes;
 static unsigned long hv_mute_fail, hv_unmute_fail;   /* failed dispatches */
-static unsigned long hv_reasserts;                   /* app unmuted, we re-muted */
-static long long hv_last_reassert_ms;
-#define HV_REASSERT_MS 1000   /* collapse one app action's B5+B6 burst */
+static unsigned long hv_reasserts;   /* app lifted the mute, we put it back */
+static int hv_lift_seen;             /* set while draining, acted on after the
+                                      * state machine has run for this tick */
+#define HV_REOPEN_MS 2000            /* retry the bus at most every 2 s */
 static void on_signal(int sig) { (void)sig; g_stop = 1; }
 
 static long long now_ms(void) {
@@ -374,6 +375,7 @@ int main(int argc, char **argv) {
     int ifd = -1;
     char dev_name[256] = {0};
     long long next_open = 0;
+    long long hv_next_open = 0;   /* bus reattach, mirrors the input's retry */
 
     /* --- opt-in playback-control channel (stdin) --- */
     playback_lease_t pb;
@@ -467,8 +469,38 @@ int main(int argc, char **argv) {
             next_open = now_ms() + REOPEN_MS;
         }
 
+        /* --- (re)attach the speaker bus; tt-can0 is late_start, and the bus
+         * can also go away underneath us. Same cadence as the input retry. --- */
+        if (hv_fd < 0 && hv_enabled && now_ms() >= hv_next_open) {
+            int fd = hv_can_open(hv_iface_arg);
+            if (fd >= 0) {
+                struct epoll_event eh;
+                memset(&eh, 0, sizeof eh);
+                eh.events = EPOLLIN;
+                eh.data.fd = fd;
+                if (epoll_ctl(ep, EPOLL_CTL_ADD, fd, &eh) == 0) {
+                    hv_fd = fd;
+                    fprintf(stderr, "tt-idle-dim: hv: %s attached\n",
+                            hv_iface_arg ? hv_iface_arg : "can0");
+                } else {
+                    close(fd);
+                    fprintf(stderr, "tt-idle-dim: hv: epoll add failed (%s)\n",
+                            strerror(errno));
+                }
+            } else {
+                fprintf(stderr, "tt-idle-dim: hv: %s unavailable (%s), retrying\n",
+                        hv_iface_arg ? hv_iface_arg : "can0", strerror(errno));
+            }
+            hv_next_open = now_ms() + HV_REOPEN_MS;
+        }
+
         /* --- wait; tick at 1 Hz, or sooner when a reopen is due --- */
         int timeout = TICK_MS;
+        if (hv_fd < 0 && hv_enabled) {
+            long long d = hv_next_open - now_ms();
+            if (d < 0) d = 0;
+            if (d < timeout) timeout = (int)d;
+        }
         if (ifd < 0) {
             long long d = next_open - now_ms();
             if (d < 0) d = 0;
@@ -492,28 +524,19 @@ int main(int argc, char **argv) {
                     }
                     continue;
                 }
-                /* HydroVive: the app can lift the mute while the panel sits
-                 * dimmed (an MQTT "user one"/"user two" voice command reaches
-                 * loadUserSettings -> toggleMusicAndSource). Nothing touches
-                 * the backlight in that case, so there is no transition to
-                 * follow: re-assert the mute ourselves. One frame per stray
-                 * unmute, rate-limited so a single app action (B5 then B6)
-                 * collapses into one. Our own frames are never received. */
+                /* HydroVive: record that the app lifted the mute. The decision
+                 * to re-assert is made AFTER the state machine below, so a
+                 * touch arriving in the same batch (or a restore later in this
+                 * tick) wins and we never mute a lit panel. */
                 if (hv_fd >= 0 && out[i].data.fd == hv_fd) {
-                    if (hv_can_recv_wake(hv_fd)) {
-                        long long tt = now_ms();
-                        if (state == IDLE_ST_DIM &&
-                            tt - hv_last_reassert_ms >= HV_REASSERT_MS) {
-                            hv_last_reassert_ms = tt;
-                            if (hv_can_send_b5(hv_fd, 1) == 0) {
-                                hv_reasserts++;
-                                fprintf(stderr, "tt-idle-dim: hv: app lifted the mute "
-                                                "while dim -> B5 mute re-sent\n");
-                            } else {
-                                hv_mute_fail++;
-                                fprintf(stderr, "tt-idle-dim: hv: re-mute FAILED\n");
-                            }
-                        }
+                    if (out[i].events & (EPOLLERR | EPOLLHUP)) {
+                        epoll_ctl(ep, EPOLL_CTL_DEL, hv_fd, NULL);
+                        close(hv_fd);
+                        hv_fd = -1;
+                        hv_next_open = now_ms() + HV_REOPEN_MS;
+                        fprintf(stderr, "tt-idle-dim: hv: bus error, will reattach\n");
+                    } else if (hv_can_recv_wake(hv_fd)) {
+                        hv_lift_seen = 1;
                     }
                     continue;
                 }
@@ -571,6 +594,7 @@ int main(int argc, char **argv) {
 
         /* Media-aware suppression, strictly additive: with the feature off,
          * playback_inhibits() is always 0 and this is exactly the old call. */
+        int was_dim = (state == IDLE_ST_DIM);
         idle_action_t act;
         if (playback_inhibits(&pb)) {
             /* PLAYING, or no trustworthy word from the parent: never dim; if we
@@ -611,6 +635,28 @@ int main(int argc, char **argv) {
                 hv_after_brightness_change(0);
             } else {
                 fprintf(stderr, "tt-idle-dim: RESTORE write failed; speaker untouched\n");
+            }
+        }
+
+        /* HydroVive: the app can lift the mute without touching the backlight
+         * (an MQTT "user one"/"user two" command reaches loadUserSettings ->
+         * toggleMusicAndSource). Put it back -- but only if the panel was
+         * dimmed at the start of this tick AND is still dimmed now: a touch or
+         * a restore in the same tick wins, so we never mute a lit panel.
+         * No time-based suppression: a second app unmute after our re-mute
+         * must still end muted, and the drain in hv_can_recv_wake already
+         * coalesces frames that arrived together. */
+        if (hv_lift_seen) {
+            hv_lift_seen = 0;
+            if (hv_fd >= 0 && was_dim && state == IDLE_ST_DIM) {
+                if (hv_can_send_b5(hv_fd, 1) == 0) {
+                    hv_reasserts++;
+                    fprintf(stderr, "tt-idle-dim: hv: app lifted the mute "
+                                    "while dim -> B5 mute re-sent\n");
+                } else {
+                    hv_mute_fail++;
+                    fprintf(stderr, "tt-idle-dim: hv: re-mute FAILED\n");
+                }
             }
         }
 
