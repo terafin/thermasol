@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """The speaker bus may not exist yet when the daemon starts, and may go away.
 
-tt-can0 is late_start in the panel's init, and this daemon starts at
+tt-can0 is late_start in the panel's init and this daemon starts at
 sys.boot_completed, so the interface can legitimately be missing for the first
-seconds. The daemon must keep running, keep dimming the panel, send nothing, and
-keep retrying -- and attach as soon as the interface answers.
+seconds. While it is missing, a dim or a restore cannot be delivered -- so on
+every attach the daemon sends the frame matching the display state it is
+actually in. One frame per attach, never periodic.
 
 Asserts (no privileged interface creation needed):
-  * with a bus that does not exist, the daemon still dims and stays alive
-  * nothing is sent on the bus in that state
-  * the retry is attempted repeatedly, at roughly HV_REOPEN_MS cadence
-  * the status counters show no mutes, and hv_fd is not attached
-  * when the interface is present from the start, it attaches once
+  * with a bus that does not exist, the daemon still dims, stays alive, sends
+    nothing on the bus and retries repeatedly
+  * dim recovery: a panel left dimmed with no bus, restarted with the bus
+    present, is muted once on attach
+  * lit recovery: a lit panel attaches and is unmuted once
+  * a bus present from the start still dims and mutes once after the reconcile
 
-The final transition -- a bus that appears after start -- needs CAP_NET_ADMIN to
-create an interface, which this host does not grant; it is covered by the same
-code path as the startup attach (one hv_can_open + epoll_ctl), exercised by the
-second half of this test.
+The "interface appears while the daemon is running" transition is the same
+hv_can_open + epoll_ctl + hv_reconcile path as the startup attach, but creating
+a vcan needs CAP_NET_ADMIN which this host does not grant, so it is not driven
+as a mid-run event here.
 Host only.
 """
 import os, pty, socket, struct, subprocess, sys, tempfile, threading, time, tty
@@ -27,12 +29,23 @@ IFACE = sys.argv[1] if len(sys.argv) > 1 else "hvtest0"
 MISSING = "hvdefinitelymissing0"
 MAXB, RESTORE = 100, 71
 MUTE = (0x131, "a5b57b0100000000")
+UNMUTE = (0x131, "a5b57b0000000000")
 
 fails = 0
 def ok(c, w):
     global fails
     print(("ok   " if c else "FAIL ") + w)
     if not c: fails += 1
+
+
+def boot_hash():
+    """Mirror read_boot_id(): FNV-1a over the whole boot_id file contents."""
+    b = open("/proc/sys/kernel/random/boot_id", "rb").read()
+    h = 1469598103934665603
+    for c in b:
+        h ^= c
+        h = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return h & 0x7FFFFFFFFFFFFFFF
 
 
 def build():
@@ -83,45 +96,82 @@ def collect(sock, secs):
     return out
 
 
+def workspace(lit):
+    w = tempfile.mkdtemp(prefix="hva-run-")
+    bright = os.path.join(w, "brightness")
+    open(bright, "w").write(f"{RESTORE if lit else 0}\n")
+    open(os.path.join(w, "max_brightness"), "w").write(f"{MAXB}\n")
+    return w, bright, os.path.join(w, "st")
+
+
+def pretend_owned_dim(status, bright):
+    """Leave the prior-state file exactly as a daemon that dimmed and then died
+    without restoring would: state=dim, same boot, panel still at the dim value."""
+    with open(status, "w") as f:
+        f.write("state=dim\nrestore_bright=%d\ndim_bright=0\nmax_bright=%d\n"
+                "boot_id=%016x\nrunning_bright=0\n" % (RESTORE, MAXB, boot_hash()))
+
+
 b = build()
 
 print("-- bus absent at start --")
-w = tempfile.mkdtemp(prefix="hva-run-")
-bright = os.path.join(w, "brightness"); open(bright, "w").write(f"{RESTORE}\n")
-status = os.path.join(w, "st")
+w, bright, status = workspace(lit=True)
 p, m = run(b, bright, status, MISSING)
 threading.Thread(target=keep_idle, args=(p,), daemon=True).start()
 time.sleep(0.4)
-
-rx = listen(IFACE)                                  # a bus the daemon is NOT on
+rx = listen(IFACE)
 frames = collect(rx, 4.0)
 rx.close()
-
 dimmed = open(bright).read().strip()
 alive = (p.poll() is None)
-p.terminate(); log = p.communicate(timeout=5)[0]
+p.kill(); log = p.communicate(timeout=5)[0]      # SIGKILL: leave it dimmed
 
 ok(dimmed == "0", f"panel still dims with no bus (got {dimmed})")
 ok(alive, "daemon stays alive with no bus")
 ok(frames == [], f"nothing sent when the bus is absent: {frames}")
-retries = log.count("unavailable")
-ok(retries >= 2, f"the bus is retried repeatedly ({retries} attempts in ~4 s)")
-ok("attached" not in log, "never claims an attach it did not make")
+ok(log.count("unavailable") >= 2, f"the bus is retried repeatedly ({log.count('unavailable')} attempts)")
+ok("B5 mute sent" not in log, "the dim was not believed to have been delivered")
 
-print("-- bus present at start --")
-w2 = tempfile.mkdtemp(prefix="hva-run2-")
-bright2 = os.path.join(w2, "brightness"); open(bright2, "w").write(f"{RESTORE}\n")
-status2 = os.path.join(w2, "st")
-p2, m2 = run(b, bright2, status2, IFACE)
+print("-- dim recovery: bus returns while the panel is still dimmed --")
+# The prior-state file written by the killed run says state=dim on this boot and
+# the panel is still at the dim value, so the daemon restarts owning the dim.
+p2, m2 = run(b, bright, status, IFACE)
 threading.Thread(target=keep_idle, args=(p2,), daemon=True).start()
-time.sleep(0.4)
 rx2 = listen(IFACE)
-frames2 = collect(rx2, 3.0)
+f2 = collect(rx2, 2.0)
 rx2.close()
+still_dim = open(bright).read().strip()
 p2.terminate(); log2 = p2.communicate(timeout=5)[0]
 
-ok(f"{IFACE} attached" in log2, "attaches when the bus is present")
-ok(frames2.count(MUTE) == 1, f"dims and mutes once: {frames2}")
+ok(f2.count(MUTE) == 1, f"one reconcile mute on attach: {f2}")
+ok(f2 == [MUTE], f"and nothing else: {f2}")
+ok("reconciled to mute" in log2, "logged as a reconcile, not a transition")
+ok(still_dim == "0", f"panel was still dimmed (got {still_dim})")
+
+print("-- lit recovery: a lit panel is unmuted on attach --")
+w2, bright2, status2 = workspace(lit=True)
+p3, m3 = run(b, bright2, status2, IFACE)
+threading.Thread(target=keep_idle, args=(p3,), daemon=True).start()
+rx3 = listen(IFACE)
+f3 = collect(rx3, 1.5)
+p3.terminate(); log3 = p3.communicate(timeout=5)[0]
+rx3.close()
+
+ok(f3.count(UNMUTE) == 1, f"one reconcile unmute on attach: {f3}")
+ok("reconciled to unmute" in log3, "logged as a reconcile")
+ok(open(bright2).read().strip() == str(RESTORE), "panel still lit")
+
+print("-- bus present from the start: reconcile, then dim and mute once --")
+w3, bright3, status3 = workspace(lit=True)
+p4, m4 = run(b, bright3, status3, IFACE)
+threading.Thread(target=keep_idle, args=(p4,), daemon=True).start()
+rx4 = listen(IFACE)
+f4 = collect(rx4, 3.0)
+p4.terminate(); log4 = p4.communicate(timeout=5)[0]
+rx4.close()
+
+ok(f4.count(UNMUTE) == 1 and f4.count(MUTE) == 1,
+   f"one reconcile unmute then one dim mute: {f4}")
 
 print("\n" + (f"FAILED ({fails})" if fails else "PASSED"))
 sys.exit(1 if fails else 0)

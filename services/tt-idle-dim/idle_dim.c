@@ -58,6 +58,9 @@ static const char *hv_iface_arg = NULL;
 static unsigned long hv_mutes, hv_unmutes;
 static unsigned long hv_mute_fail, hv_unmute_fail;   /* failed dispatches */
 static unsigned long hv_reasserts;   /* app lifted the mute, we put it back */
+static unsigned long hv_reconciles;  /* state re-asserted when the bus attached */
+static int hv_bus_state = -1;        /* last state a send succeeded with:
+                                      * -1 unknown, 0 lit/unmuted, 1 dimmed/muted */
 static int hv_lift_seen;             /* set while draining, acted on after the
                                       * state machine has run for this tick */
 #define HV_REOPEN_MS 2000            /* retry the bus at most every 2 s */
@@ -168,11 +171,12 @@ static void write_status(const char *path, const char *state, long long lvl,
         "hv_unmutes=%lu\n"
         "hv_mute_fail=%lu\n"
         "hv_unmute_fail=%lu\n"
-        "hv_reasserts=%lu\n",
+        "hv_reasserts=%lu\n"
+        "hv_reconciles=%lu\n",
         state, lvl, bright_known, restore, dim, max_bright,
         running_bright, evcount, input, input_open, (int)getpid(), g_boot_id,
         now_ms(), playback, pb_heartbeat,
-        hv_m, hv_u, hv_mf, hv_uf, hv_reasserts);
+        hv_m, hv_u, hv_mf, hv_uf, hv_reasserts, hv_reconciles);
     if (n > 0) { ssize_t w = write(fd, b, (size_t)n); (void)w; }
     close(fd);
     if (rename(tmp, path) != 0) unlink(tmp);
@@ -262,11 +266,30 @@ static void hv_after_brightness_change(int going_dim)
 {
     if (!hv_enabled || hv_fd < 0) return;
     int ok = (hv_can_send_b5(hv_fd, going_dim) == 0);
-    if (ok) { if (going_dim) hv_mutes++; else hv_unmutes++; }
+    if (ok) { if (going_dim) hv_mutes++; else hv_unmutes++; hv_bus_state = going_dim ? 1 : 0; }
     else    { if (going_dim) hv_mute_fail++; else hv_unmute_fail++; }
     fprintf(stderr, "tt-idle-dim: hv: panel %s -> B5 %s %s\n",
             going_dim ? "dimmed" : "restored",
             going_dim ? "mute" : "unmute", ok ? "sent" : "FAILED");
+}
+
+/* The bus attached. If it was absent through a transition, the unit never got
+ * that frame; if it was absent at startup we have no record at all. Either way
+ * the unit's state is unknown, so send the frame matching the display state we
+ * are actually in. One frame per attach -- never periodic. */
+static void hv_reconcile(int fd, idle_state_t state)
+{
+    if (!hv_enabled || fd < 0) return;
+    int want_mute = (state == IDLE_ST_DIM);
+    if (hv_can_send_b5(fd, want_mute) == 0) {
+        hv_bus_state = want_mute ? 1 : 0;
+        hv_reconciles++;
+        fprintf(stderr, "tt-idle-dim: hv: attached, reconciled to %s\n",
+                want_mute ? "mute" : "unmute");
+    } else {
+        hv_bus_state = -1;
+        fprintf(stderr, "tt-idle-dim: hv: attached, reconcile send FAILED\n");
+    }
 }
 
 int main(int argc, char **argv) {
@@ -421,6 +444,7 @@ int main(int argc, char **argv) {
         }
         fprintf(stderr, "tt-idle-dim: hv: %s attached\n",
                 hv_iface_arg ? hv_iface_arg : "can0");
+        hv_reconcile(hv_fd, state);
     }
     else
         fprintf(stderr, "tt-idle-dim: hv: %s unavailable (%s), retrying\n",
@@ -482,6 +506,7 @@ int main(int argc, char **argv) {
                     hv_fd = fd;
                     fprintf(stderr, "tt-idle-dim: hv: %s attached\n",
                             hv_iface_arg ? hv_iface_arg : "can0");
+                    hv_reconcile(fd, state);
                 } else {
                     close(fd);
                     fprintf(stderr, "tt-idle-dim: hv: epoll add failed (%s)\n",
@@ -650,6 +675,7 @@ int main(int argc, char **argv) {
             hv_lift_seen = 0;
             if (hv_fd >= 0 && was_dim && state == IDLE_ST_DIM) {
                 if (hv_can_send_b5(hv_fd, 1) == 0) {
+                    hv_bus_state = 1;
                     hv_reasserts++;
                     fprintf(stderr, "tt-idle-dim: hv: app lifted the mute "
                                     "while dim -> B5 mute re-sent\n");

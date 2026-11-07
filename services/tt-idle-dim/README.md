@@ -25,10 +25,13 @@ binary byte-for-byte** before any change was made — see "Verification" below.
   are coalesced by the drain, so one action is normally one re-mute. The
   decision is taken after the tick's state machine, so a touch or a restore in
   the same tick wins and the daemon never mutes a lit panel.
-* **the bus is retried**: `tt-can0` is late-start and this daemon starts at
-  `sys.boot_completed`, so the interface can be missing for the first seconds.
-  The daemon retries every 2 s in the main loop, logs each attempt, and
-  reattaches if it goes away (`EPOLLERR`/`EPOLLHUP`).
+* **the bus is retried and reconciled**: `tt-can0` is late-start and this daemon
+  starts at `sys.boot_completed`, so the interface can be missing for the first
+  seconds. The daemon retries every 2 s, logs each attempt, and reattaches if it
+  goes away (`EPOLLERR`/`EPOLLHUP`). On **every** attach it sends one frame for
+  the display state it is actually in — a dim or restore that happened while the
+  bus was absent was never delivered, and the unit's state is unknown. That is
+  one frame per attach, never periodic.
 
 ## Why the app needs policing, and where
 
@@ -45,6 +48,19 @@ Every app call site that emits `B5 00` or `B6`, and what triggers it:
 | `B6` | `Utils.delayMusicVolume` -> `setMasterVolume` | 2 s timer spawned by the above |
 | `B6` | `Utils.setRoutedVolume` | volume slider, guest button, `loadUserSettings` |
 | `B5 00`, `B6` | `SettingsActivity$IdentificationFragment` | settings screen |
+
+### Can the daemon see the app's frames at all?
+
+SocketCAN delivers a frame to other local sockets only if the **sending** socket
+has local loopback enabled (`CAN_RAW_LOOPBACK`, default on). The app's native
+library imports `socket`, `bind`, `ioctl`, `read`, `write`, `select` and `fcntl`
+— and **no `setsockopt` or `getsockopt` at all** — so it never changes that
+option, never installs a filter, and never asks to receive its own messages.
+Loopback therefore stays at the default and the daemon's socket sees its frames.
+
+The host tests use the same construction (`socket()` + `bind()` and nothing
+else) so they exercise the same path. What is still unproven is the panel
+itself; that needs a live capture during a real app-issued frame.
 
 ### What a B6 means (from `latest.bin`, not assumed)
 
@@ -82,10 +98,16 @@ timer. The alternative, gating inside the app on the brightness node, would need
 the app to read `/sys/class/backlight` and would break when the daemon is not
 the one managing the backlight. Re-asserting keeps the daemon the single owner.
 
-Traffic: one frame per unmute that reaches the bus. The captured power-off pair
-(`B5 00` then `B6 8F` 11 ms later) usually lands in two drains because the first
-re-mute is already out before the B6 arrives, so it costs two — the minimum that
-keeps the final state muted. Nothing is sent periodically.
+Traffic: one frame per unmute that reaches the bus, plus one per bus attach.
+How many re-mutes the captured pair costs is a timing property, not a promise:
+measured on the host it produced two, because the first re-mute is already out
+before the 11 ms-later B6 arrives. The requirement is the final dispatched
+command while the panel is still dimmed, and that holds either way. Nothing is
+sent periodically.
+
+A burst that races a touch can emit one transient mute before the restore
+unmute; the final state is still lit and unmuted, and the test reports the
+transient rather than asserting such an interleaving is impossible.
 
 ## Deployed configuration (unchanged by this work)
 
@@ -104,7 +126,7 @@ tt_idle_dim --parent-death --input-name "Atmel maXTouch Touchscreen" \
 ./build-android.sh idle_dim        # aarch64, AOSP clang r536225
 ```
 
-Current candidate: `725b6f3d5fb81e516640a9c2cccdf85a9c3a2216eb565e8563edee7ca26fe9a6`
+Current candidate: `b05731452496d8f2ded0159883c784b80634b7abdd59f4b3e826d61b566495dd`
 (the RAM-trial build running on the panel is the earlier `83e2bbe1…c1ef7`).
 
 ## Verification
@@ -124,9 +146,11 @@ Current candidate: `725b6f3d5fb81e516640a9c2cccdf85a9c3a2216eb565e8563edee7ca26f
   `B6 80` and `B6 0F` and `B5 01` need no re-mute; a 3-byte frame is ignored;
   an app burst racing a touch leaves the panel lit and unmuted; every re-mute on
   the bus matches `hv_reasserts`
-* `tests/test_hv_reattach.py` — with a bus that does not exist the daemon still
-  dims, stays alive, sends nothing and retries repeatedly; with the bus present
-  it attaches and mutes once
+* `tests/test_hv_reattach.py` — a missing bus: still dims, stays alive, sends
+  nothing, retries repeatedly, never claims delivery; **dim recovery**: a panel
+  left dimmed by a bus-less run is muted once when the bus returns; **lit
+  recovery**: a lit panel is unmuted once; bus present from the start: reconcile
+  unmute, then one dim mute
 * all three need `hvtest0` up and must be the only listener on it
 
 ## What is NOT verified
@@ -135,9 +159,13 @@ Current candidate: `725b6f3d5fb81e516640a9c2cccdf85a9c3a2216eb565e8563edee7ca26f
 * the re-mute has never seen a real app-issued frame: the host test injects the
   frames the app would send, which proves the daemon's reaction, not the app's
   behaviour
-* a bus that *appears after start* could not be exercised here — creating a
-  `vcan` needs CAP_NET_ADMIN, which this host does not grant. The retry uses the
-  same open-and-register path as the startup attach
+* a bus that *appears mid-run* could not be exercised here — creating a `vcan`
+  needs CAP_NET_ADMIN, which this host does not grant. Recovery is covered
+  instead by restarting on the prior state file, which is the same
+  attach-and-reconcile path
+* that the panel's CAN stack loops the app's frames to the daemon's socket —
+  the import table says the app cannot have disabled it, but only a live capture
+  during a real app-issued frame proves it
 * that the daemon's **own** B5 frames reach the unit is unverified — they have
   only been exercised against a host vcan. (The unit does apply a hand-sent
   `131#A5B57B0100000000`: sent 2026-11-06 14:22:47, operator reported "muted
