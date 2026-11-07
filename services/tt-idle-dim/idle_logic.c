@@ -152,3 +152,10 @@ int idle_external_write_seen(idle_state_t state, int actual, int our_dim)
     if (actual < 0 || our_dim < 0) return 0;  /* a failed read proves nothing */
     return (actual != our_dim) ? 1 : 0;
 }
+
+int idle_hv_needs_send(int desired, int bus_state, long long now, long long next_ms)
+{
+    if (desired < 0)          return 0;   /* nothing declared yet */
+    if (bus_state == desired) return 0;   /* already where it should be */
+    return now >= next_ms;                /* honour a failed send's back-off */
+}

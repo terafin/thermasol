@@ -74,8 +74,10 @@ The handler at `0x151a` is `ldrsb.w r3, [r4, #3]` — **signed**:
   **unmute** before writing the gain.
 
 So exactly one B6 shape lifts the mute: bit 7 set and index non-zero. `B6 8F`
-(index 15) unmutes; `B6 80` (index 0) mutes; `B6 0F` does not touch master
-volume. B5 is `ldrb data[3]; 0x1714` — `0` unmutes, anything else mutes.
+(index 15) unmutes **and sets the master gain to index 15 — it is a volume
+change, not just an unmute**; `B6 80` (index 0) mutes; `B6 0F` does not touch
+master volume. For exercising the lift, prefer a real app command or a bare
+`B5 00`, which changes no volume. B5 is `ldrb data[3]; 0x1714` — `0` unmutes, anything else mutes.
 Frames shorter than four bytes are ignored: the decoder checks `can_dlc`
 before touching `data[3..6]`.
 
@@ -126,7 +128,7 @@ tt_idle_dim --parent-death --input-name "Atmel maXTouch Touchscreen" \
 ./build-android.sh idle_dim        # aarch64, AOSP clang r536225
 ```
 
-Current candidate: `b05731452496d8f2ded0159883c784b80634b7abdd59f4b3e826d61b566495dd`
+Current candidate: `f15927d8db987f446f1c16a239a9cf4a9cd11a89c49b7987d618d64bbb7faa02`
 (the RAM-trial build running on the panel is the earlier `83e2bbe1…c1ef7`).
 
 ## Verification
@@ -151,6 +153,10 @@ Current candidate: `b05731452496d8f2ded0159883c784b80634b7abdd59f4b3e826d61b5664
   left dimmed by a bus-less run is muted once when the bus returns; **lit
   recovery**: a lit panel is unmuted once; bus present from the start: reconcile
   unmute, then one dim mute
+* `tests/test_idle_logic.c` — `idle_hv_needs_send`: matching state sends
+  nothing; unknown or mismatched state sends; a failed send backs off for
+  `IDLE_HV_RETRY_MS` and then the *current* desired state is retried (13 new
+  assertions)
 * all three need `hvtest0` up and must be the only listener on it
 
 ## What is NOT verified
@@ -159,10 +165,13 @@ Current candidate: `b05731452496d8f2ded0159883c784b80634b7abdd59f4b3e826d61b5664
 * the re-mute has never seen a real app-issued frame: the host test injects the
   frames the app would send, which proves the daemon's reaction, not the app's
   behaviour
-* a bus that *appears mid-run* could not be exercised here — creating a `vcan`
-  needs CAP_NET_ADMIN, which this host does not grant. Recovery is covered
-  instead by restarting on the prior state file, which is the same
-  attach-and-reconcile path
+* a bus that *appears mid-run*, and a send that fails mid-run, could not be
+  exercised here: both need CAP_NET_ADMIN (to create or toggle an interface),
+  which this host does not grant, and there is no fault-injection path in the
+  daemon. The dim/lit recovery tests **restart** the daemon on the prior state
+  file; that is not a mid-run reconnection test, and it must not be described as
+  one. What is proven is the shared open-and-reconcile code path plus the send
+  gating (`idle_hv_needs_send`); the failure path itself is unexercised
 * that the panel's CAN stack loops the app's frames to the daemon's socket —
   the import table says the app cannot have disabled it, but only a live capture
   during a real app-issued frame proves it

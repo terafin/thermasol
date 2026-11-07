@@ -59,8 +59,15 @@ static unsigned long hv_mutes, hv_unmutes;
 static unsigned long hv_mute_fail, hv_unmute_fail;   /* failed dispatches */
 static unsigned long hv_reasserts;   /* app lifted the mute, we put it back */
 static unsigned long hv_reconciles;  /* state re-asserted when the bus attached */
+static unsigned long hv_retries;     /* a send failed and was re-attempted */
 static int hv_bus_state = -1;        /* last state a send succeeded with:
                                       * -1 unknown, 0 lit/unmuted, 1 dimmed/muted */
+static int hv_desired = -1;          /* state the unit should be in: 0 lit, 1 dim */
+static int hv_pending_reason;        /* why the next successful send happened */
+static long long hv_next_sync_ms;    /* back-off after a failed send */
+#define HV_SYNC_RETRY_MS 2000        /* retry a failed send at most every 2 s */
+
+enum { HV_R_TRANSITION = 0, HV_R_RECONCILE, HV_R_REASSERT };
 static int hv_lift_seen;             /* set while draining, acted on after the
                                       * state machine has run for this tick */
 #define HV_REOPEN_MS 2000            /* retry the bus at most every 2 s */
@@ -172,11 +179,12 @@ static void write_status(const char *path, const char *state, long long lvl,
         "hv_mute_fail=%lu\n"
         "hv_unmute_fail=%lu\n"
         "hv_reasserts=%lu\n"
-        "hv_reconciles=%lu\n",
+        "hv_reconciles=%lu\n"
+        "hv_retries=%lu\n",
         state, lvl, bright_known, restore, dim, max_bright,
         running_bright, evcount, input, input_open, (int)getpid(), g_boot_id,
         now_ms(), playback, pb_heartbeat,
-        hv_m, hv_u, hv_mf, hv_uf, hv_reasserts, hv_reconciles);
+        hv_m, hv_u, hv_mf, hv_uf, hv_reasserts, hv_reconciles, hv_retries);
     if (n > 0) { ssize_t w = write(fd, b, (size_t)n); (void)w; }
     close(fd);
     if (rename(tmp, path) != 0) unlink(tmp);
@@ -259,37 +267,62 @@ static const char *arg_val(const char *a, const char *key,
     return NULL;
 }
 
-/* HydroVive: send the frame matching a brightness transition that SUCCEEDED.
- * going_dim 1 = panel dimmed, 0 = panel restored. Best effort; a failed send is
- * counted and logged, never retried here. */
-static void hv_after_brightness_change(int going_dim)
+/* HydroVive: keep the unit in the state the display is actually in.
+ *
+ * One place sends. hv_desired is what the display says; hv_bus_state is what the
+ * last successful send left the unit in (-1 = unknown). A mismatch is sent once;
+ * a failed send is retried on a later tick, so a mute, unmute or reconcile that
+ * could not be delivered is re-attempted until it is. While they match nothing
+ * is sent -- no periodic traffic. Own transmissions are never received, so this
+ * cannot loop. */
+static void hv_try_sync(void)
 {
     if (!hv_enabled || hv_fd < 0) return;
-    int ok = (hv_can_send_b5(hv_fd, going_dim) == 0);
-    if (ok) { if (going_dim) hv_mutes++; else hv_unmutes++; hv_bus_state = going_dim ? 1 : 0; }
-    else    { if (going_dim) hv_mute_fail++; else hv_unmute_fail++; }
-    fprintf(stderr, "tt-idle-dim: hv: panel %s -> B5 %s %s\n",
-            going_dim ? "dimmed" : "restored",
-            going_dim ? "mute" : "unmute", ok ? "sent" : "FAILED");
+    long long t = now_ms();
+    if (!idle_hv_needs_send(hv_desired, hv_bus_state, t, hv_next_sync_ms)) return;
+
+    int want = hv_desired;
+    if (hv_can_send_b5(hv_fd, want) == 0) {
+        hv_bus_state = want;
+        switch (hv_pending_reason) {
+        case HV_R_RECONCILE: hv_reconciles++; break;
+        case HV_R_REASSERT:  hv_reasserts++;  break;
+        default: if (want) hv_mutes++; else hv_unmutes++; break;
+        }
+        if (hv_pending_reason == HV_R_RECONCILE)
+            fprintf(stderr, "tt-idle-dim: hv: attached, reconciled to %s\n",
+                    want ? "mute" : "unmute");
+        else if (hv_pending_reason == HV_R_REASSERT)
+            fprintf(stderr, "tt-idle-dim: hv: app lifted the mute while dim -> "
+                            "B5 mute re-sent\n");
+        else
+            fprintf(stderr, "tt-idle-dim: hv: panel %s -> B5 %s sent\n",
+                    want ? "dimmed" : "restored", want ? "mute" : "unmute");
+        hv_next_sync_ms = 0;
+    } else {
+        if (hv_pending_reason == HV_R_TRANSITION) {
+            if (want) hv_mute_fail++; else hv_unmute_fail++;
+        }
+        if (t >= hv_next_sync_ms + HV_SYNC_RETRY_MS) hv_retries++;
+        fprintf(stderr, "tt-idle-dim: hv: B5 %s FAILED, will retry\n",
+                want ? "mute" : "unmute");
+        hv_next_sync_ms = t + HV_SYNC_RETRY_MS;
+    }
 }
 
-/* The bus attached. If it was absent through a transition, the unit never got
- * that frame; if it was absent at startup we have no record at all. Either way
- * the unit's state is unknown, so send the frame matching the display state we
- * are actually in. One frame per attach -- never periodic. */
-static void hv_reconcile(int fd, idle_state_t state)
+/* Record what the unit should be in and try to deliver it now. Called for a
+ * brightness transition, for a reconcile after attach, and when the app lifts
+ * the mute -- the reason only decides which counter and log line is used. */
+static void hv_request(int desired, int reason)
 {
-    if (!hv_enabled || fd < 0) return;
-    int want_mute = (state == IDLE_ST_DIM);
-    if (hv_can_send_b5(fd, want_mute) == 0) {
-        hv_bus_state = want_mute ? 1 : 0;
-        hv_reconciles++;
-        fprintf(stderr, "tt-idle-dim: hv: attached, reconciled to %s\n",
-                want_mute ? "mute" : "unmute");
-    } else {
-        hv_bus_state = -1;
-        fprintf(stderr, "tt-idle-dim: hv: attached, reconcile send FAILED\n");
-    }
+    hv_desired = desired;
+    hv_pending_reason = reason;
+    hv_try_sync();
+}
+
+static void hv_after_brightness_change(int going_dim)
+{
+    hv_request(going_dim ? 1 : 0, HV_R_TRANSITION);
 }
 
 int main(int argc, char **argv) {
@@ -444,7 +477,8 @@ int main(int argc, char **argv) {
         }
         fprintf(stderr, "tt-idle-dim: hv: %s attached\n",
                 hv_iface_arg ? hv_iface_arg : "can0");
-        hv_reconcile(hv_fd, state);
+        hv_bus_state = -1;                 /* the unit's state is unknown here */
+        hv_request(state == IDLE_ST_DIM ? 1 : 0, HV_R_RECONCILE);
     }
     else
         fprintf(stderr, "tt-idle-dim: hv: %s unavailable (%s), retrying\n",
@@ -506,7 +540,8 @@ int main(int argc, char **argv) {
                     hv_fd = fd;
                     fprintf(stderr, "tt-idle-dim: hv: %s attached\n",
                             hv_iface_arg ? hv_iface_arg : "can0");
-                    hv_reconcile(fd, state);
+                    hv_bus_state = -1;     /* the unit's state is unknown here */
+                    hv_request(state == IDLE_ST_DIM ? 1 : 0, HV_R_RECONCILE);
                 } else {
                     close(fd);
                     fprintf(stderr, "tt-idle-dim: hv: epoll add failed (%s)\n",
@@ -674,17 +709,15 @@ int main(int argc, char **argv) {
         if (hv_lift_seen) {
             hv_lift_seen = 0;
             if (hv_fd >= 0 && was_dim && state == IDLE_ST_DIM) {
-                if (hv_can_send_b5(hv_fd, 1) == 0) {
-                    hv_bus_state = 1;
-                    hv_reasserts++;
-                    fprintf(stderr, "tt-idle-dim: hv: app lifted the mute "
-                                    "while dim -> B5 mute re-sent\n");
-                } else {
-                    hv_mute_fail++;
-                    fprintf(stderr, "tt-idle-dim: hv: re-mute FAILED\n");
-                }
+                hv_bus_state = 0;          /* the app's frame lifted it */
+                hv_request(1, HV_R_REASSERT);
             }
         }
+
+        /* Keep the recorded desire in step with the panel, and retry anything
+         * that did not get through. When they already match this sends nothing. */
+        hv_desired = (state == IDLE_ST_DIM) ? 1 : 0;
+        hv_try_sync();
 
         if (t - last_status >= STATUS_MS) {
             const char *st = (ifd < 0) ? "no_input"

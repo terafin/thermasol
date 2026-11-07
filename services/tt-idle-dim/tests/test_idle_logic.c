@@ -227,6 +227,33 @@ static void test_external_write_while_dim(void) {
     CHECK(idle_external_write_seen(IDLE_ST_DIM, 71, -1) == 0);
 }
 
+static void test_hv_send_gating(void) {
+    /* already where it should be: nothing is sent, ever */
+    CHECK(idle_hv_needs_send(1, 1, 1000, 0) == 0);
+    CHECK(idle_hv_needs_send(0, 0, 1000, 0) == 0);
+
+    /* the unit's state is unknown (bus just attached): send */
+    CHECK(idle_hv_needs_send(1, -1, 1000, 0) == 1);
+    CHECK(idle_hv_needs_send(0, -1, 1000, 0) == 1);
+
+    /* a mismatch is sent at once ... */
+    CHECK(idle_hv_needs_send(1, 0, 1000, 0) == 1);
+    CHECK(idle_hv_needs_send(0, 1, 1000, 0) == 1);
+
+    /* ... but a failed send backs off instead of being retried every tick */
+    CHECK(idle_hv_needs_send(1, 0, 1000, 2000) == 0);
+    CHECK(idle_hv_needs_send(1, 0, 1999, 2000) == 0);
+    CHECK(idle_hv_needs_send(1, 0, 2000, 2000) == 1);
+
+    /* and it keeps retrying the CURRENT desired state until it succeeds */
+    CHECK(idle_hv_needs_send(1, 0, 4000, 2000) == 1);
+    CHECK(idle_hv_needs_send(0, 1, 4000, 2000) == 1);
+
+    /* nothing declared yet: no send */
+    CHECK(idle_hv_needs_send(-1, 0, 1000, 0) == 0);
+    CHECK(idle_hv_needs_send(-1, -1, 1000, 0) == 0);
+}
+
 int main(void) {
     test_timeout_dim();
     test_touch_restore();
@@ -246,6 +273,7 @@ int main(void) {
     test_user_changed_brightness_wins();
     test_unknown_boot_never_matches_unknown_prior();
     test_external_write_while_dim();
+    test_hv_send_gating();
     printf("%d assertions, %d failures\n", g_tests, g_fails);
     return g_fails ? 1 : 0;
 }

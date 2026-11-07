@@ -108,4 +108,11 @@ int idle_prior_owned(const idle_prior_t *prior, long long cur_boot,
 int idle_startup_restore(const idle_prior_t *prior, long long cur_boot,
                          int max_bright, int live);
 
+/* HydroVive send gating. desired < 0 means "no opinion"; bus_state < 0 means
+ * the unit's state is unknown (a send is always attempted then). A mismatch is
+ * sent at once, and re-attempted only after next_ms -- the back-off a failed
+ * send sets, so a broken bus is not hammered once per tick. */
+#define IDLE_HV_RETRY_MS 2000
+int idle_hv_needs_send(int desired, int bus_state, long long now, long long next_ms);
+
 #endif /* IDLE_LOGIC_H */
