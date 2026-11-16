@@ -325,6 +325,38 @@ static void hv_after_brightness_change(int going_dim)
     hv_request(going_dim ? 1 : 0, HV_R_TRANSITION);
 }
 
+/* Idle goes to the Android home screen rather than leaving whatever app was in
+ * front behind a dark panel. Called only on a successful idle DIM; the dim is
+ * refused while the playback lease reports PLAYING or UNKNOWN, so a playing
+ * video is never sent home. Fire-and-forget: SIGCHLD is ignored, so the child is
+ * reaped by the kernel and a slow `input` cannot stall the idle loop. */
+static void go_home(void) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        /* child stdout/stderr -> a log so a failed launch is visible, not silent */
+        /* `cmd activity` hands its stdio fds to system_server over binder; the
+         * daemon's stdin is the playback pipe, and a pipe there makes the transaction
+         * fail ("Failed transaction 2147483646"). Give the child plain descriptors. */
+        int nf = open("/dev/null", O_RDWR);
+        if (nf >= 0) dup2(nf, 0);
+        int lf = open("/data/local/tmp/tt-idle-dim-home.log", O_WRONLY|O_CREAT|O_APPEND, 0644);
+        if (lf >= 0) { dup2(lf, 1); dup2(lf, 2); } else if (nf >= 0) { dup2(nf, 1); dup2(nf, 2); }
+        for (int fd = 3; fd < 256; fd++) close(fd);
+        /* The HOME intent, not a simulated HOME key: the key was observed to be
+         * dropped when sent at the moment the backlight goes dark, while the intent
+         * is honoured regardless of display state. */
+        char *const args[] = { "/system/bin/am", "start", "--user", "0",
+                               "-a", "android.intent.action.MAIN",
+                               "-c", "android.intent.category.HOME",
+                               "-f", "0x10200000", NULL };
+        char *const env[] = { "PATH=/system/bin:/system/xbin", NULL };
+        execve(args[0], args, env);
+        _exit(127);
+    }
+    if (pid < 0) fprintf(stderr, "tt-idle-dim: HOME fork failed: %s\n", strerror(errno));
+    else         fprintf(stderr, "tt-idle-dim: HOME sent (pid %d)\n", (int)pid);
+}
+
 int main(int argc, char **argv) {
     const char *in_path = DEF_INPUT, *br_path = DEF_BRIGHT, *st_path = DEF_STATUS;
     const char *want_name = "";
@@ -353,6 +385,7 @@ int main(int argc, char **argv) {
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT, &sa, NULL);
     signal(SIGPIPE, SIG_IGN);
+    signal(SIGCHLD, SIG_IGN);   /* go_home() children are reaped by the kernel */
 
     /* Opt-in parent-death signal, installed AFTER the SIGTERM handler above so a
      * death signal that arrives immediately is already handled. The init-managed
@@ -673,6 +706,10 @@ int main(int argc, char **argv) {
             int cur = -1;
             if (read_int_file(br_path, &cur) == 0 && idle_bright_valid(cur, max_bright)) {
                 restore = cur; running_bright = cur; bright_known = 1;
+                /* Home first, then dark: an app switch requested at the instant the
+                 * backlight goes to 0 was observed to be ignored. */
+                go_home();
+                { struct timespec ts = { 1, 500000000L }; nanosleep(&ts, NULL); }
                 int ok = (write_int_file(br_path, dim) == 0);
                 state = idle_commit(state, act, ok);
                 if (ok) {

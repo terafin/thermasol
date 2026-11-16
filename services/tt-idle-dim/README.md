@@ -1,6 +1,10 @@
 # tt-idle-dim — the panel's idle/lock daemon, with HydroVive quiet-on-idle
 
-This is the **source of the daemon currently deployed** at `/vendor/bin/tt_idle_dim`
+> **Deployed today:** `v1.2-android15` runs [`deployed/`](deployed/) — the original daemon plus
+> idle-to-home, without the HydroVive coupling below. This directory carries the same
+> idle-to-home change on top of the HydroVive work.
+
+This began as the **source of the daemon deployed through v1.1** at `/vendor/bin/tt_idle_dim`
 (sha256 `e1ff56f27454ebdcbf466e1757426bb67b644794b520a3c9b4018a6cb66fd28c`) and its
 supervisor `tt_idle_dim_super.jar` (`e25666ac…e2e65706`).
 

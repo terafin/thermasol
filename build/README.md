@@ -84,6 +84,20 @@ adb shell 'su 0 sha256sum /dev/block/by-name/dtbo_$(getprop ro.boot.slot_suffix)
 | vendor | `37f858a16a7d6a1fab25653827111629e2ab898160c5e6e5ec45dc6540ea6fbc` | 536,870,912 |
 | vbmeta | `f9f496c448855b2cbf127ae6cb7b0ec1bbfee23df78529eac18a4015067efbb5` | 1,048,576 |
 
+**v1.2-android15** changes only `vendor` and `vbmeta` (idle goes to the home screen; see
+[`../services/tt-idle-dim/deployed/`](../services/tt-idle-dim/deployed/)):
+
+| Partition | SHA-256 | Bytes |
+|---|---|---|
+| vendor | `8b4ab623ab1f0e31e8ee19d8afd2d9536fd6755b869ac0a08a1980c6a7191946` | 536,870,912 |
+| vbmeta | `c814a60c9a40355f6f79dcff460a3b0ff31c23b8da140b1b2d97ec133fbb2cd8` | 1,048,576 |
+
+These two are the bytes read back from both `vendor_a`/`vendor_b` and `vbmeta_a`/`vbmeta_b` on the
+panel. The vendor image is v1.1's with `bin/tt_idle_dim` replaced; the other 999 inodes, their
+uid/gid/mode/mtime, and all SELinux labels were compared and are identical, and the hashtree
+reuses v1.1's salt. vbmeta was re-signed from the panel's own vbmeta (re-signing it unchanged
+reproduced it byte for byte), so only the vendor descriptor differs.
+
 ## Availability of the images
 
 The images are **not committed to git** — 4.4 GB in a repo whose value is the reasoning, and
