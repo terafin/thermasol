@@ -21,6 +21,9 @@ wrong, or from an artifact that proves it would.
 | Chain `boot` in vbmeta | `get_margin_pos` bug → the slot parks in fastboot **forever**; an AVB I/O error skips the tries decrement. |
 | Count on the boot guard to roll back on its own | It does not reboot by itself. A bad trial needs a deliberate return. |
 | Let a second reboot inherit a first boot's approval | That is the stale-approval bug; approval content is a **boot id**. |
+| Leave a host-side "UI keeper" running | `panel-ui-keeper.sh` relaunched ThermaSol every 45 s whenever it was not in focus, which yanked fullscreen YouTube away. Disabled (`systemctl --user disable tt-panel-ui-keeper tt-panel-first-aid`); look for it first if the panel "keeps going back to ThermaSol". |
+| Fork `am`/`cmd` from a daemon whose stdin is a pipe | `cmd activity` passes its stdio fds to system_server, and a pipe fails it with `Failed transaction (2147483646)`. Give the child `/dev/null`. |
+| Send HOME (`KEYCODE_HOME` or the intent) at the instant the backlight goes to 0 | It is ignored. Send the HOME intent first, wait 1.5 s, then dim. |
 
 ## Build
 

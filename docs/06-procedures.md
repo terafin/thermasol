@@ -213,6 +213,36 @@ avbtool make_vbmeta_image --output vbmeta.img \
 verbatim, including the *old* root digest and image size. The result signs cleanly and describes
 the wrong partition. Always point it at the partition images themselves.
 
+**The exception, used for v1.2:** when only `vendor` changed and the boot/system/product images
+in hand are not byte-certain to be the panel's, include the panel's **live** vbmeta first and the
+new vendor image *after* it. avbtool keeps only the last descriptor per partition name, so only
+the vendor descriptor is replaced. Prove the method first: re-signing the live vbmeta on its own,
+with the same key and `--padding_size 4096`, must reproduce its bytes exactly. Then `info_image`
+diffs on the two vbmetas should show only vendor's size, offsets and root digest.
+
+```sh
+avbtool make_vbmeta_image --include_descriptors_from_image vbmeta_live.img \
+  --include_descriptors_from_image vendor.raw \
+  --algorithm SHA256_RSA4096 --key testkey_rsa4096.pem --padding_size 4096 \
+  --rollback_index 0 --output vbmeta.img
+truncate -s 1048576 vbmeta.img
+```
+
+**Extraction that keeps every attribute:** `fsck.erofs --extract` as root drops mtimes. A loop
+mount plus `cp -a` keeps uid/gid/mode/mtime and the `security.selinux` xattrs. mkfs.erofs then
+takes those labels from the xattrs, with no fs_config or file_contexts:
+
+```sh
+sudo mount -t erofs -o loop,ro vendor_live.raw orig && sudo cp -a orig staging
+# change the file; give it its label and mtime explicitly
+sudo setfattr -n security.selinux -v u:object_r:vendor_file:s0 staging/bin/foo
+sudo mkfs.erofs -zlz4hc,9 -b4096 -U<original uuid> --preserve-mtime --mount-point=/vendor \
+  vendor.erofs staging
+```
+
+Then compare `find -printf '%p|%y|%m|%U:%G|%T@|%s|%l'`, `getfattr -R -h -d -m -` and per-file
+sha256 manifests for the old and new mounts. Exactly one line should differ.
+
 **6. Verify the whole chain, not just the vbmeta signature.**
 
 ```sh

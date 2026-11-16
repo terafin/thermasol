@@ -449,6 +449,28 @@ away → native cache OOM → LMKD kill → CAN heartbeat stopped → the genera
 **Hard rule:** the idle action sends only finite, known CAN frames (mute, light off, standby).
 It never calls `Utils.ShutdownAll` (that stops steam) and never suspends.
 
+### 9a. Idle goes to the home screen (v1.2)
+
+**Symptom.** The panel kept dropping back to the ThermaSol app every 45 s or so, even over a
+fullscreen YouTube video. And on a real idle it dimmed over whatever app was last in front.
+
+**Cause of the jumps.** Not the panel: a recovery-era host script (`panel-ui-keeper.sh`, run
+by a user systemd unit on the management host) pressed BACK and relaunched ThermaSol's
+`LoadActivity` whenever ThermaSol was not in focus. It was disabled. See
+[10-known-pitfalls.md](10-known-pitfalls.md).
+
+**Fix.** `tt_idle_dim` (`ec905b34…`, source [`services/tt-idle-dim/deployed/`](../services/tt-idle-dim/deployed/))
+sends the HOME intent, waits 1.5 s, then sets the backlight to 0. It only does this on a
+confirmed `IDLE` lease, so `PLAYING` or `UNKNOWN` still blocks both the home switch and the dim.
+
+Verified on the panel, booted from the flashed vendor (no bind mount), using a 15 s timer fed the
+production supervisor's live verdict: a playing YouTube video stayed in front with the backlight
+on, and the same video paused went to the launcher and then dimmed.
+
+Three traps, each observed (see [10-known-pitfalls.md](10-known-pitfalls.md)): `KEYCODE_HOME` at
+dim time does nothing; `am start` at the moment the backlight goes dark is ignored; and `am`
+forked with the playback pipe as stdin fails the binder transaction.
+
 ---
 
 ## 10. Google: Play Store "device isn't certified", native YouTube blocked
