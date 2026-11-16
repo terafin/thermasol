@@ -26,7 +26,7 @@ documented recovery. Consequences below are not stylistic preferences.
 | How is the image built and flashed? | [`docs/04-android15-port.md`](docs/04-android15-port.md), [`build/README.md`](build/README.md) |
 | Why does X behave like that? | [`docs/05-fixes.md`](docs/05-fixes.md) |
 | I need to do a procedure | [`docs/06-procedures.md`](docs/06-procedures.md) |
-| What is still broken? | **[the issue tracker](https://github.com/terafin/thermasol/issues)** — index at [`docs/07-open-issues.md`](docs/07-open-issues.md) |
+| What is still broken? | **[the issue tracker](https://github.com/terafin/thermasol/issues)** |
 | Apps, audio control, adb UI recipes | [`docs/12-apps-and-control.md`](docs/12-apps-and-control.md) |
 | Serving an app store / installing Termux on stock | [`docs/11-vendor-store-mirror.md`](docs/11-vendor-store-mirror.md) |
 | I have a stock panel to convert | [`docs/09-install-from-stock.md`](docs/09-install-from-stock.md) |
@@ -37,8 +37,9 @@ documented recovery. Consequences below are not stylistic preferences.
 
 ## Working the open issues
 
-**The GitHub issue tracker is canonical** — <https://github.com/terafin/thermasol/issues>.
-`docs/07-open-issues.md` is a human-readable index of it; if they disagree, the tracker wins.
+**The GitHub issue tracker is the only list of what is still broken** — <https://github.com/terafin/thermasol/issues>.
+Do not mirror it in a doc. Known constraints that are deliberately not issues are in
+[`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
 
 Labels mean what they say: `needs-operator` means a human has to be physically present — do not
 "close" one from a successful adb command. `unverified` means written down but not proven.
@@ -132,7 +133,7 @@ produced false conclusions here.
 
 ## If you are asked to change something
 
-1. **Read [`docs/07-open-issues.md`](docs/07-open-issues.md) first.** Much of what looks
+1. **Read [the open issues](https://github.com/terafin/thermasol/issues) first.** Much of what looks
    unfixed was investigated to a hard stop — do not redo it.
 2. **Read [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).** If the thing you are
    about to try is listed, do not try it.
@@ -147,7 +148,7 @@ produced false conclusions here.
 
 ## If you are asked about the ceiling speaker hiss
 
-It is **unresolved**. Read [`docs/07-open-issues.md`](docs/07-open-issues.md) §1 before
+It is **unresolved**. Read [issue #1](https://github.com/terafin/thermasol/issues/1) before
 proposing anything: nine distinct controls were tried and verified on the bus, and the noise
 survived even a full SoC suspend. The remaining evidence points at the ceiling unit itself.
 Do not restart the investigation from the beginning.

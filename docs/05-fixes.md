@@ -515,7 +515,7 @@ was nothing to fix).
 ## 11. The unresolved one: ceiling speaker hiss
 
 Investigated to conclusion but **unresolved** — see
-[07-open-issues.md](07-open-issues.md). Listed here only so the numbering is complete.
+[issue #1](https://github.com/terafin/thermasol/issues/1). Listed here only so the numbering is complete.
 
 ---
 

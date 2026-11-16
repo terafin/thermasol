@@ -52,7 +52,7 @@ Concretely, the acceptance list that drove the work:
 
 **One item on that list is not met.** The speaker does *not* go quiet when idle: it hisses
 continuously, and no control the panel owns changes it. That is
-[07-open-issues.md §1](07-open-issues.md#1-the-ceiling-speaker-hisses-and-nothing-we-control-silences-it),
+[issue #1](https://github.com/terafin/thermasol/issues/1),
 and it is unresolved. Everything else on the list was verified on the device.
 
 ## The shape of the work

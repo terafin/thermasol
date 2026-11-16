@@ -605,4 +605,4 @@ failure.
 - Chrome launching and rendering, after the flags in §6.1 and once load has settled
 
 Known defects that remain are tracked as issues, not described here —
-[07-open-issues.md](07-open-issues.md).
+[the issue tracker](https://github.com/terafin/thermasol/issues).

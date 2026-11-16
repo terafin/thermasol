@@ -25,7 +25,6 @@ docs/
   04-android15-port.md    The port itself: device tree, image build, flashing
   05-fixes.md             Each defect found, its root cause, and its fix
   06-procedures.md        Runbooks: flash, rollback, recover, verify
-  07-open-issues.md       What is still wrong (be honest here)
   08-lessons.md           What I would do differently
   09-install-from-stock.md  Stock panel -> Android 15, start to finish
   10-known-pitfalls.md    Flat "do not do this" list

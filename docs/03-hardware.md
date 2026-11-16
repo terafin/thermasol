@@ -38,7 +38,7 @@ Backlight is `pwm-backlight`, exposed at `/sys/class/backlight/backlight`. Pract
 this panel: 0 (off) to 100, default 71.
 
 There is a real-time clock chip, `isil,isl12057/8`, on I²C — but see
-[07-open-issues.md](07-open-issues.md): there is **no RTC wakealarm** on this kernel.
+[10-known-pitfalls.md](10-known-pitfalls.md): there is **no RTC wakealarm** on this kernel.
 
 ## Touch
 
