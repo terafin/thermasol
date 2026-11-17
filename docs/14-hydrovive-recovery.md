@@ -338,9 +338,16 @@ Four separate trees are needed to show it, and each cite below names its own:
   (`drivers/watchdog/imx2_wdt.c:345`, kernel tree). ATF's `imx_system_reset` is external `WDOG_B`
   only — `IMX_WDOG_B_RESET` is defined for i.MX8MM at
   `plat/imx/imx8m/imx8mm/include/platform_def.h:189`, so it calls `imx_wdog_restart(true)`, which
-  asserts the pin and ends in `while (1)` (`plat/imx/imx8m/imx8m_psci_common.c:228-233`).
+  arms WDOG1 with a 0.5 s timeout and ends in `while (1)`
+  (`plat/imx/imx8m/imx8m_psci_common.c:195-233`: `WCR = (old & 0x000E) | WDE | SRS`, so `WDE`
+  is set and `WT` stays 0).
+- **Why that armed timeout does nothing.** U-Boot's `set_wdog_reset` sets `WDT` alongside
+  `WDZST` — `arch/arm/mach-imx/imx8m/soc.c:78-88` in `varigit/uboot-imx@e20d4ecd9f`, the tree the
+  panel boots, whose comment says `WDZST` is write-once and names the external `WDOG_B` route. ATF's
+  `& 0x000E` mask preserves both bits, so the timeout drives `WDOG_B` only and never the internal
+  reset — and `WDOG_B`'s pad is on GPIO, so the timer expires into a pin that goes nowhere.
 
-With the pad on GPIO, that assertion reaches nothing and ATF waits forever. `tt_reboot_pin.ko`
+With the pad on GPIO, that timeout reaches nothing and ATF waits forever. `tt_reboot_pin.ko`
 restores the mux on a normal restart, but it is a vendor module and never loads when first-stage
 init dies. So any first-stage failure parks the unit until power is cycled — which is what the
 frozen port counters show. An external pull on that same net may still reset the board — and that
