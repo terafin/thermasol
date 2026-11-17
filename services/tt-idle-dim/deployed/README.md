@@ -8,6 +8,13 @@ It is the original deployed daemon (`e1ff56f2…f66fd28c`, no HydroVive coupling
 change: **idle goes to the Android home screen, then dims.** The parent directory's daemon has
 HydroVive mute-on-dim enabled by default and is not what runs on the panel.
 
+**This is a second copy of the same program, not a symlink.** Exactly four files differ from the
+parent: `idle_dim.c`, `idle_logic.c`, `idle_logic.h` and `build-android.sh`, and the difference
+is only the HydroVive feature. A fix made in the parent does not reach the panel unless it is
+made here too, and vice versa. Collapsing the two into one source with a `TT_IDLE_DIM_HV` flag
+belongs here as a change of its own, gated on rebuilding this directory's binary and confirming
+`ec905b34…` still comes out; until that is done, change both or neither.
+
 ## Behaviour
 
 * No touch for 300 s **and** the playback lease reports `IDLE` → send the HOME intent, wait

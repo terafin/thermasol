@@ -14,8 +14,11 @@
 int hv_can_open(const char *ifname);   /* ifname NULL -> "can0"; fd or -1 */
 int hv_can_send_b5(int fd, int mute);  /* 0x131 A5 B5 7B (mute?01:00) 00 00 00 00 */
 
-/* Drain queued 0x131 frames; return 1 if any of them would lift the mute
- * (B5 with 0x00, or any B6 -- the firmware unmutes before it writes gain).
+/* Drain queued 0x131 frames; return 1 if any of them would lift the mute.
+ * Exactly two shapes qualify, both read out of the unit's firmware:
+ *   B5 with data[3] == 0x00; and B6 with bit 7 set and (data[3] & 0x7f) != 0.
+ * A B6 with bit 7 clear skips the master block entirely, and B6 whose index is
+ * 0 mutes, so neither lifts the mute. See hv_can.c for the addresses.
  * Never blocks. */
 int hv_can_recv_wake(int fd);
 

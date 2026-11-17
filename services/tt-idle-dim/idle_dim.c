@@ -4,7 +4,12 @@
  * Native arm64 binary (no APK, no Java). Behaviour:
  *   - read-only evdev listener (find-by-name preferred, retry every 2s)
  *   - NO EVIOCGRAB, NO SoC suspend, NO kernel power writes, NO input masking,
- *     NO CAN, NO Settings changes
+ *     NO Settings changes
+ *   - CAN is used for exactly one thing: a B5 mute/unmute on 0x131 (the panel's
+ *     own command id) on each dim/restore transition, plus a filtered listen on
+ *     that id to notice the ThermaSol app lifting the mute while dimmed. It
+ *     never sends volume, source, light, standby or heat/water frames. The
+ *     daemon in deployed/ predates this and sends nothing on the bus at all.
  *   - never dims unless the listener is OPEN (blind dim can't be undone)
  *   - re-reads the real brightness immediately BEFORE every dim and restores
  *     that validated value (0..max_brightness), so user brightness changes are
@@ -18,7 +23,13 @@
  *   idle_dim --input /dev/input/event1 \
  *            --brightness /sys/class/backlight/backlight/brightness \
  *            --idle-seconds 120 --dim 8 [--bright 71] \
- *            --status /data/local/tmp/tt-idle-dim.status
+ *            --status /data/local/tmp/tt-idle-dim.status \
+ *            [--input-name "<evdev name>"] [--hv-iface can0] \
+ *            [--playback-stdin] [--parent-death]
+ *
+ * --playback-stdin takes the media verdict (PLAYING or IDLE lines) on stdin and
+ * inhibits dimming until it reads IDLE. --parent-death makes the daemon restore
+ * and exit if its supervisor dies. --hv-iface default is can0.
  */
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -60,6 +71,8 @@ static unsigned long hv_mute_fail, hv_unmute_fail;   /* failed dispatches */
 static unsigned long hv_reasserts;   /* app lifted the mute, we put it back */
 static unsigned long hv_reconciles;  /* state re-asserted when the bus attached */
 static unsigned long hv_retries;     /* a send failed and was re-attempted */
+static int hv_open_failures;         /* consecutive failed bus opens */
+static long long hv_next_unavail_log_ms;  /* "unavailable" is logged a minute apart */
 static int hv_bus_state = -1;        /* last state a send succeeded with:
                                       * -1 unknown, 0 lit/unmuted, 1 dimmed/muted */
 static int hv_desired = -1;          /* state the unit should be in: 0 lit, 1 dim */
@@ -325,6 +338,20 @@ static void hv_after_brightness_change(int going_dim)
     hv_request(going_dim ? 1 : 0, HV_R_TRANSITION);
 }
 
+/* The bus is retried every 2 s, but an absent can0 (or one that never comes up)
+ * must not write 30 lines a minute into logcat for the life of the panel: log
+ * the first failure, then at most once a minute, with the running count. */
+static void hv_log_unavailable(void)
+{
+    long long t = now_ms();
+    hv_open_failures++;
+    if (hv_open_failures == 1 || t >= hv_next_unavail_log_ms) {
+        fprintf(stderr, "tt-idle-dim: hv: %s unavailable (%s), %d retries so far\n",
+                hv_iface_arg ? hv_iface_arg : "can0", strerror(errno), hv_open_failures);
+        hv_next_unavail_log_ms = t + 60000;
+    }
+}
+
 /* Idle goes to the Android home screen rather than leaving whatever app was in
  * front behind a dark panel. Called only on a successful idle DIM; the dim is
  * refused while the playback lease reports PLAYING or UNKNOWN, so a playing
@@ -514,8 +541,7 @@ int main(int argc, char **argv) {
         hv_request(state == IDLE_ST_DIM ? 1 : 0, HV_R_RECONCILE);
     }
     else
-        fprintf(stderr, "tt-idle-dim: hv: %s unavailable (%s), retrying\n",
-                hv_iface_arg ? hv_iface_arg : "can0", strerror(errno));
+        hv_log_unavailable();
 
     while (!g_stop) {
         /* --- (re)open input; find-by-name preferred, else path --- */
@@ -571,6 +597,7 @@ int main(int argc, char **argv) {
                 eh.data.fd = fd;
                 if (epoll_ctl(ep, EPOLL_CTL_ADD, fd, &eh) == 0) {
                     hv_fd = fd;
+                    hv_open_failures = 0;
                     fprintf(stderr, "tt-idle-dim: hv: %s attached\n",
                             hv_iface_arg ? hv_iface_arg : "can0");
                     hv_bus_state = -1;     /* the unit's state is unknown here */
@@ -581,8 +608,7 @@ int main(int argc, char **argv) {
                             strerror(errno));
                 }
             } else {
-                fprintf(stderr, "tt-idle-dim: hv: %s unavailable (%s), retrying\n",
-                        hv_iface_arg ? hv_iface_arg : "can0", strerror(errno));
+                hv_log_unavailable();
             }
             hv_next_open = now_ms() + HV_REOPEN_MS;
         }
@@ -707,7 +733,12 @@ int main(int argc, char **argv) {
             if (read_int_file(br_path, &cur) == 0 && idle_bright_valid(cur, max_bright)) {
                 restore = cur; running_bright = cur; bright_known = 1;
                 /* Home first, then dark: an app switch requested at the instant the
-                 * backlight goes to 0 was observed to be ignored. */
+                 * backlight goes to 0 was observed to be ignored. go_home() only
+                 * forks, so this sleep is the whole of the ordering -- the HOME
+                 * request goes out 1.5 s before the dim and nothing confirms the
+                 * switch. If the brightness write below then fails, the panel has
+                 * switched apps without dimming; that is preferred to a dark panel
+                 * whose app we could not leave. */
                 go_home();
                 { struct timespec ts = { 1, 500000000L }; nanosleep(&ts, NULL); }
                 int ok = (write_int_file(br_path, dim) == 0);

@@ -220,7 +220,7 @@ def main(argv=None):
     ap.add_argument("--apk-prefix", default=DEFAULT_APK_PREFIX,
                     help="URL prefix for APKs (adjust after observing the real request)")
     ap.add_argument("--base-url", default=None,
-                    help="absolute base the panel will fetch from, e.g. http://10.0.1.5 "
+                    help="absolute base the panel will fetch from, e.g. http://<mirror-host> "
                          "(required: icon URLs must be absolute or the client silently "
                          "refuses to install)")
     ap.add_argument("--log", action="store_true", help="log every request line")
