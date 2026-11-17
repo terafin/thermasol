@@ -320,7 +320,7 @@ Either way the panel then boots Android from slot `_b`, which is unmodified.
 evidence: SPL and ATF print before `board_init_r`, so their output narrows the fault to the stage
 that failed, and complete silence narrows it to power or the BootROM. The BootROM serial-download
 path (`SERIAL_DOWNLOAD`, USB OTG with `imx_usb_loader` / `uuu` and the vendor `flash.bin`) is not
-open to this panel — there is no reachable USB ([04-android15-port.md](04-android15-port.md#a-b-and-flashing)).
+open to this panel — there is no reachable USB ([04-android15-port.md](04-android15-port.md#ab-and-flashing)).
 UART output is the channel that remains.
 
 **Do not** write `flash.bin` (the bootloader at `0x8400`), and do not touch slot A: neither is
