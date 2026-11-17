@@ -198,6 +198,13 @@ PSCI reset instead of returning.
 Needs hands on the unit. There is no remote path: adb is down, the network never comes up, and
 power cycles do not change the outcome.
 
+**This section is a plan, not a transcript.** Nothing below has been executed — it cannot be,
+without the unit in front of you. Two steps in particular are unverified and are the ones a
+recovery depends on: that a failed `bootcmd` really does leave U-Boot at a prompt you can type
+into, and that `tftpboot` works from that prompt with the network not yet brought up. If the
+prompt does not appear, the serial-download route at the end is the remaining option, and that
+one is untested too. Treat the commands as the intended sequence and verify each result as you go.
+
 **Console.** The SoC's UART4 is `ttymxc3`, `0x30a60000`, **115200 8N1**, three-wire (TX, RX,
 GND) on the SoM header. U-Boot's `bootdelay=0` leaves no countdown to interrupt, but when
 `bootcmd` fails U-Boot drops to its prompt — which is the likely state — so attaching the console
