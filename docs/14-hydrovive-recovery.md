@@ -198,17 +198,23 @@ PSCI reset instead of returning.
 ### U-Boot powers the PHY before `bootcmd`
 
 The bootloader on the panel is U-Boot **2019.04-41468-ge20d4ecd9f** (May 31 2022), read from the
-`flash.bin` at `0x8400`. In that build `initr_net` sits in `init_sequence_r`
-(`common/board_r.c:846`), ahead of `run_main_loop` (`:885`), and `initr_net` calls
-`eth_initialize()` (`:557-560`). `eth_initialize()` probes the Ethernet device
+`flash.bin` at `0x8400`. Every line number below is for that vendor tree (`varigit/uboot-imx` at
+`e20d4ecd9f`, 41,468 commits past the `v2019.04` tag); on the upstream tag the same three places
+are `common/board_r.c:554`, `:800` and `:827`.
+
+In that build `initr_net` sits in `init_sequence_r` (`common/board_r.c:846`), ahead of
+`run_main_loop` (`:885`), and `initr_net` calls `eth_initialize()` (`:557-560`). Both the
+function and its sequence entry are inside `#ifdef CONFIG_CMD_NET` (`:556` and `:845`), so
+everything below rests on that symbol being set — it is, in
+`configs/imx8mm_var_dart_android_defconfig:129`. `eth_initialize()` probes the Ethernet device
 (`net/eth-uclass.c:396,409` → `uclass_first_device_check` → `device_probe`,
 `drivers/core/uclass.c:600-612`), and the FEC probe enables the PHY's supply, releases its reset
 and soft-resets it (`drivers/net/fec_mxc.c:1396`, `:1405`, `phy_connect` → `phy_reset` at
 `:1305`). The board's device tree supplies both properties: `&fec1` has
 `phy-supply = <&reg_eth_phy>` and `phy-reset-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>`
 (`arch/arm/dts/fsl-imx8mm-var-dart.dts:402-403`), with `reg_eth_phy` on `gpio1_io07` there at
-`:50-56`; `CONFIG_DM_ETH`, `CONFIG_DM_GPIO` and `CONFIG_DM_REGULATOR_FIXED` are all set in the
-board's `android_defconfig`.
+`:50-56`; `CONFIG_DM_ETH`, `CONFIG_DM_GPIO`, `CONFIG_DM_REGULATOR` and
+`CONFIG_DM_REGULATOR_FIXED` are all set in the same defconfig.
 
 So a link blip is expected on every boot that reaches `board_init_r`, with no network command
 anywhere in the chain (`bootcmd_orig` is `run cmaargs; boota ${fastboot_dev}`), and a payload that
