@@ -44,8 +44,8 @@ I2C2/3/4, SPI1/2 and DFU only, **never FDCAN**.
   otherwise version = `d1`, status = `d2`; `d7 != 0` clears ack-pending.
 - `start_bootloader` sends `A5 BC 7B 01` and sleeps 250 ms. `load_firmware` then busy-waits for
   status 1 **without transmitting**: the panel never solicits; the device must announce itself.
-- Then `101#01` → status 2 → `101#02` → status 3 → 2 KB pages on 0x102 → `101#05` + CRC →
-  `101#03`, `101#04`.
+- Then status 1 → `101#01` → status 2 → `101#02` → status 3 → 2 KB pages on 0x102, each followed
+  by `101#05` with that page's CRC → `101#03`, `101#04`. Every wait comes before its command.
 
 ## Observations since the command
 
@@ -135,7 +135,8 @@ What the panel's flash and logs show afterwards:
 unrecoverable from software, and the only way back is somebody physically power-cycling the
 appliance. Bare metal does not remove that: a bare-metal payload that hangs before enabling the
 watchdog has the same hole, and the prize — a few seconds of listening on a bus that has carried
-no unit frame in twenty cold boots — does not justify the risk to a sealed panel. The original
+no unit frame in any cold boot since the failure — does not justify the risk to a sealed panel.
+The original
 environment is restored (md5 `1b1533ff…`) and the panel runs the published v1.2.
 
 **What a future attempt would need**, all of it before any armed boot: a warm-reset path that
@@ -153,7 +154,7 @@ binary, and all of them are command- or write-direction:
 | `0x101 A5 BC 7B 01` (also `0x131`) | `hvlsr_start_bootloader` |
 | `0x101` d0=`01`, then `02` | `hvlsr_bootloader_load_firmware` |
 | `0x102` `[page, cnt_hi, cnt_lo, 0x69, 4 bytes]` | `send_flash_page` |
-| `0x101` d0=`05` + 32-bit CRC | `send_flash_page`, once per image |
+| `0x101` d0=`05`, d1=page, d2..5 = CRC32 of that page | `send_flash_page`, after every page |
 | `0x101` d0=`03`, then `04` | `hvlsr_complete_update_and_restart` |
 
 The only device-to-panel data in the library is the status frame on 0x100 (version, status,
