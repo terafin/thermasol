@@ -1,0 +1,50 @@
+// TT10V2 — avbab, the A/B slot metadata tool for the ThermaSol panel.
+//
+// Written and owned by the Shower Firmware Helper session. This module exists
+// only so B's image carries it.
+//
+// It reads and writes the libavb_ab AvbABData record at misc+0x800 (magic
+// "\0AB0", version 1.0) and NOT the AOSP bootloader_control struct, whose magic
+// 0x42414342 is absent from this panel's 2019 bootloader. Writes are confined
+// to misc[0x800..0x820).
+//
+// Used by the init-level self-revert (verb "revert-a") and the mark-successful
+// step (verb "mark-successful"). Both are required build artefacts: if slot B is
+// unreachable nobody can write misc remotely, so the revert must run on the
+// panel itself.
+//
+// Pure libc, no liblog, no Android headers — hence no shared_libs. Installed to
+// /system/bin so first-stage init can reach it. Deliberately not /data.
+cc_binary {
+    name: "avbab",
+    srcs: ["avbab.c"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+    strip: {
+        none: true,
+    },
+}
+
+// SAME SOURCE, SECOND INSTALL. The init-level self-revert must run in a domain
+// that AOSP exempts from the misc_block_device neverallow (domain.te:1551-1571,
+// a NAME list). vendor_misc_writer is the one built for this, and the platform
+// already ships init_daemon_domain(vendor_misc_writer), so no custom .te is
+// needed -- only the file_contexts line below, which assigns the platform's own
+// (public) exec type to this binary.
+//
+// Deliberately NOT named misc_writer: hardware/google/pixel/misc_writer/Android.bp
+// already defines a module of that name.
+cc_binary {
+    name: "tt_misc_writer",
+    srcs: ["avbab.c"],
+    vendor: true,
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+    strip: {
+        none: true,
+    },
+}
