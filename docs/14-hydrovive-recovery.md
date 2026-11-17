@@ -265,6 +265,11 @@ fstab.** It was established at source and against the deployed image:
   (`libfstab/boot_config.cpp:173-191`) reads the device tree *first*, from
   `/proc/device-tree/firmware/android/<key>`, and the panel's live DTB carries
   `fstab_suffix = "nxp"`. So the first property is always tried, whatever the cmdline says.
+  That DTB was read off the running unit — `/firmware/android/{compatible,fstab_suffix,
+  boot_devices,...}` dumped over adb on 2026-11-17 and kept at a recorded digest
+  `8427df15a7…`, 73,856 B, FDT v17 — with `compatible = "android,firmware"` present, which is
+  what `is_dt_compatible()` tests. Unlike a source citation, an observation off the unit cannot be
+  repeated while the unit is dark, so it is recorded with its digest rather than asserted bare.
 - The ramdisk in the deployed boot image has no `fstab.nxp`. Extracted from `boot_b.img`
   (sha256 `5d81612048…`, ramdisk 19,435,281 B, LZ4 legacy, 584 entries), `cpio -t | grep fstab`
   lists only `first_stage_ramdisk/fstab.freescale` and `system/etc/recovery.fstab`. `fstab.nxp`
