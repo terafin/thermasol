@@ -39,7 +39,7 @@ byte positions exactly.
 
 | function | op | payload | notes |
 |---|---|---|---|
-| `hvlsr_send_heartbeat` | `0B` | none | `A5 0B 7B 00 00 00 00 00` |
+| `hvlsr_send_heartbeat` | `B1` | none | `A5 B1 7B 00 00 00 00 00` |
 | `hvlsr_mute` | `B5` | `p0 = 01` | `A5 B5 7B 01 00 00 00 00` |
 | `hvlsr_unmute` | `B5` | `p0 = 00` | |
 | `hvlsr_light_on` | `B4` | `p0 = 01` | |
@@ -79,16 +79,24 @@ non-zero `data[7]` clears the ack-pending latch. The status values drive the boo
 machine: `1` = the unit is in the bootloader and waiting, `2` = ready for the image, `3` = ready
 for pages.
 
+Every `0x100` frame also writes zero over the cached firmware-version byte, so
+`hvlsr_get_fw_version` returns 0 while the unit is in its bootloader.
+
 **`0x143` — application status.** `data[1]` selects the field:
 
 | `data[1]` | meaning | lands in |
 |---|---|---|
 | `B0` | firmware version, in `data[3]` | the byte `hvlsr_get_fw_version` returns (`A5 B0 8F 07` = **v7**) |
 | `B8` | Bluetooth state, in `data[3]` | `hvlsr_get_bluetooth_state` |
-| `B9` | indexed info block: `data[3]` is the slot (0x00–0x1C), `data[4]` the value | the unit-info array |
+| `B9` | a four-byte chunk of a string: `data[3]` is the offset (0x00–0x1C), `data[4..7]` the bytes | the Bluetooth device name |
 
-Every `0x143` frame also stamps a monotonic time, which is what makes `hvlsr_is_active` true for
-five seconds.
+`B9` is how the device name arrives, four bytes at a time, and a zero byte in the chunk ends the
+string. Bytes past offset 0x1C are ignored.
+
+Only `B0` stamps the activity counter that `hvlsr_is_active` reads — `B8` and `B9` do not. The
+stamp is a 1 Hz tick count, not a wall clock, so `hvlsr_is_active` means "a `B0` arrived within
+the last five ticks": it is false until the first one arrives, and false whenever the tick count
+is behind the stamp.
 
 `0x135`, `0x140` and `0x142` are handled by the same dispatcher for other equipment; the unit
 itself uses only `0x100` and `0x143`.
@@ -102,22 +110,27 @@ back on.
 | step | frame | waits for |
 |---|---|---|
 | `hvlsr_start_bootloader` | `0x101 A5 BC 7B 01`, then the same on `0x131`, then 250 ms | nothing |
-| `hvlsr_bootloader_load_firmware` | `0x101` dlc 1, `01` | status `1` on `0x100` |
-| | `0x101` dlc 1, `02` | status `2`, then status `3` |
-| `hvlsr_program_page(n)` | on `0x102`: `[n, count_hi, count_lo, 0x69, b0 b1 b2 b3]` per 4 bytes | an ack flag; 10 retries, 40 ms apart |
-| end of image | `0x101` dlc 6, `[05, page, crc32]` | — |
+| `hvlsr_bootloader_load_firmware` | nothing | status `1` on `0x100` |
+| | `0x101` dlc 1, `01` | status `2` |
+| | `0x101` dlc 1, `02` | status `3` |
+| `hvlsr_program_page(n)` | on `0x102`: `[n, count_hi, count_lo, 0x69, b0 b1 b2 b3]` per 4 bytes | an ack flag, polled about 400 ms |
+| | `0x101` dlc 6, `[05, page, crc32 of that page]` — after each page | — |
 | `hvlsr_complete_update_and_restart` | `0x101` dlc 1, `03` then `04` | — |
 
-`hvlsr_program_page` returns 1 only if the ack arrived; the caller in the vendor app is what
-decides to continue. The important structural fact: `load_firmware` **busy-waits for status 1
-without transmitting anything after the start frames**, so the unit has to announce itself before
-the panel will do anything. There is no polling and no read path.
+The order matters: `load_firmware` **busy-waits for status 1 without transmitting anything**, so
+the unit has to announce itself before the panel sends its first byte. After that each handshake
+is a wait followed by a one-byte command, not a command followed by a wait.
+
+`hvlsr_program_page` sends the page once, then polls the ack flag for about 400 ms (eleven 40 ms
+polls in the 11.0.2 build, ten in the installed one). It re-sends **only** when the unit asks —
+a `0x100` frame with `data[0] == 4` sets a resend flag, and the next poll re-sends the page and
+clears the flag. It is not a fixed retry timer. It returns 1 only if the ack arrived.
 
 ## Timing
 
 - `hvlsr_start_bootloader` sleeps 250 ms after the two start frames.
-- `hvlsr_program_page` retries an unacknowledged page 10 times, 40 ms apart, before giving up.
-- `hvlsr_is_active` is a 5-second window over received `0x143` frames.
+- `hvlsr_program_page` polls an unacknowledged page for about 400 ms before returning failure.
+- `hvlsr_is_active` is five ticks of a 1 Hz counter since the last `0x143` `B0` frame.
 - The application sends its status at 1 Hz while running (captured: `0x143 A5 B0 8F 07` and
   `A5 B8 8F 00` once a second from a healthy unit).
 
