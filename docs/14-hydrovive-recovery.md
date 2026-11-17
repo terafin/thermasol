@@ -278,8 +278,8 @@ Try it before `env default -a`: it leaves the rest of the environment intact.
 
 **A prompt that does not appear is an answer, not a dead end.** No prompt means no U-Boot to type
 at, so the saved `bootargs` is ruled out and the fault is at or before `initr_net` — the SPL/ATF
-or early `board_init_r` window. That is a different investigation and it starts with the serial
-download, not with this command.
+or early `board_init_r` window. That is a different investigation, and the UART output itself is
+its first evidence: what SPL and ATF print, or their silence.
 
 ## Recovering a panel that boots to nothing
 
@@ -289,9 +289,8 @@ power cycles do not change the outcome.
 **This section is a plan, not a transcript.** Nothing below has been executed — it cannot be,
 without the unit in front of you. Two steps in particular are unverified and are the ones a
 recovery depends on: that a failed `bootcmd` really does leave U-Boot at a prompt you can type
-into, and that `tftpboot` works from that prompt with the network not yet brought up. If the
-prompt does not appear, the serial-download route at the end is the remaining option, and that
-one is untested too. Treat the commands as the intended sequence and verify each result as you go.
+into, and that `tftpboot` works from that prompt with the network not yet brought up. Treat the
+commands as the intended sequence and verify each result as you go.
 
 **Console.** The SoC's UART4 is `ttymxc3`, `0x30a60000`, **115200 8N1**, three-wire (TX, RX,
 GND) on the SoM header. `bootdelay=0` leaves no countdown to interrupt. Whether a prompt is
@@ -317,9 +316,12 @@ reset
 
 Either way the panel then boots Android from slot `_b`, which is unmodified.
 
-**If there is no prompt**, the SoC did not reach U-Boot: the BootROM serial-download path is
-`SERIAL_DOWNLOAD` (USB OTG, `imx_usb_loader` / `uuu` with the vendor `flash.bin`), which needs the
-unit on a bench with USB access.
+**If there is no prompt**, the SoC did not reach U-Boot. What the console shows next is the
+evidence: SPL and ATF print before `board_init_r`, so their output narrows the fault to the stage
+that failed, and complete silence narrows it to power or the BootROM. The BootROM serial-download
+path (`SERIAL_DOWNLOAD`, USB OTG with `imx_usb_loader` / `uuu` and the vendor `flash.bin`) is not
+open to this panel — there is no reachable USB ([04-android15-port.md](04-android15-port.md#a-b-and-flashing)).
+UART output is the channel that remains.
 
 **Do not** write `flash.bin` (the bootloader at `0x8400`), and do not touch slot A: neither is
 involved in this failure.
