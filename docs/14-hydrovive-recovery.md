@@ -163,6 +163,70 @@ checking what it received. Guessing an undocumented opcode on a bootloader we ca
 erasing the chip it was meant to preserve. A copy of v7 has to come from somewhere else — the
 app's download cache, or a vendor artefact — not from the device.
 
+## The bare-metal attempt and the stuck panel
+
+The kernel route ended with two measured results: `booti` on a raw Image is entered and hangs
+(`stage = prebooti`, three times, with no panic and no pstore), and `bootm` on a legacy gzip
+uImage is **rejected** (`stage = bootm-ret`). Even a working kernel only reaches CAN at about
+6 s, so a bare-metal payload was the next step: an 812-byte arm64 image with a valid header that
+`booti` loads at `0x40080000`, programs the pinmux, drives the MCP2518FD over ECSPI1, and never
+touches Linux.
+
+It hung on its first run and the panel has not come back since. What is known:
+
+- The armed environment was verified on flash before the cycle (md5 `a2447cd8…`) and it **does**
+  define `bootcmd_safe=run bootcmd_orig`, so the disarm had its variable.
+- No packets from the panel on the wire for 60 s, so `bootcmd` did not fall through to a default
+  environment doing DHCP — the SoC stops before any network.
+- Three power cycles (12 s, 15 s, 30 s off) did not restore Android.
+
+Two faults are mine and both are in the chain, not the payload:
+
+1. `saveenv` is a command like any other, and a flat `;` chain continues when it fails. If it
+   fails, `bootcmd` in flash stays armed and every boot re-enters the payload. The self-disarm
+   guards a hang; it does not guarantee that the disarm was stored.
+2. `booti` is called unconditionally. If the `mmc read` fails, `booti` jumps into whatever is at
+   `0x40080000` and hangs instead of falling through to `run bootcmd_orig`.
+
+The payload that was staged also wrote SNVS `LPGPR` (`0x30370068`) as its first instruction — the
+same class of always-on register that aborted U-Boot's `mw` — which is the leading suspect for
+the hang itself. The replacement payload removes that write, bounds every wait, and ends in a
+PSCI reset instead of returning.
+
+## Recovering a panel that boots to nothing
+
+Needs hands on the unit. There is no remote path: adb is down, the network never comes up, and
+power cycles do not change the outcome.
+
+**Console.** The SoC's UART4 is `ttymxc3`, `0x30a60000`, **115200 8N1**, three-wire (TX, RX,
+GND) on the SoM header. U-Boot's `bootdelay=0` leaves no countdown to interrupt, but when
+`bootcmd` fails U-Boot drops to its prompt — which is the likely state — so attaching the console
+should present a `=>` prompt directly. Send a carriage return first to confirm.
+
+**Restore the environment.** From the prompt, either:
+
+```
+env default -a; saveenv; reset
+```
+
+or write the saved original back over the environment area (LBA `0x2000`, 8 sectors of 512):
+
+```
+tftpboot 0x41000000 env-orig-0x400000.bin     # the 4 KB blob, md5 1b1533ff43325d1a0c437826dd9aad88
+mmc dev 1
+mmc write 0x41000000 0x2000 8
+reset
+```
+
+Either way the panel then boots Android from slot `_b`, which is unmodified.
+
+**If there is no prompt**, the SoC did not reach U-Boot: the BootROM serial-download path is
+`SERIAL_DOWNLOAD` (USB OTG, `imx_usb_loader` / `uuu` with the vendor `flash.bin`), which needs the
+unit on a bench with USB access.
+
+**Do not** write `flash.bin` (the bootloader at `0x8400`), and do not touch slot A: neither is
+involved in this failure.
+
 ## Rules this added
 
 - Never send a bank-swap, option-byte or bootloader command to a peripheral without a verified
@@ -170,6 +234,12 @@ app's download cache, or a vendor artefact — not from the device.
 - The U-Boot image lives in the eMMC user area at 0x8400, with no A/B copy. Do not write it.
 - When the panel listens without ACKing, a silent bus floods with retransmits; that is a
   measurement, not a fault.
+- **A payload whose only failure mode is a hang cannot be made safe by a disarming `bootcmd`.** The
+  disarm protects the panel only if it is stored; a `saveenv` that fails inside the chain is
+  invisible. Before any payload that can hang: verify the disarm by reading the env back, and give
+  the payload a bounded exit (PSCI reset) and no access to registers that can stall the bus.
+- **Never `booti` unconditionally.** Check the loaded image (magic, size) in the chain first, so a
+  failed read falls through to the stock boot instead of jumping into stale RAM.
 
 ## Sources
 
