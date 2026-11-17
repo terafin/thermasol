@@ -81,6 +81,8 @@ Kept as a single list because the same wrong ideas recur. Each is here so it is 
 | `adbd` never starts on its own | true on A10 only; A15's `usbd` starts it at ~21 s |
 | a non-Termux adb path exists on A10 | true premise, wrong conclusion — access converges on Termux |
 | silence on the wire proves the boot stopped before `netd` | `netd` is native and starts at `zygote-start` |
+| silence on the wire proves the boot stopped before U-Boot's network init | `initr_net` probes the FEC and powers the PHY before `bootcmd` runs, so the link is up with no network command at all |
+| the FEC driver does not own the PHY's power or reset | read from the Android 15 tree's U-Boot 2024.04; the panel's 2019.04 `&fec1` carries `phy-supply` and `phy-reset-gpios` |
 | the static logo proves the failure is before Android | `bootanim` has two possible starters |
 | U-Boot netconsole is output-only | false |
 | fastboot in 2019.04 is USB-only | false |

@@ -177,7 +177,9 @@ It hung on its first run and the panel has not come back since. What is known:
 - The armed environment was verified on flash before the cycle (md5 `a2447cd8…`) and it **does**
   define `bootcmd_safe=run bootcmd_orig`, so the disarm had its variable.
 - No packets from the panel on the wire for 60 s, so `bootcmd` did not fall through to a default
-  environment doing DHCP — the SoC stops before any network.
+  environment running a network command. It says no more than that: U-Boot powers the PHY and
+  brings the link up itself before `bootcmd` runs (below), so silence on the wire is not evidence
+  that the boot stopped before network.
 - Three power cycles (12 s, 15 s, 30 s off) did not restore Android.
 
 Two faults are mine and both are in the chain, not the payload:
@@ -193,6 +195,31 @@ same class of always-on register that aborted U-Boot's `mw` — which is the lea
 the hang itself. The replacement payload removes that write, bounds every wait, and ends in a
 PSCI reset instead of returning.
 
+### U-Boot powers the PHY before `bootcmd`
+
+The bootloader on the panel is U-Boot **2019.04-41468-ge20d4ecd9f** (May 31 2022), read from the
+`flash.bin` at `0x8400`. In that build `initr_net` sits in `init_sequence_r`
+(`common/board_r.c:846`), ahead of `run_main_loop` (`:885`), and `initr_net` calls
+`eth_initialize()` (`:557-560`). `eth_initialize()` probes the Ethernet device
+(`net/eth-uclass.c:396,409` → `uclass_first_device_check` → `device_probe`,
+`drivers/core/uclass.c:600-612`), and the FEC probe enables the PHY's supply, releases its reset
+and soft-resets it (`drivers/net/fec_mxc.c:1396`, `:1405`, `phy_connect` → `phy_reset` at
+`:1305`). The board's device tree supplies both properties: `&fec1` has
+`phy-supply = <&reg_eth_phy>` and `phy-reset-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>`
+(`arch/arm/dts/fsl-imx8mm-var-dart.dts:402-403`), with `reg_eth_phy` on `gpio1_io07` there at
+`:50-56`; `CONFIG_DM_ETH`, `CONFIG_DM_GPIO` and `CONFIG_DM_REGULATOR_FIXED` are all set in the
+board's `android_defconfig`.
+
+So a link blip is expected on every boot that reaches `board_init_r`, with no network command
+anywhere in the chain (`bootcmd_orig` is `run cmaargs; boota ${fastboot_dev}`), and a payload that
+hangs leaves the link up because it only reprograms ECSPI pins. Two consequences:
+
+- **Link up is evidence that U-Boot started, not that Linux did.** It places the boot at or past
+  `initr_net`.
+- **A boot that never links did not reach `initr_net`** — or the probe failed, which prints
+  `Could not get PHY for …` or `No ethernet found` and continues into `bootcmd` anyway. Only the
+  console separates those two.
+
 ## Recovering a panel that boots to nothing
 
 Needs hands on the unit. There is no remote path: adb is down, the network never comes up, and
@@ -206,9 +233,11 @@ prompt does not appear, the serial-download route at the end is the remaining op
 one is untested too. Treat the commands as the intended sequence and verify each result as you go.
 
 **Console.** The SoC's UART4 is `ttymxc3`, `0x30a60000`, **115200 8N1**, three-wire (TX, RX,
-GND) on the SoM header. U-Boot's `bootdelay=0` leaves no countdown to interrupt, but when
-`bootcmd` fails U-Boot drops to its prompt — which is the likely state — so attaching the console
-should present a `=>` prompt directly. Send a carriage return first to confirm.
+GND) on the SoM header. `bootdelay=0` leaves no countdown to interrupt. Whether a prompt is
+waiting follows from the link: U-Boot powers the PHY itself before `bootcmd` runs, so a unit that
+links and then goes quiet is one whose `bootcmd` failed, and its prompt should be there; a unit
+that never links may not be reaching `board_init_r` at all, and nothing appears. Send a carriage
+return first to confirm.
 
 **Restore the environment.** From the prompt, either:
 
@@ -247,6 +276,9 @@ involved in this failure.
   the payload a bounded exit (PSCI reset) and no access to registers that can stall the bus.
 - **Never `booti` unconditionally.** Check the loaded image (magic, size) in the chain first, so a
   failed read falls through to the stock boot instead of jumping into stale RAM.
+- **U-Boot brings the link up before `bootcmd`.** `initr_net` probes the FEC and powers the PHY, so
+  a link is evidence that U-Boot ran, never that Linux did. Judge how far a boot got by the
+  console, not by the switch.
 
 ## Sources
 
