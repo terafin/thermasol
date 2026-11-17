@@ -381,6 +381,16 @@ setenv bootargs 'init=/init consoleblank=0 androidboot.hardware=freescale androi
 
 Try it before `env default -a`: it leaves the rest of the environment intact.
 
+**Whatever restores the command line, it must contain `androidboot.hardware=freescale`.** Deleting
+the variable is not a fix: with no env `bootargs`, the vendor `boota` falls back to the boot
+image's own header cmdline, and the v1.2 header carries
+`androidboot.vendor.apex.com.google.android.widevine=… androidboot.lcd_density=120 earlycon=…
+console=ttymxc3,115200 clk_ignore_unused printk.devkmsg=on` — no `androidboot.hardware`, and no
+`init=` either. The same failure follows. `env default -a` is safe only because the board config
+supplies one (`include/configs/imx8mm_var_dart_android.h:60-68` at `e20d4ecd9f` is the compiled
+default, and it carries the token). After any restore, `printenv bootargs` and read it before
+`reset`.
+
 **A prompt that does not appear is an answer, not a dead end.** No prompt means no U-Boot to type
 at, so the saved `bootargs` is ruled out and the fault is at or before `initr_net` — the SPL/ATF
 or early `board_init_r` window. That is a different investigation, and the UART output itself is
