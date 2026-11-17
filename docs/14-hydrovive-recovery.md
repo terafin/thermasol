@@ -343,7 +343,16 @@ Four separate trees are needed to show it, and each cite below names its own:
 With the pad on GPIO, that assertion reaches nothing and ATF waits forever. `tt_reboot_pin.ko`
 restores the mux on a normal restart, but it is a vendor module and never loads when first-stage
 init dies. So any first-stage failure parks the unit until power is cycled — which is what the
-frozen port counters show.
+frozen port counters show. An external pull on that same net may still reset the board — and that
+is recorded as an inference, not a fact:
+
+> **Inference, not established.** `03-hardware.md:58-59` records that a weak input pull-down on
+> `GPIO1_IO02` resets the board, and `13-instruments-lie.md:59` that pulling the presumed `CHG`
+> pin low does the same. If those two pins are one net — the maXTouch `CHG` line sharing the
+> PMIC's `WDOG_B` — then a low on it resets the unit whatever the SoC mux is set to, and a touch
+> on the frozen panel would do it. No schematic has been read to confirm the shared net, and the
+> two notes were written from separate probes that could each have reset the board for their own
+> reason. If it holds, it is not a recovery: the unit replays the same failing boot.
 
 **Check the link before booking a console session.** It is the observation that separates a unit
 that booted Linux badly from one that never got there, and it costs a glance at the switch port:
