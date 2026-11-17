@@ -43,7 +43,8 @@ Concretely, the acceptance list that drove the work:
 - Steam starts and stops from the panel and from the physical control; the generator draws
   its real ~8.7 kW and returns to 0–2 W.
 - Lights, speaker, and steam are controllable; the speaker goes quiet when idle.
-- Display sleeps/dims when idle and wakes on touch.
+- Display sleeps/dims when idle and wakes on touch. Since v1.2 it goes to the Android home
+  screen first, and never while a video is playing.
 - Native YouTube, Play Store, Plex, Netflix, Apple TV, Home Assistant, Music Assistant,
   1Password.
 - Remote recovery over Ethernet.
@@ -51,7 +52,7 @@ Concretely, the acceptance list that drove the work:
 
 **One item on that list is not met.** The speaker does *not* go quiet when idle: it hisses
 continuously, and no control the panel owns changes it. That is
-[07-open-issues.md §1](07-open-issues.md#1-the-ceiling-speaker-hisses-and-nothing-we-control-silences-it),
+[issue #1](https://github.com/terafin/thermasol/issues/1),
 and it is unresolved. Everything else on the list was verified on the device.
 
 ## The shape of the work

@@ -21,6 +21,9 @@ wrong, or from an artifact that proves it would.
 | Chain `boot` in vbmeta | `get_margin_pos` bug → the slot parks in fastboot **forever**; an AVB I/O error skips the tries decrement. |
 | Count on the boot guard to roll back on its own | It does not reboot by itself. A bad trial needs a deliberate return. |
 | Let a second reboot inherit a first boot's approval | That is the stale-approval bug; approval content is a **boot id**. |
+| Leave a host-side "UI keeper" running | `panel-ui-keeper.sh` relaunched ThermaSol every 45 s whenever it was not in focus, which yanked fullscreen YouTube away. Disabled (`systemctl --user disable tt-panel-ui-keeper tt-panel-first-aid`); look for it first if the panel "keeps going back to ThermaSol". |
+| Fork `am`/`cmd` from a daemon whose stdin is a pipe | `cmd activity` passes its stdio fds to system_server, and a pipe fails it with `Failed transaction (2147483646)`. Give the child `/dev/null`. |
+| Send HOME (`KEYCODE_HOME` or the intent) at the instant the backlight goes to 0 | It is ignored. Send the HOME intent first, wait 1.5 s, then dim. |
 
 ## Build
 
@@ -60,3 +63,20 @@ wrong, or from an artifact that proves it would.
 | Run `dumpsys SurfaceFlinger`, `dumpsys window`, `logcat -d`, `ps -A --sort=-RSS`, or repeated `screencap` | Each is followed within ~50–70 s by load 19–22 and ~70 s of dead adb — twice needing a power cycle. Single spaced reads only; sample `/proc/pressure/memory` instead of `ps`. |
 | Use `on_input`/injected swipes near ThermaSol's power control | An injected swipe hit the vendor power button, which called `killExternalApps` and left owner apps disabled. The panel healer re-enables them every 20 s for this reason. |
 | Let `watchdogd` go unpetted | `/system/bin/watchdogd 10 50` must stay alive; **an unpetted WDT resets the panel ~60 s later.** |
+
+## Constraints and known limitations — deliberately *not* issues
+
+These are facts about this panel. None of them is going to be worked on, and filing them as
+issues just creates chores that never close. Work items live in the [issue tracker](https://github.com/terafin/thermasol/issues).
+
+| Thing | Reality |
+|---|---|
+| **Deep suspend** | Not a sleep policy — there is no RTC/alarm wake source. If one is suspended, wait ~90 s before power cycling: the i.MX2 watchdog resets the panel unattended. |
+| **Power cycling** | The panel is not PoE. The only power action is a physical power cycle, i.e. a human. |
+| **Rollback** | Both slots hold A15. Switching is proven and the panel was deliberately moved to slot `_b` as the last action before the wall closed. The **idle slot's current bootability** is a hash comparison, not a recent boot. See [04-android15-port.md](04-android15-port.md) §Rolling back. |
+| **Bluetooth audio** | Bring-up baud is 115200 — enough to connect, not enough for A2DP. Not being chased. Pairing, range and accessory audio need a real peer and have not been tested. |
+| **WebView** | The **A10** image ships Chromium 74. **A15 ships 128 and takes 155 as a normal data update** (signer-verified, survives reboot), which runs the modern HA frontend. No system flash needed. |
+| **Home Assistant dashboard** | ~82% of the SoC. That is a **dashboard** problem, not a panel defect — a lighter dashboard is the fix, and it belongs in the HA repo. |
+| **Apple TV** | Deferred by the operator. Not work until they say it is. |
+| **Heavy adb probes** | `dumpsys SurfaceFlinger`, `dumpsys window`, `logcat -d`, `ps -A --sort=-RSS`, repeated `screencap` each cost ~70 s of dead adb. An operating rule, not a bug to fix. |
+| **ThermaSol approval** | None. The vendor app has two UI-only methods patched, the HAL binary was replaced, and the device tree was changed. Warranty service would find a non-stock device. |

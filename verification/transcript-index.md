@@ -63,7 +63,7 @@ open the session file for that chunk and use the `sed` range above. Call numbers
 - It does not claim the reconstruction is complete in the sense of explaining *why* every dead
   end was a dead end. The dead ends that taught something are in
   [`../docs/13-instruments-lie.md`](../docs/13-instruments-lie.md).
-- It does not claim the panel is finished. See [`../docs/07-open-issues.md`](../docs/07-open-issues.md).
+- It does not claim the panel is finished. See [the open issues](https://github.com/terafin/thermasol/issues).
 
 ## Index audit
 
