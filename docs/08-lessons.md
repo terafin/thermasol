@@ -85,6 +85,8 @@ Kept as a single list because the same wrong ideas recur. Each is here so it is 
 | the FEC driver does not own the PHY's power or reset | read from the Android 15 tree's U-Boot 2024.04; the panel's 2019.04 `&fec1` carries `phy-supply` and `phy-reset-gpios` |
 | the boot image's `hdr->cmdline` is appended to a set env `bootargs` | read in `u-boot/u-boot` v2019.04; the panel's `e20d4ecd9f` appends it only when `bootargs` is unset, so a stripped value reaches the kernel verbatim |
 | the BootROM serial-download path is the fallback for a dark panel | `04-android15-port.md`: there is no USB; the two write routes are `adb`+`dd` and U-Boot+TFTP |
+| a source DTS line describes the device tree the panel booted | source says `&wdog1` takes `pinctrl_wdog`; the compiled DT has `watchdog@30280000` with no pinctrl and nothing referencing `wdoggrp`, so the group is source-only |
+| the source function the reader checked is the one on the device | `libfstab/fstab.cpp` (A15) vs `fs_mgr/fs_mgr_fstab.cpp` (A10): different properties, different prefix list, and only one of them is on this unit |
 | the static logo proves the failure is before Android | `bootanim` has two possible starters |
 | U-Boot netconsole is output-only | false |
 | fastboot in 2019.04 is USB-only | false |
