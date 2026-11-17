@@ -76,7 +76,91 @@ power-on at the earliest. Things tried or measured to listen earlier:
   the same kernel, an initramfs with the stock first-stage modules, and `/init` that listens at
   100k in **normal** mode (the panel ACKs, so a one-shot announcement is received, not lost),
   runs the vendor update on status 1, pings the hardware watchdog, logs to ramoops and reboots.
-  It would listen ~1.5 s earlier than the shim.
+  Tried on 2026-11-17 and abandoned: the payload kernel hangs before `/init`, leaving the panel
+  dark until a power cycle. See [The local-payload attempt](#the-local-payload-attempt).
+
+## The local-payload attempt
+
+The unit's only recoverable state is the first seconds after power-on, so the payload was booted
+directly from the eMMC by the U-Boot environment — no network, no slot write.
+
+**Why the environment and not a slot.** The eMMC tail above the last partition is unused space
+and boots with no image write: Image at LBA 30,340,000 (`3d89f010…`), initramfs at 30,410,000
+(`fda08cd2…`), the live device tree at 30,420,000 (`aa854ee2…`). The GPT's last partition
+(`vbmeta_b`) ends at LBA 30,330,879 and the last usable LBA is 30,535,646; the three ranges were
+read back as all zeros before writing and hash-matched after. Those three ranges still hold the
+payload as staged. Nothing boots them — the environment is stock — but anything that repartitions
+the disk must not allocate them without zeroing them first.
+
+**The one-shot must disarm itself, not be cleared by the payload.** `hv-recovery/payload` ends
+with `reboot(RB_AUTOBOOT)` unconditionally, so an armed `bootcmd` plus a payload that hangs or
+panics is an endless loop — payload, reboot, payload — with no adb and no network to break it.
+The armed `bootcmd` therefore restores the stock command as its **first** action, before the
+kernel is loaded:
+
+```
+setenv bootcmd ${bootcmd_safe}; saveenv; mmc dev 1; mmc read ${loadaddr} 0x1CEF3A0 0xEC2D;
+mmc read ${rdaddr} 0x1D00510 0x2A7; setenv rdsize 0x54D7C; mmc read ${fdtaddr} 0x1D02C20 0x87;
+setenv bootargs ${payargs}; booti ${loadaddr} ${rdaddr}:${rdsize} ${fdtaddr}; run bootcmd_orig
+```
+
+`bootcmd_safe` is `run bootcmd_orig`, so the restore needs no quoting. The eMMC is U-Boot mmc
+device **1**: its device tree (inside `flash.bin`, FDT at 0x107dac) maps `mmc1` to `30b60000`,
+which Linux exposes as `/dev/block/mmcblk2`, and `fastboot_dev=mmc1` already boots Android.
+`rdsize` is the initramfs length in bytes, not the sector-padded read size.
+
+**Cycle 1 — the environment with only `bootdelay=0`** (stock `bootcmd`, so nothing new can fail):
+adb at 50 s, `boot_completed` at 53 s, slot `_b`. U-Boot time 4107 → 3124 ms.
+
+**Cycle 2 — armed.** Off 08:24:57Z, on 08:25:24Z. The panel never answered adb, never answered
+ping (ARP incomplete), and stayed dark for 7½ minutes until a power cycle. It then booted
+Android normally in ~57 s.
+
+What the panel's flash and logs show afterwards:
+
+- **The disarm ran.** The environment read back `bootcmd=run bootcmd_orig`, `bootcmd_safe=run
+  bootcmd_orig`, `bootdelay=0`, `bootcmd_orig` unchanged, CRC `0x6c38b977` valid.
+- **`booti` was reached and did not return to the fallback.** A failed `mmc read` or `booti`
+  would have fallen through to `run bootcmd_orig` and booted Android 50 s later. It did not.
+- **`/sys/fs/pstore` is empty.** There is no `console-ramoops-0`, so nothing reached the point
+  where ramoops or the ramoops console exists. `panic=5` would have warm-reset into Android, and
+  so would the 60 s watchdog in `/init`; neither happened. The CPU hung before either could run,
+  which is why only a power cycle recovered it.
+- The arm64 header is sound: `text_offset=0`, `flags=0xa`, `image_size=0x1e20000` against a file
+  of `0x1d85a00`. The kernel relocates itself to a 2 MiB-aligned base and lands well below the
+  device tree at 0x43000000 and the initramfs at 0x44680000, so relocation did not overwrite
+  either.
+
+**Why this is the end of the attempt.** A hang before the payload can arm its own watchdog is
+unrecoverable from software, and the only way back is somebody physically power-cycling the
+appliance. Bare metal does not remove that: a bare-metal payload that hangs before enabling the
+watchdog has the same hole, and the prize — a few seconds of listening on a bus that has carried
+no unit frame in twenty cold boots — does not justify the risk to a sealed panel. The original
+environment is restored (md5 `1b1533ff…`) and the panel runs the published v1.2.
+
+**What a future attempt would need**, all of it before any armed boot: a warm-reset path that
+exists before userspace (U-Boot `wdt start`, if this build has it), a payload that proves its
+own boot on a bench machine rather than the panel, and a console — the device has none exposed.
+
+## Reading the unit's flash is not possible over CAN
+
+The question "can we pull v7 off the chip before overwriting it" has a definite answer: no.
+Every frame `libthermacan` 11.0.2 can emit into the bootloader state was enumerated from the
+binary, and all of them are command- or write-direction:
+
+| frame | function |
+|---|---|
+| `0x101 A5 BC 7B 01` (also `0x131`) | `hvlsr_start_bootloader` |
+| `0x101` d0=`01`, then `02` | `hvlsr_bootloader_load_firmware` |
+| `0x102` `[page, cnt_hi, cnt_lo, 0x69, 4 bytes]` | `send_flash_page` |
+| `0x101` d0=`05` + 32-bit CRC | `send_flash_page`, once per image |
+| `0x101` d0=`03`, then `04` | `hvlsr_complete_update_and_restart` |
+
+The only device-to-panel data in the library is the status frame on 0x100 (version, status,
+ack pending). There is no page read, no memory read and no range CRC: the `05` CRC is the unit
+checking what it received. Guessing an undocumented opcode on a bootloader we cannot test risks
+erasing the chip it was meant to preserve. A copy of v7 has to come from somewhere else — the
+app's download cache, or a vendor artefact — not from the device.
 
 ## Rules this added
 
