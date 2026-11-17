@@ -32,6 +32,7 @@ documented recovery. Consequences below are not stylistic preferences.
 | I have a stock panel to convert | [`docs/09-install-from-stock.md`](docs/09-install-from-stock.md) |
 | What should I avoid? | [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md) |
 | How was this written / what went wrong | [`docs/08-lessons.md`](docs/08-lessons.md) |
+| The HydroVive amp and why it is silent | [`docs/14-hydrovive-recovery.md`](docs/14-hydrovive-recovery.md) |
 
 ---
 
