@@ -28,8 +28,8 @@ Stages 0–4 and 6 need **no UART and no USB**. Stage 5's failure path may.
 
 ## 0.1 It is not the steam controller
 
-The LAN has more than one ThermaSol device. **`10.0.90.49` is a T2000 steam generator
-controller**, not the panel — it answers port 80 with:
+The LAN has more than one ThermaSol device. **The T2000 steam generator controller** (an address
+on the IoT VLAN, `<generator-ip>` below) is not the panel — it answers port 80 with:
 
 ```
 {"api_ver": 7, "type": "residential", "model": "T2000", "firmware": "5.65"}
@@ -44,7 +44,7 @@ it is the wrong ThermaSol thing.
 The reliable source is the UniFi client registry, because the switch port is labelled:
 
 ```
-"name": "Thermasol", "ip": "10.0.90.130", "is_wired": true,
+"name": "Thermasol", "ip": "<panel-ip>", "is_wired": true,
 "mac": "f8:dc:7a:9c:9a:e4", "hostname": "couchdb"
 ```
 
@@ -415,9 +415,11 @@ Expect `00 41 42 30 01 00 00 00 0e 00 01 00 0f 04 00 00 ... 06 ef 18 bb`.
 > that header produces valid-looking garbage. The panel speaks libavb_ab `AvbABData` (`\0AB0`),
 > which is what is written above.
 
-> **The 30-minute self-revert.** `init.nxp.rc:272` runs `tt_misc_writer guard ${ro.boot.slot_suffix} 1800`.
-> An **unmarked** A15 boot returns to the previous slot half an hour later, and it presents as
-> `A15 came up and then died`. If you see that, look for the guard before you debug anything.
+> **The 5-minute self-revert.** `/vendor/etc/init/hw/init.freescale.rc:280` runs
+> `tt_misc_writer guard ${ro.boot.slot_suffix} 300`. An **unmarked** A15 boot returns to the
+> previous slot five minutes later — the argument is the guard's window in seconds — and it
+> presents as `A15 came up and then died`. If you see that, look for the guard before you debug
+> anything.
 
 Then `adb reboot`.
 

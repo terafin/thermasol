@@ -248,7 +248,7 @@ No resolver software was involved — not dnsmasq, not unbound, not pihole. The 
 the whole change. Verified with:
 
 ```sh
-dig +short @10.0.90.1 thermatouch.tsolup.com    # the IoT-VLAN gateway the panel resolves through
+dig +short @<iot-vlan-gateway> thermatouch.tsolup.com   # the gateway the panel resolves through
 ```
 
 The panel's request lines were exactly as this page predicts:
