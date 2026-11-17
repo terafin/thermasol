@@ -312,6 +312,39 @@ The link evidence agrees rather than conflicts: on the switch, port 12's `link_d
 down without first having come up. The PHY did link at each power-on — U-Boot reached
 `initr_net` — and the failure is downstream of it, in Linux, with the command line above.
 
+**A first-stage failure hangs; it does not loop.** Android's own restart path cannot recover the
+unit, because the pad that carries the reset is owned by the touch controller at steady state.
+Four separate trees are needed to show it, and each cite below names its own:
+
+- **U-Boot, `varigit/uboot-imx@e20d4ecd9f`.** U-Boot and its SPL mux `GPIO1_IO02` to
+  `WDOG1_WDOG_B`: `board/variscite/imx8mm_var_dart/imx8mm_var_dart.c:39-40,97-101` and
+  `spl.c:329-330,338-342`.
+- **The panel's own DT** — the live dump recorded at `8427df15a7…` (see the tree-observation note
+  above). Both pin groups write the same pad, `0x030`/`0x298`: `wdoggrp` in mode `1`
+  (`WDOG1_WDOG_B`) and `captouchgrp` in mode `0` (GPIO). The touch node (`atmel,maxtouch`,
+  `touch@4b`, `status = "okay"`) names `captouchgrp` as its `pinctrl-0` and takes the pad as its
+  IRQ (`irq-gpio = <&gpio1 2 1>`, `interrupt-parent` = `gpio1`).
+- **The A15 kernel tree on tellah**, `vendor/nxp-opensource/kernel_imx`, whose version string is
+  `6.6.58-4k-ga9e7dfe9bde2` — the same string the panel's boot image prints.
+  `arch/arm64/boot/dts/freescale/imx8mm-pinfunc.h:24-25` is the mode table those two values come
+  from (`GPIO1_IO2` = `0x0`, `WDOG1_WDOG_B` = `0x1`); `CONFIG_TOUCHSCREEN_ATMEL_MXT=y` in its
+  built config, so the touch driver is present before first-stage init runs. The source DTS names
+  the group (`imx8mm-var-som.dtsi:345`, `&wdog1` → `pinctrl_wdog`), but the **compiled** DT the
+  panel runs does not: its `watchdog@30280000` is `status = "okay"` with no `pinctrl-0`, and
+  nothing references `wdoggrp`. So nothing in the kernel ever puts the pad back on `WDOG_B`.
+- **The ATF tree beside it**, `vendor/nxp-opensource/arm-trusted-firmware`. A kernel restart goes
+  to PSCI, not to a kernel watchdog: `psci_sys_reset_nb` registers at priority 129
+  (`drivers/firmware/psci/psci.c:338-340`, kernel tree) against `imx2_wdt` at 128
+  (`drivers/watchdog/imx2_wdt.c:345`, kernel tree). ATF's `imx_system_reset` is external `WDOG_B`
+  only — `IMX_WDOG_B_RESET` is defined for i.MX8MM at
+  `plat/imx/imx8m/imx8mm/include/platform_def.h:189`, so it calls `imx_wdog_restart(true)`, which
+  asserts the pin and ends in `while (1)` (`plat/imx/imx8m/imx8m_psci_common.c:228-233`).
+
+With the pad on GPIO, that assertion reaches nothing and ATF waits forever. `tt_reboot_pin.ko`
+restores the mux on a normal restart, but it is a vendor module and never loads when first-stage
+init dies. So any first-stage failure parks the unit until power is cycled — which is what the
+frozen port counters show.
+
 **Check the link before booking a console session.** It is the observation that separates a unit
 that booted Linux badly from one that never got there, and it costs a glance at the switch port:
 link up at power-on means the boot reached `initr_net`, so the saved command line is the thing to
