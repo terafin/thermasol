@@ -7,3 +7,21 @@
 
 __pycache__/
 *.pyc
+
+# Build outputs. Sources and their build scripts are tracked; what they produce is not.
+*.o
+services/tt-idle-dim/tests/test_idle_logic
+services/tt-idle-dim/tests/test_playback_control
+services/tt-idle-dim/deployed/tests/test_idle_logic
+services/tt-idle-dim/deployed/tests/test_playback_control
+services/tt-idle-dim/idle_dim
+services/tt-idle-dim/deployed/idle_dim
+services/hv-recovery/flasher/hvflash
+services/hv-recovery/flasher/hvflash-host
+services/hv-recovery/flasher/hvnet
+services/hv-recovery/flasher/canprobe
+services/hv-recovery/flasher/cansniff
+services/hv-recovery/flasher/hvcatch
+services/hv-recovery/flasher/hvpoll
+services/hv-recovery/flasher/hvwatch
+services/hv-recovery/payload/out/
