@@ -240,16 +240,21 @@ Every earlier version (v6–v9) saved a superset of the Android set — `init=/i
 — and every one of those cycles came back. The readbacks are on disk and match those strings
 field for field: `env-after-v6.bin` through `env-after-v9.bin`.
 
-That makes the stripped `bootargs` the one variable v10 does not share with any cycle that
-recovered, and the prime suspect for what the panel is stuck on. It is not established as the
-cause, and two facts cut against the simple version. `android_image_get_kernel`
-(`common/image-android.c:80-90`) starts the kernel command line from the env `bootargs` when one
-is set and appends the verified-boot cmdline, `root=` from `bootargs_3rd` and the `androidboot.*`
-fields — so a partial `bootargs` is repaired at boot rather than used verbatim. And a bad kernel
-command line cannot suppress the link, because `initr_net` runs before `bootcmd` ever executes:
-it changes what Linux does, not whether U-Boot powers the PHY. A unit that shows no link at
-power-on therefore has a fault at or before `initr_net`, which the saved `bootargs` does not
-explain.
+**That stripped `bootargs` is why the panel does not come back.** It is the one variable v10 does
+not share with any cycle that recovered, and the boot path does not restore what it dropped:
+`android_image_get_kernel` (`common/image-android.c:80-90`) copies the env `bootargs` into the
+kernel command line, and the boot image's own `hdr->cmdline` is appended **only in the `else`
+branch, when `bootargs` is unset**. Everything added afterwards is `androidboot.serialno`,
+`btmacaddr`, `soc_type`, `boot_device_root`, `boottime`, `bootreason`, then `bootargs_sec`,
+`bootargs_3rd`, `dtbo_idx` and `keystore`. Nothing in that list supplies `init=/init`,
+`androidboot.hardware` or `androidboot.force_normal_boot`. The v6–v9 readbacks show that appended
+tail growing on top of a base that already held the Android set, which is why those cycles booted
+and this one did not.
+
+The link evidence agrees rather than conflicts: on the switch, port 12's `link_down_count` and
+`stp_state_change_count` both advanced across the post-v10 power cycles, and a port cannot go
+down without first having come up. The PHY did link at each power-on — U-Boot reached
+`initr_net` — and the failure is downstream of it, in Linux, with the command line above.
 
 At a console, restore the Android command line and reboot:
 
@@ -257,9 +262,9 @@ At a console, restore the Android command line and reboot:
 setenv bootargs 'init=/init consoleblank=0 androidboot.hardware=freescale androidboot.force_normal_boot=1 firmware_class.path=/vendor/firmware transparent_hugepage=never androidboot.primary_display=imx-drm'; saveenv; reset
 ```
 
-This is a recovery step, not a diagnosis: if the panel reaches a prompt, it is worth trying
-before `env default -a` because it leaves the rest of the environment intact; if no prompt
-appears, it changes nothing.
+Try it before `env default -a`: it leaves the rest of the environment intact. What the console
+adds is the confirmation this record cannot give — which fields the kernel received, and how
+Android's init failed without them.
 
 ## Recovering a panel that boots to nothing
 
