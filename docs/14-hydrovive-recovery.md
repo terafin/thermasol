@@ -283,6 +283,17 @@ That is also why the panel booted for months with these same images: every earli
 `androidboot.hardware=freescale`, so the lookup succeeded on its second property and nothing
 depended on `fstab.nxp` being present.
 
+Two other routes reach the same mount, both needing a `dtbo` write and a `vbmeta` re-sign, because
+`dtbo` is a chain part of `vbmeta` (the panel's DTB lists `boot_devices` and `vbmeta` parts
+`vbmeta,dtbo,boot,system,vendor,product`). A `dtbo` supplying
+`/firmware/android/hardware = "freescale"` satisfies `GetFstabPath()` directly, since
+`fs_mgr_get_boot_config` reads the device tree before `ro.boot` or the cmdline. A `dtbo` restoring
+the `/firmware/android/fstab` sub-tree works for a different reason:
+`ReadDefaultFstab()` merges `ReadFstabFromDt()` ahead of the file lookup and returns true if either
+populated entries, gated only by `IsDtFstabCompatible()` requiring
+`/firmware/android/fstab/compatible = "android,fstab"`. Restoring `bootargs` is the cheapest of the
+three and needs no image write.
+
 A different tree applies if the panel is ever put back on stock firmware. Stock Android 10 has
 no `libfstab/` directory; its function is `system/core/fs_mgr/fs_mgr_fstab.cpp:446-462` on
 `android10-release`, and it tries only `hardware` then `hardware.platform` across `/odm/etc`,
