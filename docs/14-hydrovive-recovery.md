@@ -246,10 +246,50 @@ not share with any cycle that recovered, and the boot path does not restore what
 kernel command line, and the boot image's own `hdr->cmdline` is appended **only in the `else`
 branch, when `bootargs` is unset**. Everything added afterwards is `androidboot.serialno`,
 `btmacaddr`, `soc_type`, `boot_device_root`, `boottime`, `bootreason`, then `bootargs_sec`,
-`bootargs_3rd`, `dtbo_idx` and `keystore`. Nothing in that list supplies `init=/init`,
-`androidboot.hardware` or `androidboot.force_normal_boot`. The v6–v9 readbacks show that appended
-tail growing on top of a base that already held the Android set, which is why those cycles booted
-and this one did not.
+`bootargs_3rd`, `dtbo_idx` and `keystore`. That tail supplies `androidboot.force_normal_boot=1`
+(`drivers/fastboot/fb_fsl/fb_fsl_boot.c:256`, inside `#ifndef CONFIG_ANDROID_AUTO_SUPPORT`, and
+that symbol is set in neither the defconfig nor the board header) — so the missing token is not
+that one. The v6–v9 readbacks show the appended tail growing on top of a base that already held
+the Android set, which is why those cycles booted and this one did not.
+
+**The token that stops this boot is `androidboot.hardware=freescale`, through the first-stage
+fstab.** It was established at source and against the deployed image:
+
+- `init` switches to `/first_stage_ramdisk` and then calls `CreateFirstStageMount`, which needs
+  `GetFstabPath()` to return a path.
+- `GetFstabPath` (`system/core/fs_mgr/libfstab/fstab.cpp`) tries three properties in order —
+  `fstab_suffix`, `hardware`, `hardware.platform` — looking for `fstab.<suffix>` across
+  `/odm/etc`, `/vendor/etc`, `/system/etc`, `/first_stage_ramdisk/system/etc`, `/`, and
+  `/first_stage_ramdisk`.
+- `fstab_suffix` is **not** lost with the command line. `fs_mgr_get_boot_config`
+  (`libfstab/boot_config.cpp:173-191`) reads the device tree *first*, from
+  `/proc/device-tree/firmware/android/<key>`, and the panel's live DTB carries
+  `fstab_suffix = "nxp"`. So the first property is always tried, whatever the cmdline says.
+- The ramdisk in the deployed boot image has no `fstab.nxp`. Extracted from `boot_b.img`
+  (sha256 `5d81612048…`, ramdisk 19,435,281 B, LZ4 legacy, 584 entries), `cpio -t | grep fstab`
+  lists only `first_stage_ramdisk/fstab.freescale` and `system/etc/recovery.fstab`. `fstab.nxp`
+  exists only in the vendor image at `/vendor/etc/fstab.nxp`, which first stage cannot read.
+- With `fstab_suffix=nxp` missing from the ramdisk, the second property is what resolves:
+  `hardware=freescale` finds `first_stage_ramdisk/fstab.freescale`. v10's `payargs` dropped
+  `androidboot.hardware`, so neither property resolves, `GetFstabPath()` returns `""`, and
+  first-stage mount is fatal.
+
+That is also why the panel booted for months with these same images: every earlier cmdline carried
+`androidboot.hardware=freescale`, so the lookup succeeded on its second property and nothing
+depended on `fstab.nxp` being present.
+
+A different tree applies if the panel is ever put back on stock firmware. Stock Android 10 has
+no `libfstab/` directory; its function is `system/core/fs_mgr/fs_mgr_fstab.cpp:446-462` on
+`android10-release`, and it tries only `hardware` then `hardware.platform` across `/odm/etc`,
+`/vendor/etc` and `/` — no `fstab_suffix`, no `/first_stage_ramdisk`. The token that matters there
+is still `androidboot.hardware`: it is the only property asked before falling to
+`hardware.platform`. `fs_mgr_get_boot_config` is device-tree-first on both versions.
+
+Both slot images were extracted and agree. The published v1.2 boot image that slot B runs
+(sha256 `5d81612048…`, ramdisk 19,435,281 B, 584 entries) and the boot_a image deployed beside it
+(sha256 `90653e87…`, ramdisk 19,500,738 B, 585 entries) each list only
+`first_stage_ramdisk/fstab.freescale` and `system/etc/recovery.fstab`. Neither carries
+`fstab.nxp`, so the chain holds whichever slot boots.
 
 The link evidence agrees rather than conflicts: on the switch, port 12's `link_down_count` and
 `stp_state_change_count` both advanced across the post-v10 power cycles, and a port cannot go
