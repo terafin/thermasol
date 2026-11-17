@@ -324,7 +324,7 @@ Four separate trees are needed to show it, and each cite below names its own:
   (`WDOG1_WDOG_B`) and `captouchgrp` in mode `0` (GPIO). The touch node (`atmel,maxtouch`,
   `touch@4b`, `status = "okay"`) names `captouchgrp` as its `pinctrl-0` and takes the pad as its
   IRQ (`irq-gpio = <&gpio1 2 1>`, `interrupt-parent` = `gpio1`).
-- **The A15 kernel tree on tellah**, `vendor/nxp-opensource/kernel_imx`, whose version string is
+- **The A15 kernel tree on tellah**, `vendor/variscite/kernel_imx`, whose version string is
   `6.6.58-4k-ga9e7dfe9bde2` — the same string the panel's boot image prints.
   `arch/arm64/boot/dts/freescale/imx8mm-pinfunc.h:24-25` is the mode table those two values come
   from (`GPIO1_IO2` = `0x0`, `WDOG1_WDOG_B` = `0x1`); `CONFIG_TOUCHSCREEN_ATMEL_MXT=y` in its
