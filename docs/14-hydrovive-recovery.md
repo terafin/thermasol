@@ -256,15 +256,30 @@ The link evidence agrees rather than conflicts: on the switch, port 12's `link_d
 down without first having come up. The PHY did link at each power-on — U-Boot reached
 `initr_net` — and the failure is downstream of it, in Linux, with the command line above.
 
+**Check the link before booking a console session.** It is the observation that separates a unit
+that booted Linux badly from one that never got there, and it costs a glance at the switch port:
+link up at power-on means the boot reached `initr_net`, so the saved command line is the thing to
+fix; link down means the fault is at or before `initr_net` — where the two chain faults live — and
+this cause is ruled out without a UART trip.
+
+One trap for whoever checks the code next: this reading is the **vendor** tree. Upstream
+`v2019.04` (`common/image-android.c:85-90`) appends `hdr->cmdline` unconditionally, which would
+make a stripped `bootargs` harmless; the vendor tree at `e20d4ecd9f` moves that append into the
+`else` branch. The panel runs the vendor build, and the difference decides whether this cause
+exists at all.
+
 At a console, restore the Android command line and reboot:
 
 ```
 setenv bootargs 'init=/init consoleblank=0 androidboot.hardware=freescale androidboot.force_normal_boot=1 firmware_class.path=/vendor/firmware transparent_hugepage=never androidboot.primary_display=imx-drm'; saveenv; reset
 ```
 
-Try it before `env default -a`: it leaves the rest of the environment intact. What the console
-adds is the confirmation this record cannot give — which fields the kernel received, and how
-Android's init failed without them.
+Try it before `env default -a`: it leaves the rest of the environment intact.
+
+**A prompt that does not appear is an answer, not a dead end.** No prompt means no U-Boot to type
+at, so the saved `bootargs` is ruled out and the fault is at or before `initr_net` — the SPL/ATF
+or early `board_init_r` window. That is a different investigation and it starts with the serial
+download, not with this command.
 
 ## Recovering a panel that boots to nothing
 
