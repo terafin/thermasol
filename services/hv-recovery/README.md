@@ -29,3 +29,7 @@ $R/prebuilts/clang/host/linux-x86/clang-r536225/bin/clang --target=aarch64-unkno
 ```
 
 `flasher/build.sh` builds the bionic tools (needs `ANDROID_BUILD_TOP`).
+
+`payload/build.sh` builds the payload `/init` and `initrd.lz4` from these sources, the boot image's
+first-stage modules and ThermaSol's `latest.bin`, and prints their sha256. An image goes on the
+panel only from main, on the inactive slot, with those sums committed first.
