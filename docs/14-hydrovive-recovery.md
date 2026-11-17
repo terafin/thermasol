@@ -226,6 +226,61 @@ hangs leaves the link up because it only reprograms ECSPI pins. Two consequences
   `Could not get PHY for …` or `No ethernet found` and continues into `bootcmd` anyway. Only the
   console separates those two.
 
+### What the v10 cycle left on flash
+
+The v10 chain ran `setenv bootargs ${payargs}; …; saveenv`, and v10's `payargs` was the only one
+in the series that did **not** carry the Android command line:
+
+```
+console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 clk_ignore_unused keep_bootcon panic=1
+```
+
+Every earlier version (v6–v9) saved a superset of the Android set — `init=/init`,
+`androidboot.hardware`, `root=/dev/mmcblk2p6`, the verified-boot fields and, in v8/v9, `ramoops`
+— and every one of those cycles came back. The readbacks are on disk and match those strings
+field for field: `env-after-v6.bin` through `env-after-v9.bin`.
+
+**That stripped `bootargs` is why the panel does not come back.** It is the one variable v10 does
+not share with any cycle that recovered, and the boot path does not restore what it dropped:
+`android_image_get_kernel` (`common/image-android.c:80-90`) copies the env `bootargs` into the
+kernel command line, and the boot image's own `hdr->cmdline` is appended **only in the `else`
+branch, when `bootargs` is unset**. Everything added afterwards is `androidboot.serialno`,
+`btmacaddr`, `soc_type`, `boot_device_root`, `boottime`, `bootreason`, then `bootargs_sec`,
+`bootargs_3rd`, `dtbo_idx` and `keystore`. Nothing in that list supplies `init=/init`,
+`androidboot.hardware` or `androidboot.force_normal_boot`. The v6–v9 readbacks show that appended
+tail growing on top of a base that already held the Android set, which is why those cycles booted
+and this one did not.
+
+The link evidence agrees rather than conflicts: on the switch, port 12's `link_down_count` and
+`stp_state_change_count` both advanced across the post-v10 power cycles, and a port cannot go
+down without first having come up. The PHY did link at each power-on — U-Boot reached
+`initr_net` — and the failure is downstream of it, in Linux, with the command line above.
+
+**Check the link before booking a console session.** It is the observation that separates a unit
+that booted Linux badly from one that never got there, and it costs a glance at the switch port:
+link up at power-on means the boot reached `initr_net`, so the saved command line is the thing to
+fix; link down means the fault is at or before `initr_net` — where the two chain faults live — and
+this cause is ruled out without a UART trip.
+
+One trap for whoever checks the code next: this reading is the **vendor** tree. Upstream
+`v2019.04` (`common/image-android.c:85-90`) appends `hdr->cmdline` unconditionally, which would
+make a stripped `bootargs` harmless; the vendor tree at `e20d4ecd9f` moves that append into the
+`else` branch. The panel runs the vendor build, and the difference decides whether this cause
+exists at all.
+
+At a console, restore the Android command line and reboot:
+
+```
+setenv bootargs 'init=/init consoleblank=0 androidboot.hardware=freescale androidboot.force_normal_boot=1 firmware_class.path=/vendor/firmware transparent_hugepage=never androidboot.primary_display=imx-drm'; saveenv; reset
+```
+
+Try it before `env default -a`: it leaves the rest of the environment intact.
+
+**A prompt that does not appear is an answer, not a dead end.** No prompt means no U-Boot to type
+at, so the saved `bootargs` is ruled out and the fault is at or before `initr_net` — the SPL/ATF
+or early `board_init_r` window. That is a different investigation and it starts with the serial
+download, not with this command.
+
 ## Recovering a panel that boots to nothing
 
 Needs hands on the unit. There is no remote path: adb is down, the network never comes up, and
@@ -285,6 +340,10 @@ involved in this failure.
 - **U-Boot brings the link up before `bootcmd`.** `initr_net` probes the FEC and powers the PHY, so
   a link is evidence that U-Boot ran, never that Linux did. Judge how far a boot got by the
   console, not by the switch.
+- **Never `saveenv` a `bootargs` you have replaced.** A saved `bootargs` outlives the cycle that
+  set it: the next boot uses it for real, and an incomplete one is read by the bootloader as the
+  kernel command line to build on. Change `bootargs` in RAM for a test and let the reset discard
+  it; save only a value you would accept on the next unattended power-on.
 
 ## Sources
 
