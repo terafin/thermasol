@@ -350,7 +350,17 @@ Four separate trees are needed to show it, and each cite below names its own:
 With the pad on GPIO, that timeout reaches nothing and ATF waits forever. `tt_reboot_pin.ko`
 restores the mux on a normal restart, but it is a vendor module and never loads when first-stage
 init dies. So any first-stage failure parks the unit until power is cycled — which is what the
-frozen port counters show. An external pull on that same net may still reset the board — and that
+frozen port counters show. **For any future experiment on this unit, add `reboot=warm` to the test
+command line.** With it the same first-stage fatal becomes a reboot loop instead of a dead hang:
+`psci_sys_reset` sends `SYSTEM_RESET2` when `reboot_mode` is WARM or SOFT
+(`drivers/firmware/psci/psci.c:323-330`), arm64's default is COLD because `DEFAULT_REBOOT_MODE` is
+empty outside `CONFIG_ARM` (`kernel/reboot.c:31-37`), and ATF's `imx_system_reset2` calls
+`imx_wdog_restart(false)` — the internal reset, which does not need `WDOG_B`
+(`plat/imx/imx8m/imx8m_psci_common.c:237-239`). A loop is not recovery: the same saved
+environment comes back. It is the difference between a unit that retries while someone watches the
+switch port and one that is silent until power is cut, and it costs one token.
+
+An external pull on that same net may still reset the board — and that
 is recorded as an inference, not a fact:
 
 > **Inference, not established.** `03-hardware.md:58-59` records that a weak input pull-down on
@@ -430,6 +440,15 @@ reset
 ```
 
 Either way the panel then boots Android from slot `_b`, which is unmodified.
+
+**Where the blob is, and its fragility.** Working copies live under
+`~/.local/state/issue-shower-amp/` on tellah — three of them, all md5
+`1b1533ff43325d1a0c437826dd9aad88`. That is a session state directory and nothing sweeps it on
+purpose or protects it by accident, so treat the copies as provisional: before relying on the TFTP
+route, copy the image somewhere durable and serve it from there. `firmware/panel-env-record.md`
+carries its hash, its flash location and every assignment except the two device identifiers, so a
+regenerated image is possible if the copies are lost — but a regenerated image is not the original
+and the document should not be read as saying it is.
 
 **If there is no prompt**, the SoC did not reach U-Boot. What the console shows next is the
 evidence: SPL and ATF print before `board_init_r`, so their output narrows the fault to the stage
