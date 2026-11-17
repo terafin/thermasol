@@ -226,6 +226,41 @@ hangs leaves the link up because it only reprograms ECSPI pins. Two consequences
   `Could not get PHY for …` or `No ethernet found` and continues into `bootcmd` anyway. Only the
   console separates those two.
 
+### What the v10 cycle left on flash
+
+The v10 chain ran `setenv bootargs ${payargs}; …; saveenv`, and v10's `payargs` was the only one
+in the series that did **not** carry the Android command line:
+
+```
+console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 clk_ignore_unused keep_bootcon panic=1
+```
+
+Every earlier version (v6–v9) saved a superset of the Android set — `init=/init`,
+`androidboot.hardware`, `root=/dev/mmcblk2p6`, the verified-boot fields and, in v8/v9, `ramoops`
+— and every one of those cycles came back. The readbacks are on disk and match those strings
+field for field: `env-after-v6.bin` through `env-after-v9.bin`.
+
+That makes the stripped `bootargs` the one variable v10 does not share with any cycle that
+recovered, and the prime suspect for what the panel is stuck on. It is not established as the
+cause, and two facts cut against the simple version. `android_image_get_kernel`
+(`common/image-android.c:80-90`) starts the kernel command line from the env `bootargs` when one
+is set and appends the verified-boot cmdline, `root=` from `bootargs_3rd` and the `androidboot.*`
+fields — so a partial `bootargs` is repaired at boot rather than used verbatim. And a bad kernel
+command line cannot suppress the link, because `initr_net` runs before `bootcmd` ever executes:
+it changes what Linux does, not whether U-Boot powers the PHY. A unit that shows no link at
+power-on therefore has a fault at or before `initr_net`, which the saved `bootargs` does not
+explain.
+
+At a console, restore the Android command line and reboot:
+
+```
+setenv bootargs 'init=/init consoleblank=0 androidboot.hardware=freescale androidboot.force_normal_boot=1 firmware_class.path=/vendor/firmware transparent_hugepage=never androidboot.primary_display=imx-drm'; saveenv; reset
+```
+
+This is a recovery step, not a diagnosis: if the panel reaches a prompt, it is worth trying
+before `env default -a` because it leaves the rest of the environment intact; if no prompt
+appears, it changes nothing.
+
 ## Recovering a panel that boots to nothing
 
 Needs hands on the unit. There is no remote path: adb is down, the network never comes up, and
@@ -285,6 +320,10 @@ involved in this failure.
 - **U-Boot brings the link up before `bootcmd`.** `initr_net` probes the FEC and powers the PHY, so
   a link is evidence that U-Boot ran, never that Linux did. Judge how far a boot got by the
   console, not by the switch.
+- **Never `saveenv` a `bootargs` you have replaced.** A saved `bootargs` outlives the cycle that
+  set it: the next boot uses it for real, and an incomplete one is read by the bootloader as the
+  kernel command line to build on. Change `bootargs` in RAM for a test and let the reset discard
+  it; save only a value you would accept on the next unattended power-on.
 
 ## Sources
 
