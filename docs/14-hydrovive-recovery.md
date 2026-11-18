@@ -29,7 +29,7 @@ reach the chip. The remaining route is the chip's own USART2 (PA2/PA3, the pair 
 bootloader listens on), which needs the board in hand. If the chip is not read-protected, bank 1
 should still hold the v7 image it was running, and putting BFB2 back is the whole fix.
 
-## Why the unit did not fall back to v7 (root cause)
+## Why the unit did not fall back to v7
 
 `BC 01` toggles one option bit, BFB2, and erases one page (bank 2, page `0x7F`). Ghidra's decompile of
 v5 (`0x80014b0` case `0xBC`) confirms nothing else changes: the OB program call passes
@@ -39,23 +39,29 @@ The unit shipped with BFB2 = 0. On the G47x that boots bank 1 directly, with no 
 `BC 01`, BFB2 = 1, so every reset runs the ROM's dual-bank check (AN2606 Fig. 59): it jumps to a bank
 only if that bank's first word, the initial stack pointer, is "within internal SRAM".
 
-v5's initial stack pointer is **`0x20020000`**, the top of 128 KB (96 KB SRAM1/2 plus 32 KB CCM). The ST
-system bootloader rejects that value; the 96 KB top, `0x20018000`, is accepted. A G474 dual-bank
-example documented this with ST staff in 2020 (barafael/g4-dual-bank-example, "Challenge 1"), and
-AN2606 Rev 68 lists ROM V13.4's limitation as "CCSRAM/ENGI not supported", fixed in V13.5. v7 comes from
-the same template. So on reset the ROM rejects bank 2 (empty, or the same stack pointer), rejects bank 1,
-and stays in the system bootloader.
+v5's initial stack pointer is **`0x20020000`**, the top of 128 KB (96 KB SRAM1/2 plus 32 KB CCM). Some
+G47x ROMs reject that value: a G474 example documented the rejection with ST staff in 2020
+(barafael/g4-dual-bank-example, "Challenge 1"), and AN2606 Rev 68 lists V13.4's limitation as
+"CCSRAM/ENGI not supported", fixed in V13.5. But both DSV-4000 images use the same stack pointer, and
+ThermaSol's own updates go through the same toggle, so the ROM on these units probably accepts it.
+That leaves two states that fit everything observed:
+
+- **S1, ROM rejects both banks:** the MCU stays in the ST system bootloader.
+- **S2, ROM accepts bank 2:** bank 2 held a valid-looking first word (an older image, its last page now
+  erased by `BC 01`). The ROM jumped into it and the core faulted or locked up without a watchdog. That
+  matches the quiet bus: no frames and no error bursts over 120 s, so no reset loop.
 
 What follows:
 
 - **v7 is intact in bank 1.** Only bank 2's last page was erased.
-- **The MCU is in the ST system bootloader.** Its interfaces are USART1 (PA9/PA10), USART2 (PA2/PA3),
+- **In S1 the MCU is in the ST system bootloader; in S2 it gets there with BOOT0 (PB8) held high across a
+  reset** (nSWBOOT0 is still the factory 1). The bootloader's interfaces are USART1 (PA9/PA10), USART2 (PA2/PA3),
   USART3 (PC10/PC11), I2C2/3/4, SPI1/2 and DFU. On G47x it has no FDCAN, so nothing on the CAN bus can
   reach it, and none of those pins reaches the M12 harness (5-pin: shield, 24 V, GND, CAN_H, CAN_L).
-- **The fix is one option-byte write.** Connect to USART2 (PA2/PA3, 8E1, send `0x7F`; no BOOT0 change is
-  needed because the chip is already in the bootloader), then write the user option bytes with BFB2 = 0.
-  On the next reset the G47x boots bank 1 directly and v7 runs. No firmware is flashed.
-- **Do not flash v5** to fix this. It carries the same stack pointer and would not change the outcome.
+- **The fix is one option-byte write.** Connect to USART2 (PA2/PA3, 8E1, send `0x7F`). If it answers, the
+  MCU is in S1; if not, it is in S2: hold BOOT0 high, power-cycle and connect again. Then write the user
+  option bytes with BFB2 = 0. On the next reset the G47x boots bank 1 directly and v7 runs. No firmware is flashed.
+- **Do not flash v5** to fix this. v7 is already in bank 1; clearing BFB2 is enough.
 
 ### More checks from the panel (2026-11-18)
 
