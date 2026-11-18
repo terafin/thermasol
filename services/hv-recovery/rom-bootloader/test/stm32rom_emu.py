@@ -8,7 +8,8 @@ v5=open(sys.argv[1],'rb').read(); FLASH[:len(v5)]=v5
 OPTR=[int(sys.argv[2],16)]
 OLD_ROM=len(sys.argv)>3 and sys.argv[3]=='old'
 log=open(sys.argv[4] if len(sys.argv)>4 else '/dev/null','a')
-def ob(): v=OPTR[0]; return bytearray(struct.pack('<II',v,(~v)&0xffffffff)+b'\xff'*0x38)
+OBREST=[bytearray(b'\xff\xff\x00\xff\x00\xff\xff\xff'*5)]   # non-0xFF "rest" so an 8-byte write that erases it is detectable
+def ob(): v=OPTR[0]; return bytearray(struct.pack('<II',v,(~v)&0xffffffff))+OBREST[0]
 def rd(a,n):
     if 0x08000000<=a and a+n<=0x08080000: return bytes(FLASH[a-0x08000000:a-0x08000000+n])
     if 0x1FFF7800<=a and a+n<=0x1FFF7840:
@@ -57,10 +58,10 @@ def handle(c):
                 for y in d: cs^=y
                 if cs!=ck: w(NACK); continue
                 if 0x1FFF7800<=a<0x1FFF7840:
-                    buf=ob(); buf[a-0x1FFF7800:a-0x1FFF7800+N]=d
+                    buf=bytearray(b'\xff'*48); buf[a-0x1FFF7800:a-0x1FFF7800+N]=d   # AN3155: OB area erased, then written
                     v,cmp_=struct.unpack_from('<II',buf,0)
                     if cmp_!=(~v)&0xffffffff and N>=8: w(NACK); continue
-                    OPTR[0]=v; log.write(f'  OPTR <- {v:#010x}\n'); w(ACK)
+                    OPTR[0]=v; OBREST[0]=bytearray(buf[8:48]); log.write(f'  OPTR <- {v:#010x} rest_intact={bytes(buf[8:48])==b"\xff\xff\x00\xff\x00\xff\xff\xff"*5}\n'); w(ACK)
                     log.write('  OB reload -> reset\n'); log.flush(); c.close(); return
                 elif 0x08000000<=a<0x08080000:
                     FLASH[a-0x08000000:a-0x08000000+N]=d; w(ACK)
@@ -77,4 +78,4 @@ s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind
 open(sys.argv[4]+'.optr','w').write(hex(OPTR[0])) if len(sys.argv)>4 else None
 while True:
     c,_=s.accept(); handle(c)
-    if len(sys.argv)>4: open(sys.argv[4]+'.optr','w').write(hex(OPTR[0]))
+    if len(sys.argv)>4: open(sys.argv[4]+'.optr','w').write(hex(OPTR[0])); open(sys.argv[4]+'.rest','w').write(OBREST[0].hex())

@@ -1,0 +1,3 @@
+bc6fd9053adb4aad03531ce3420cff89096b2edccf3939868d927d0227cf131d  /home/terafin/.local/state/issue-thermasol-audit/repo/services/hv-recovery/rom-bootloader/run-20261118-025114/3-flash.bin
+bank1 SP/RV 0x20020000 0x80033cd
+bank2 SP/RV 0xffffffff 0xffffffff

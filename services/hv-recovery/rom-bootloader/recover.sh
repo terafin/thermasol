@@ -16,19 +16,10 @@ if ! $BL read 0x1FFF7800 48 "$D/2-ob.bin"; then
   if $BL read 0x40022020 4 "$D/2-optr-reg.bin"; then
     REG=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read())[0]))" "$D/2-optr-reg.bin")
     echo "FLASH_OPTR register: $REG" | tee "$D/2-ob.txt"
-    if [ "$REG" = "0xfffff8aa" ]; then
-      echo "That is exactly the ST factory value with BFB2 set (the state BC 01 leaves)."
-      read -r -p "Write the ST factory option word 0xFFEFF8AA (BFB2=0, nothing else differs)? type FACTORY: " ok
-      if [ "$ok" = FACTORY ]; then
-        python3 -I -c "import struct;open('$D/4-ob-new.bin','wb').write(struct.pack('<II',0xFFEFF8AA,(~0xFFEFF8AA)&0xffffffff))"
-        $BL write 0x1FFF7800 "$D/4-ob-new.bin" || echo "(no ACK; checking)"; sleep 3
-        if $BL read 0x40022020 4 "$D/5-reg-after.bin" 2>/dev/null; then
-          echo "FLASH_OPTR after: $(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read())[0]))" "$D/5-reg-after.bin")"
-        else echo "No bootloader answer after the write: expected if v7 is now running. Check the panel for 0x143 frames."; fi
-        exit 0; fi
-    fi
+    [ "$REG" = "0xfffff8aa" ] && echo "That is the ST factory value with only BFB2 set - the expected state."
   fi
-  echo "Not writing blind. Use STM32CubeProgrammer: STM32_Programmer_CLI -c port=<tty> br=57600 P=EVEN -ob BFB2=0 -ob displ"; exit 5; fi
+  echo "Not writing: a Write Memory to the option area erases all 48 option bytes (AN3155), and this ROM will not let them be read back first."
+  echo "Use STM32CubeProgrammer: STM32_Programmer_CLI -c port=<tty> br=57600 P=EVEN -ob BFB2=0 -ob displ"; exit 5; fi
 xxd "$D/2-ob.bin" | tee "$D/2-ob.txt"
 OPTR=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read()[:4])[0]))" "$D/2-ob.bin")
 python3 -I -c "import sys;v=int(sys.argv[1],16);print('OPTR',hex(v),'BFB2=',v>>20&1,'DBANK=',v>>22&1,'nSWBOOT0=',v>>26&1,'nBOOT0=',v>>27&1,'RDP=',hex(v&0xff))" $OPTR | tee -a "$D/2-ob.txt"
@@ -43,15 +34,20 @@ import struct,sys; d=bytearray(open(sys.argv[1],'rb').read()); old,comp=struct.u
 assert comp == (~old & 0xffffffff), f"unexpected OB layout: {old:#x} / {comp:#x} - stop"
 assert (old & 0xff) == 0xaa, "RDP is not level 0 (0xAA) - stop, never touch RDP"
 v = old & ~(1<<20)
-struct.pack_into('<II',d,0,v,(~v)&0xffffffff); open(sys.argv[2],'wb').write(bytes(d[:8])); print(f"OPTR {old:#010x} -> {v:#010x}")
+assert len(d)==48, f"need the full 48-byte option block, got {len(d)}"
+struct.pack_into('<II',d,0,v,(~v)&0xffffffff)
+# AN3155: a Write Memory to the option area erases ALL option bytes first, so write back the whole
+# 48-byte block as read, with only OPTR/its complement changed.
+open(sys.argv[2],'wb').write(bytes(d)); print(f"OPTR {old:#010x} -> {v:#010x} (full 48-byte block rewritten)")
 PY
 if ! $BL write 0x1FFF7800 "$D/4-ob-new.bin" | tee "$D/4-write.txt"; then
   echo "Write did not get an ACK. Checking whether it took (the ROM resets after an option-byte write)..."; fi
 sleep 3
 echo "[5] verify: reconnect and read OPTR back"
-if $BL read 0x1FFF7800 8 "$D/5-ob-after.bin" 2>/dev/null; then
+if $BL read 0x1FFF7800 48 "$D/5-ob-after.bin" 2>/dev/null; then
   NEWV=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read()[:4])[0]))" "$D/5-ob-after.bin")
   echo "OPTR after: $NEWV"
+  python3 -I -c "import sys;a=open(sys.argv[1],'rb').read();b=open(sys.argv[2],'rb').read();diff=[i for i in range(48) if a[i]!=b[i]];print('bytes changed vs before:',diff);sys.exit(0 if set(diff)<=set(range(8)) else 1)" "$D/2-ob.bin" "$D/5-ob-after.bin" || { echo "WARNING: option bytes outside OPTR changed - inspect 2-ob.bin vs 5-ob-after.bin"; exit 8; }
   [ $(( NEWV >> 20 & 1 )) -eq 0 ] && echo "SUCCESS: BFB2 is clear. Power-cycle; the MCU boots bank 1 (v7)." || { echo "FAILED: BFB2 still set."; exit 6; }
 else
   echo "No bootloader answer after the write. That is expected if the MCU left the ROM and is now running v7."

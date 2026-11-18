@@ -10,7 +10,7 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
   1. identifies the chip (refuses anything but device ID 0x469, STM32G47x),
   2. reads the user option bytes at `0x1FFF7800`,
   3. backs up the full 512 KB flash and prints both banks' vector words,
-  4. only after you type `YES`, writes the option word with **BFB2 cleared and nothing else changed**.
+  4. only after you type `YES`, rewrites the full 48-byte option block with **BFB2 cleared and every other byte as read** (a Write Memory to the option area erases all of it first), then reads it back and checks nothing else changed.
 
 Step 4 refuses unless the read-back has the value/complement layout, RDP is level 0 (`0xAA`), and the
 new value differs only in bit 20. On a unit in the state described in docs/14 it writes `0xFFEFF8AA`, the
@@ -20,7 +20,7 @@ ST factory default, after which the G47x boots bank 1 directly and the original 
 
 - **No answer at step 1:** the MCU is running stale bank-2 code. Hold BOOT0 (PB8) at 3.3 V through about
   10 kΩ, power-cycle the shower supply, and run it again.
-- **Option-byte read refused at step 2:** if the FLASH_OPTR register reads exactly `0xFFFFF8AA` (ST factory value with BFB2 set), the script offers to write the factory word `0xFFEFF8AA` after you type `FACTORY`, then verifies it. Otherwise: older G474 ROMs (before V13.5, `0xD5`) refuse reads above
+- **Option-byte read refused at step 2:** the script does not write. A Write Memory to the option area erases all 48 option bytes (AN3155), and this ROM will not let them be read back first, so a partial write could change other option fields. older G474 ROMs (before V13.5, `0xD5`) refuse reads above
   `0x1FFF73FF`. The script prints the FLASH_OPTR register instead and stops. Use STM32CubeProgrammer over
   a UART (it talks to the same ROM bootloader): its Option Bytes view shows BFB2 as a checkbox; untick it,
   Apply, change nothing else. Or from the command line, with a USB-serial adapter on PA2/PA3:
