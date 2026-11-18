@@ -44,8 +44,13 @@ The compiled default environment in the panel's own bootloader binary contains:
 cmaargs=if test $sdram_size = 1024; then setenv cmavar 320M@0x400M-0xb80M; else setenv cmavar 800M@0x400M-0xb80M; fi; setenv bootargs ${bootargs} cma=${cmavar};
 ```
 
-On this 2 GB panel that is `cma=800M`, the cause of the 30-second touch lag fixed on
-2026-10-11. The fix below restores the October values instead.
+On this 2 GB panel that is `cma=800M`. That is the vendor's intended value, and it is the cause of
+the 30-second touch lag fixed on 2026-10-11. Measured on this panel at 800M (Android 10,
+`~/tt-recovery/backstop-20261011/LEDGER.md`): `workingset_refault` 86,130/s and `pgsteal_kswapd`
+86,495/s, with about 600 MB idle in CMA while the rest of memory thrashed. Overriding `cmaargs`
+to use the device-tree default (320M) dropped refaults to about 5,400/s. The saved environment
+has carried that override since. It has not been re-measured at 800M on Android 15. The fix
+below restores the October values instead.
 
 ## Tools
 
@@ -57,8 +62,9 @@ On this 2 GB panel that is `cma=800M`, the cause of the 30-second touch lag fixe
 
 ## Wiring
 
-Header **U6** on the carrier board: **GND / TX / RX / 3P3U**, 3.3 V logic, **115200 8N1**. The
-holes are through-holes, not pins, so the wire is soldered or wedged.
+Header **U6** on the carrier board: **GND / TX / RX / 3P3U**, 3.3 V logic, **115200 8N1**. It is
+the SoC's UART4 (`ttymxc3`, the console U-Boot and the kernel print to). The holes are
+through-holes, not pins, so the wire is soldered or wedged.
 
 | Adapter | U6 |
 |---|---|
