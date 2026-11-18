@@ -5,7 +5,10 @@ set -euo pipefail
 HOST=${1:?usage: recover.sh <esp32-ip> [port]}; PORT=${2:-6639}
 D=$(dirname "$0")/run-$(date +%Y%m%d-%H%M%S); mkdir -p "$D"
 socat -d pty,raw,echo=0,link="$D/tty" tcp:$HOST:$PORT & SP=$!; trap 'kill $SP 2>/dev/null' EXIT; sleep 1
-echo "[1] identify (Get/GetID/GetVersion)"; stm32flash -b 57600 -m 8e1 "$D/tty" | tee "$D/1-identify.txt"
+echo "[1] identify (Get/GetID/GetVersion)"
+if ! stm32flash -b 57600 -m 8e1 "$D/tty" | tee "$D/1-identify.txt" | grep -q 'Device ID'; then
+  echo "No answer from the ROM bootloader. The MCU is probably running (locked up in) bank-2 code."
+  echo "Hold BOOT0 (PB8) at 3.3 V through ~10k, power-cycle the shower supply, then rerun. Stopping."; exit 4; fi
 grep -q 'Device ID *: 0x0469' "$D/1-identify.txt" || { echo "not an STM32G47x (0x469) - stop"; exit 2; }
 echo "[2] read option bytes 0x1FFF7800 (48 B)"; stm32flash -b 57600 -m 8e1 -c -S 0x1FFF7800:48 -r "$D/2-ob.bin" "$D/tty"; xxd "$D/2-ob.bin" | tee "$D/2-ob.txt"
 OPTR=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read()[0:4])[0]))" "$D/2-ob.bin")
