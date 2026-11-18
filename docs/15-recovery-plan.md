@@ -13,19 +13,28 @@ Every fact below was checked directly against one of these, and nothing else:
 
 ## What is wrong
 
-The panel's saved U-Boot environment holds a `bootargs` with no Android settings in it:
+The v10 environment was written to eMMC at 09:56 UTC on 2026-11-17 (md5 `a2447cd8…`), and the
+supply was cycled at 09:56:43. As written, its `bootargs` is still correct. Its `bootcmd` is a
+one-shot chain, and U-Boot runs that chain on the first power-on (`bootdelay=0`):
+
+- **Steps 0–1:** `setenv bootcmd ${bootcmd_safe}; saveenv`. From then on `bootcmd` is
+  `run bootcmd_orig`, which runs the stock `run cmaargs; boota ${fastboot_dev}`.
+- **Steps 13–15:** `setenv bootargs ${payargs}; …; saveenv`. That saves `bootargs` as
+  `payargs`, which has no Android settings in it:
 
 ```
 console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 clk_ignore_unused keep_bootcon panic=1
 ```
 
-The v10 boot script saved it (its steps 13–15: `setenv bootargs ${payargs}; …; saveenv`) after
-first setting `bootcmd` back to stock (steps 0–1). So every power-on runs the stock `boota`
-with this command line. The bootloader uses a saved `bootargs` in place of the boot image's
-own command line. Android's first stage then looks for its mount table. The ramdisk in
-`boot.img` holds only `first_stage_ramdisk/fstab.freescale`, which is found through
-`androidboot.hardware=freescale`. That token is missing, so the boot stops there. Power cycles
-cannot change it, because the saved environment comes back unchanged every time.
+Then `booti` ran the payload. Every power-on since runs the stock `boota` with that saved
+command line. The bootloader uses a saved `bootargs` in place of the boot image's own command
+line. Android's first stage then looks for its mount table. The ramdisk in `boot.img` holds only
+`first_stage_ramdisk/fstab.freescale`, which is found through `androidboot.hardware=freescale`.
+That token is missing, so the boot stops there. Power cycles cannot change it, because the saved
+environment comes back unchanged every time.
+
+What is on the eMMC after that first boot has never been read back; the panel has been dark since.
+Step 4 sets all three variables, so it repairs the panel whether or not the chain finished.
 
 Deleting `bootargs` is **not** a fix. The boot image's header command line has no
 `androidboot.hardware` and no `init=` either:
@@ -87,7 +96,14 @@ exactly like a dead console.
 3. Press and keep pressing **Enter** in the terminal, then turn the supply **on**.
    The bootloader prints `Hit any key to stop autoboot`; any key stops it. The saved delay is 1
    second, so starting to press before power-on means the key is already there.
-4. At the `=>` prompt, type these three lines. They are the exact values from the October
+4. At the `=>` prompt, first record what is there now. Copy the output into the notes; it is
+   the only read-back of the environment since v10 ran:
+
+   ```
+   printenv bootcmd bootargs stage
+   ```
+
+   Then type these three lines. They are the exact values from the October
    backup:
 
    ```
@@ -102,7 +118,8 @@ exactly like a dead console.
    printenv bootcmd cmaargs bootargs
    ```
 
-   Read each printed line against step 4, character by character. `bootargs` must contain
+   Read each printed line against step 4, character by character. `bootcmd` must read exactly
+   `run cmaargs; boota ${fastboot_dev}`, and `bootargs` must contain
    `androidboot.hardware=freescale`.
 6. Save and boot:
 
