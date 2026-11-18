@@ -149,3 +149,28 @@ This removes the leftover variables from the v10 experiment (`payargs`, `fdtaddr
 
 Not part of this trip. There is no known way into the amp's board yet, and no evidence about
 its connectors. Planning for it starts only once the board can be seen.
+
+## The amp — research only, nothing to act on yet
+
+Everything below is read from the v5 firmware image (`latest.bin`, sha256 `37c81d0b…`) and
+ThermaSol's HydroVive installation manual. Nothing has been tested on the unit.
+
+**What the chip uses, from its interrupt table and pin setup:**
+
+- **USART2 on PA2/PA3**, alternate function 7 (`0x8002f8a`: pins `0x0C`, mode 2, AF 7). That is
+  the exact pair ST's ROM bootloader listens on for USART2 (AN2606 Rev 61, Table 101). It is the
+  realistic way in without a debugger.
+- **USART1** is also active (the Bluetooth link). **USB is unused** — no USB handlers in the vector
+  table — so USB DFU is not an option.
+- **I2C2 on PA8/PA9** (`0x8002d20`: pins `0x300`, open-drain, AF 4) to the DSP.
+- CAN has no interrupt handler; the firmware polls it. The ROM bootloader has no CAN at all, which
+  is why nothing on the panel can reach the chip now.
+
+**How the unit comes down (installation manual):** it is held by 3.5-inch screws under screw covers,
+sealed with silicone, and hangs on its brackets when lowered. It connects by two plugs, an M12
+power/data cable to the PDM and an audio cable, so it can be unplugged without cutting anything.
+Its electronics are inside a sealed module; whether the board is reachable without opening that
+housing is unknown.
+
+**The next step is a look, not a fix:** lower the unit, photograph the module and any access panel
+or label, and stop. Only once the board can be seen does a recovery procedure get written.
