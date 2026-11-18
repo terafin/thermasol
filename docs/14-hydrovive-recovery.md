@@ -396,10 +396,27 @@ the variable is not a fix: with no env `bootargs`, the vendor `boota` falls back
 image's own header cmdline, and the v1.2 header carries
 `androidboot.vendor.apex.com.google.android.widevine=… androidboot.lcd_density=120 earlycon=…
 console=ttymxc3,115200 clk_ignore_unused printk.devkmsg=on` — no `androidboot.hardware`, and no
-`init=` either. The same failure follows. `env default -a` is safe only because the board config
-supplies one (`include/configs/imx8mm_var_dart_android.h:60-68` at `e20d4ecd9f` is the compiled
-default, and it carries the token). After any restore, `printenv bootargs` and read it before
-`reset`.
+`init=` either. The same failure follows. `env default -a` restores a command line that works only
+because the board config supplies the token (`include/configs/imx8mm_var_dart_android.h:60-68` at
+`e20d4ecd9f` is the compiled default, and it carries it). After any restore, `printenv bootargs`
+and read it before `reset`.
+
+**`env default -a` is not a no-op restore — it changes more than the command line.** The saved
+environment is not the compiled default: this unit's carries an October override,
+`cmaargs=echo cma: using device-tree default`, so the device tree's CMA size has been in force.
+`env default -a` replaces that with the compiled body, which sets `cma=800M` on this 2 GB board
+(`cmaargs` branches on `sdram_size = 1024`). At 800M this panel was measured with
+`workingset_refault` at 40k/s and io PSI 75% while 586 MB of its 598 MB `MemFree` sat in `CmaFree`
+— about 12 MB usable (A10, `~/tt-recovery/backstop-20261011/LEDGER.md:158-162` on tellah). With
+the device-tree default in force the same ledger records settle refault of 2,128/1,290/2,219/s
+across three runs at the 60-second mark under a six-app cold-launch burst (`:317`), falling to
+2–90/s by 90–150 s (`:231`).
+So prefer the single-variable restore above; reach for `env default -a` knowing it also resets CMA,
+and expect the unit to boot but page badly.
+
+The override is also this unit's only saved environment: the ledger records the `saveenv` at
+20:21:53 on 2026-10-11 as the first ever, with the block at eMMC `0x400000` verified zeros before
+it (`:173`). Before that the unit ran compiled defaults, which is where the 800M figure comes from.
 
 **A prompt that does not appear is an answer, not a dead end.** No prompt means no U-Boot to type
 at, so the saved `bootargs` is ruled out and the fault is at or before `initr_net` — the SPL/ATF
