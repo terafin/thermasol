@@ -66,8 +66,8 @@ LQFP64 pin numbers (DS12288, Table 12). Pin 1 is at the dot; numbering runs coun
 | PB5 / PB6 (FDCAN2) | 58 / 59 | the CAN transceiver; leave alone |
 | PA13 / PA14 (SWD) | 49 / 50 | SWDIO / SWCLK, if an ST-LINK is used instead |
 
-PA2 and PA3 sit either side of the VSS/VDD pair at 15-16, so a probe slip there shorts the supply:
-use fine probes or tack wires.
+PA2 and PA3 sit either side of the corner, with VSS/VDD (15-16) between them on PA2's side, so a probe
+slip from pin 14 can short the supply: use fine probes or tack wires.
 
 PA2/PA3 run to the Bluetooth module's UART, so its RX/TX pads are a second place to connect; the
 module is unpowered while the MCU sits in the ROM. v5 sends it `AA 00 03 02 00 <action> <chk>` at
@@ -125,8 +125,10 @@ writes, and reads it back. It never touches bank 2 or the option bytes.
 The board has no known header for USART2. Ways onto the pins without soldering, from easiest:
 
 - **Spring-needle probes on a magnetic base** (Sensepeek PCBite SP10, 0.5 mm tip, made for fine-pitch
-  legs; the 4-probe kit is Sensepeek PCBITE-7028, Mouser 90-PCBITE-7028). Two of them, one on pin 14 and one on pin 17. Those two are 1.5 mm apart, not neighbours, so
-  each probe has room. Take ground from any large ground point on the board, not pin 15, so no probe
+  legs; the 4-probe kit is Sensepeek PCBITE-7028, Mouser 90-PCBITE-7028). Two of them, one on pin 14 and one on pin 17. On the LQFP64 pins 1-16 run
+  down one side, so 14 (PA2), 15 (VSS) and 16 (VDD) are the last three before a corner and 17 (PA3) is
+  the first pin round it: the two probes come in from different sides and cannot touch. Watch pin 14's
+  neighbour 16 (3.3 V) two pins along; a slip there shorts the supply through the probe. Take ground from any large ground point on the board, not pin 15, so no probe
   sits next to another. The run takes a few minutes, so nothing may move during it.
 - **The Bluetooth module's edge pads** (BM64 19/20, BM62 32/33), about 1 mm wide, with the same probes
   or micro-grabbers.
