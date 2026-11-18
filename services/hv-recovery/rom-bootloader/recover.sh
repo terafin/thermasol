@@ -61,6 +61,14 @@ if ! python3 -I -c "import struct,sys;sp,rv=struct.unpack_from('<II',open(sys.ar
   echo "If the firmware is in bank 2 instead, this is a different state from docs/14; keep 3-flash.bin and stop."; exit 10; fi
 if [ $(( OPTR >> 20 & 1 )) -eq 0 ]; then
   echo "BFB2 is already 0: clearing it is not the fix. Inspect the bank vectors above and 3-flash.bin. Stopping."; exit 3; fi
+if [ -n "${RV:-}" ] && [ "$RV" -ge $((0xD5)) ]; then
+  echo "This ROM is V13.5 or later, which accepts a CCM stack pointer (AN2606 Table 102: 'Add CCSRAM/ENGI"
+  echo "support'). On it the ROM should have started v5 or v7, so the diagnosis in docs/14 does not explain"
+  echo "this unit. Clearing BFB2 boots bank 1 directly and is probably still harmless, but the cause is"
+  echo "something else; the flash backup in $D is the thing to study first."
+  read -r -p "type V135-CONTINUE to clear BFB2 anyway, anything else to stop: " ok135
+  [ "$ok135" = V135-CONTINUE ] || { echo "stopped before any write"; exit 12; }
+fi
 read -r -p "[4] write OPTR with BFB2=0 (MCU resets afterwards)? type YES: " ok; [ "$ok" = YES ] || { echo "stopped before any write"; exit 0; }
 python3 -I - "$D/2-ob.bin" "$D/4-ob-new.bin" <<'PY'
 import struct,sys; d=bytearray(open(sys.argv[1],'rb').read()); old,comp=struct.unpack_from('<II',d,0)

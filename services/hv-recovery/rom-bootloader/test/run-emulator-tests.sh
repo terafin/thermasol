@@ -25,5 +25,6 @@ check drop      0xFFFFF8AA new 16698 0 0xffeff8aa YES 0xD4 "retrying" "" 0x08020
 check bank2     0xFFFFF8AA new 16699 9 0xffeff8aa YES 0xD4 "BANK-2 OPTION BYTES CHANGED" "" "" 1
 check bank1blank 0xFFFFF8AA new 16700 10 0xfffff8aa YES 0xD4 "bank 1 has no bootable image" "" "" "" 2
 check fbswap    0xFFFFF8AA new 16701 11 0xfffff8aa YES 0xD4 "FB_MODE=1" "" "" "" "" 1
+check rom135    0xFFFFF8AA new 16702 12 0xfffff8aa YES 0xD5 "V13.5 or later, which accepts a CCM stack pointer"
 check rdp1      0xFFFFF8BB new 16693 1 0xfffff8bb
 echo "$pass passed, $fail failed"; [ $fail -eq 0 ]

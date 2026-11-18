@@ -125,7 +125,7 @@ writes, and reads it back. It never touches bank 2 or the option bytes.
 The board has no known header for USART2. Ways onto the pins without soldering, from easiest:
 
 - **Spring-needle probes on a magnetic base** (Sensepeek PCBite SP10, 0.5 mm tip, made for fine-pitch
-  legs). Two of them, one on pin 14 and one on pin 17. Those two are 1.5 mm apart, not neighbours, so
+  legs; the 4-probe kit is Sensepeek PCBITE-7028, Mouser 90-PCBITE-7028). Two of them, one on pin 14 and one on pin 17. Those two are 1.5 mm apart, not neighbours, so
   each probe has room. Take ground from any large ground point on the board, not pin 15, so no probe
   sits next to another. The run takes a few minutes, so nothing may move during it.
 - **The Bluetooth module's edge pads** (BM64 19/20, BM62 32/33), about 1 mm wide, with the same probes
