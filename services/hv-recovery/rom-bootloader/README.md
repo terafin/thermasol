@@ -96,9 +96,13 @@ PA3 (USART2_RX) to input with a weak pull-up (about 40 kΩ). Expect about 3.3 V 
 - the module's **RXD** pad (PA2) at 3.3 V says the ROM is running and driving its TX;
 - the module's **TXD** pad (PA3) at 3.3 V says nothing is clamping the ROM's RX line.
 
-PA3 near 0 V or about 0.6 V means the module is holding it down; use the MCU's pins 14/17 instead.
-PA2 low as well means the MCU is not in the ROM at all (see "No answer at step 1"). The MCU's own
-pins are the safer default. A factory
+The MCU pin and the module pad are the same net, so the reading is the same at either end, and
+moving the clip does not get around a clamp. PA3 near 0 V or about 0.6 V means something on that net
+is holding it down. Look for a series resistor between the MCU and the module on that line: wiring
+on the MCU side of it (pin 17) lets the ESP32 drive PA3 through the resistor's isolation. With no
+such resistor, the ESP32 (through its own 1 kΩ) may still drive a 0.6 V clamp high enough; if
+`recover.sh` gets no answer, lifting the module's TXD pad or that resistor frees the line. PA2 low as
+well means the MCU is not in the ROM at all (see "No answer at step 1"). A factory
 header on the board, if there is one, is more likely the USART1 console on PC4/PC5 (LQFP64 pins 22/23,
 DS12288), which the ROM does not listen on. No answer from such a header says nothing about
 the ROM.
