@@ -51,6 +51,15 @@ That leaves two states that fit everything observed:
   erased by `BC 01`). The ROM jumped into it and the core faulted or locked up without a watchdog. That
   matches the quiet bus: no frames and no error bursts over 120 s, so no reset loop.
 
+**S1 is the more likely state.** Bank 2 was probably blank: the panel never updated the unit (the
+A10 app's HydroVive updater only runs when `firmware.json` lists a newer HydroVive version, and the
+server has only v5, older than the unit's v7; no backup records an update). With bank 2 reading
+`0xFFFFFFFF` the ROM rejects it and decides on bank 1. A V13.5 ROM would accept `0x20020000` and v7 would
+run and talk on CAN; it does not, so the ROM is probably V13.3 or V13.4 and the MCU is in the system
+bootloader. Those ROMs also refuse Read Memory above `0x1FFF73FF`, so reading the option bytes over the
+bootloader will likely fail; use STM32CubeProgrammer's option-byte view to clear BFB2 (see
+[`services/hv-recovery/rom-bootloader`](../services/hv-recovery/rom-bootloader/)).
+
 What follows:
 
 - **v7 is intact in bank 1.** Only bank 2's last page was erased.
