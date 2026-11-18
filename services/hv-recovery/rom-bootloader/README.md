@@ -20,7 +20,7 @@ ST factory default, after which the G47x boots bank 1 directly and the original 
 
 - **No answer at step 1:** the MCU is running stale bank-2 code. Hold BOOT0 (PB8) at 3.3 V through about
   10 kΩ, power-cycle the shower supply, and run it again.
-- **Option-byte read refused at step 2:** older G474 ROMs (before V13.5, `0xD5`) refuse reads above
+- **Option-byte read refused at step 2:** if the FLASH_OPTR register reads exactly `0xFFFFF8AA` (ST factory value with BFB2 set), the script offers to write the factory word `0xFFEFF8AA` after you type `FACTORY`, then verifies it. Otherwise: older G474 ROMs (before V13.5, `0xD5`) refuse reads above
   `0x1FFF73FF`. The script prints the FLASH_OPTR register instead and stops. Use STM32CubeProgrammer over
   a UART (it talks to the same ROM bootloader): its Option Bytes view shows BFB2 as a checkbox; untick it,
   Apply, change nothing else. Or from the command line, with a USB-serial adapter on PA2/PA3:

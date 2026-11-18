@@ -13,8 +13,22 @@ grep -q 'device_id=0x0469' "$D/1-identify.txt" || { echo "not an STM32G47x (0x46
 echo "[2] read option bytes 0x1FFF7800 (48 B)"
 if ! $BL read 0x1FFF7800 48 "$D/2-ob.bin"; then
   echo "Option-byte read refused (pre-V13.5 ROM limit). Reading FLASH_OPTR register mirror instead:"
-  $BL read 0x40022020 4 "$D/2-optr-reg.bin" && xxd "$D/2-optr-reg.bin" | tee "$D/2-ob.txt" || true
-  echo "Not writing blind. Use STM32CubeProgrammer (UART, 8E1): untick BFB2, Apply. Expect 0xFFFFF8AA -> 0xFFEFF8AA."; exit 5; fi
+  if $BL read 0x40022020 4 "$D/2-optr-reg.bin"; then
+    REG=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read())[0]))" "$D/2-optr-reg.bin")
+    echo "FLASH_OPTR register: $REG" | tee "$D/2-ob.txt"
+    if [ "$REG" = "0xfffff8aa" ]; then
+      echo "That is exactly the ST factory value with BFB2 set (the state BC 01 leaves)."
+      read -r -p "Write the ST factory option word 0xFFEFF8AA (BFB2=0, nothing else differs)? type FACTORY: " ok
+      if [ "$ok" = FACTORY ]; then
+        python3 -I -c "import struct;open('$D/4-ob-new.bin','wb').write(struct.pack('<II',0xFFEFF8AA,(~0xFFEFF8AA)&0xffffffff))"
+        $BL write 0x1FFF7800 "$D/4-ob-new.bin" || echo "(no ACK; checking)"; sleep 3
+        if $BL read 0x40022020 4 "$D/5-reg-after.bin" 2>/dev/null; then
+          echo "FLASH_OPTR after: $(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read())[0]))" "$D/5-reg-after.bin")"
+        else echo "No bootloader answer after the write: expected if v7 is now running. Check the panel for 0x143 frames."; fi
+        exit 0; fi
+    fi
+  fi
+  echo "Not writing blind. Use STM32CubeProgrammer: STM32_Programmer_CLI -c port=<tty> br=57600 P=EVEN -ob BFB2=0 -ob displ"; exit 5; fi
 xxd "$D/2-ob.bin" | tee "$D/2-ob.txt"
 OPTR=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read()[:4])[0]))" "$D/2-ob.bin")
 python3 -I -c "import sys;v=int(sys.argv[1],16);print('OPTR',hex(v),'BFB2=',v>>20&1,'DBANK=',v>>22&1,'nSWBOOT0=',v>>26&1,'nBOOT0=',v>>27&1,'RDP=',hex(v&0xff))" $OPTR | tee -a "$D/2-ob.txt"
