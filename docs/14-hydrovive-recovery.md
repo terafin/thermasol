@@ -73,7 +73,8 @@ What follows:
 - **The fix is one option-byte write.** Connect to USART2 (PA2/PA3, 8E1, send `0x7F`). If it answers, the
   MCU is in S1; if not, it is in S2: hold BOOT0 high, power-cycle and connect again. Then write the user
   option bytes with BFB2 = 0. On the next reset the G47x boots bank 1 directly and v7 runs. No firmware is flashed.
-- **Do not flash v5** to fix this. v7 is already in bank 1; clearing BFB2 is enough.
+- **Do not flash v5** to fix this. v7 is already in bank 1; clearing BFB2 is enough. v5 is a fine bank-1
+  image once BFB2 is clear, which `restore-bank1.sh` relies on if bank 1 turns out not to hold one.
 
 ### More checks from the panel (2026-11-18)
 

@@ -9,6 +9,13 @@ H=$(cd "$(dirname "$0")" && pwd); BL="python3 -I $H/an3155.py $HOST $PORT"; D=$H
 V5_SHA=37c81d0b020d0be55287a2ac836909cff0473f08a5ccc74a12eeb8c33083279f
 boots(){ python3 -I -c "import struct,sys;sp,rv=struct.unpack_from('<II',open(sys.argv[1],'rb').read(),0);sys.exit(0 if 0x20000000<sp<=0x20020000 and rv&1 and 0x08000000<=rv<0x08040000 else 1)" "$1"; }
 $BL id | grep -q 'device_id=0x0469' || { echo "not an STM32G47x (0x469) - stop"; exit 4; }
+# SYSCFG_MEMRMP.FB_MODE (RM0440): 1 means bank 2 is mapped at 0x08000000, which would turn every "bank 1"
+# address below into bank 2. AN2606 Fig. 60: the ROM sets the swap only when it jumps to user code.
+if $BL read 0x40010000 4 "$D/1-memrmp.bin" >/dev/null 2>&1; then
+  if [ $(( $(od -An -tu4 "$D/1-memrmp.bin") >> 8 & 1 )) -eq 1 ]; then
+    echo "FB_MODE=1: bank 2 is mapped at 0x08000000, so bank addresses here would be swapped. Not continuing."; exit 11; fi
+  echo "FB_MODE=0: bank 1 at 0x08000000" | tee -a /dev/null
+else echo "SYSCFG_MEMRMP not readable - continuing on the documented default (FB_MODE=0)" | tee -a /dev/null; fi
 echo "[1] back up both banks (512 KB)"; $BL read 0x08000000 0x80000 "$D/flash-before.bin"; sha256sum "$D/flash-before.bin" | tee "$D/flash-before.sha256"
 head -c 262144 "$D/flash-before.bin" > "$D/bank1-before.bin"; tail -c 262144 "$D/flash-before.bin" > "$D/bank2.bin"
 if boots "$D/bank1-before.bin"; then echo "bank 1 already boots; nothing to restore. Run recover.sh."; exit 2; fi

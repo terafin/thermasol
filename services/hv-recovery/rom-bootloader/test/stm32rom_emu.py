@@ -33,6 +33,7 @@ def rd(a,n):
     if 0x1FFFF800<=a and a+n<=0x1FFFF830:
         if OLD_ROM: return None
         return bytes(OB2[0][a-0x1FFFF800:a-0x1FFFF800+n])
+    if a==0x40010000 and n<=4: return struct.pack('<I',0x100 if os.environ.get('FB_MODE')=='1' else 0)[:n]   # SYSCFG_MEMRMP
     if a==0x40022020 and n<=4: return struct.pack('<I',OPTR[0])[:n]
     if 0x1FFF6FF0<=a and a+n<=0x1FFF7000: return bytes([ROMVER,0x00]*n)[:n] if a==0x1FFF6FFE else bytes([ROMVER]*n)
     return None

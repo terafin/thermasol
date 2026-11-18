@@ -18,6 +18,13 @@ if $BL read 0x1FFF6FFE 1 "$D/1-romver.bin" >/dev/null 2>&1; then
   if [ "$RV" -lt $((0xD4)) ]; then echo " (dual-bank boot erratum: this ROM never boots bank 2)" | tee -a "$D/1-identify.txt"
   else echo " (rejects a bank whose initial SP is above 0x20017FFF)" | tee -a "$D/1-identify.txt"; fi
 else echo "ROM build byte at 0x1FFF6FFE not readable - continuing" | tee -a "$D/1-identify.txt"; fi
+# SYSCFG_MEMRMP.FB_MODE (RM0440): 1 means bank 2 is mapped at 0x08000000, which would turn every "bank 1"
+# address below into bank 2. AN2606 Fig. 60: the ROM sets the swap only when it jumps to user code.
+if $BL read 0x40010000 4 "$D/1-memrmp.bin" >/dev/null 2>&1; then
+  if [ $(( $(od -An -tu4 "$D/1-memrmp.bin") >> 8 & 1 )) -eq 1 ]; then
+    echo "FB_MODE=1: bank 2 is mapped at 0x08000000, so bank addresses here would be swapped. Not continuing."; exit 11; fi
+  echo "FB_MODE=0: bank 1 at 0x08000000" | tee -a "$D/1-identify.txt"
+else echo "SYSCFG_MEMRMP not readable - continuing on the documented default (FB_MODE=0)" | tee -a "$D/1-identify.txt"; fi
 echo "[2] read option bytes 0x1FFF7800 (48 B)"
 if ! $BL read 0x1FFF7800 48 "$D/2-ob.bin"; then
   echo "Option-byte read refused (pre-V13.5 ROM limit). Reading FLASH_OPTR register mirror instead:"
