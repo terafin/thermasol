@@ -52,7 +52,17 @@ data sheet (DS60001403F, Tables 1-2/1-3), with the module's TXD going to the MCU
 So the ESP32's TX (GPIO17) goes on the module's **TXD** pad (that line is PA3, the MCU's RX), and the
 ESP32's RX (GPIO16) on the module's **RXD** pad (PA2). Read the marking on the can first; if it is not
 a BM62/BM64, find that module's UART pins. A series resistor between module and MCU, if fitted, is
-fine at 57600. A factory
+fine at 57600.
+
+Check before using the module pads. The module runs from its own BAT_IN supply and only comes up
+when the MCU presses its MFB power key, which never happens while the MCU sits in the ROM. Its
+I/O rail is internal ("do not connect", VDD_IO), so with the module shut down its UART pins may
+clamp the line to ground through their protection diodes, and the ROM would never see the `0x7F`
+sync byte. The data sheet does not state the shut-down pin state. With the shower supply on and
+the ESP32 **not** connected, measure each pad to GND: about 3.3 V on the module's TXD pad means
+the line is free (the ROM enables a pull-up on its RX pin); near 0 V or about 0.6 V means the
+module is holding it, so use the MCU's pins 14/17 instead. The MCU's own pins are the safer
+default. A factory
 header on the board, if there is one, is more likely the USART1 console on PC4/PC5 (LQFP64 pins 22/23,
 DS12288), which the ROM does not listen on. No answer from such a header says nothing about
 the ROM.
