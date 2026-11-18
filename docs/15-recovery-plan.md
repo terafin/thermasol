@@ -34,7 +34,7 @@ That token is missing, so the boot stops there. Power cycles cannot change it, b
 environment comes back unchanged every time.
 
 What is on the eMMC after that first boot has never been read back; the panel has been dark since.
-Step 4 sets all three variables, so it repairs the panel whether or not the chain finished.
+Step 4 sets all of them, so it repairs the panel whether or not the chain finished.
 
 Deleting `bootargs` is **not** a fix. The boot image's header command line has no
 `androidboot.hardware` and no `init=` either:
@@ -93,9 +93,12 @@ exactly like a dead console.
 1. Turn the shower supply **off** with Home Assistant
    (`switch.bathroom_bathroom_steam_shower_power`).
 2. Connect the three wires. Open the terminal: `picocom -b 115200 /dev/ttyUSB0`.
-3. Press and keep pressing **Enter** in the terminal, then turn the supply **on**.
-   The bootloader prints `Hit any key to stop autoboot`; any key stops it. The saved delay is 1
-   second, so starting to press before power-on means the key is already there.
+3. Start pressing **Enter** repeatedly in the terminal, and keep pressing. *Then* turn the
+   supply **on**. v10 left the saved delay at **0**, not the October value of 1. At 0 the
+   bootloader stops only if a key is already waiting when it checks (`common/autoboot.c`,
+   `__abortboot`: one `tstc()` check, and no countdown loop). It prints
+   `Hit any key to stop autoboot:  0` either way, so that line does not mean it waited. Pressing
+   after power-on is too late: the panel boots straight into the hang.
 4. At the `=>` prompt, first record what is there now. Copy the output into the notes; it is
    the only read-back of the environment since v10 ran:
 
@@ -103,19 +106,24 @@ exactly like a dead console.
    printenv bootcmd bootargs stage
    ```
 
-   Then type these three lines. They are the exact values from the October
-   backup:
+   Expect `bootcmd` to read `run bootcmd_orig` already. The chain's first step saved that, and
+   `bootcmd_orig` is the stock `run cmaargs; boota ${fastboot_dev}`. Expect `bootargs` to be the
+   `payargs` line above, and `stage` to be one of the chain's markers. Then type these four
+   lines; setting them all also covers any state the read-back did not predict. The first three
+   are the exact values from the October backup. The last puts the 1-second delay back, so the
+   next person at this prompt gets a real countdown:
 
    ```
    setenv bootcmd 'run cmaargs; boota ${fastboot_dev}'
    setenv cmaargs 'echo cma: using device-tree default'
    setenv bootargs 'init=/init consoleblank=0 androidboot.hardware=freescale androidboot.force_normal_boot=1 firmware_class.path=/vendor/firmware transparent_hugepage=never androidboot.primary_display=imx-drm'
+   setenv bootdelay 1
    ```
 
 5. Check them before saving:
 
    ```
-   printenv bootcmd cmaargs bootargs
+   printenv bootcmd cmaargs bootargs bootdelay
    ```
 
    Read each printed line against step 4, character by character. `bootcmd` must read exactly
@@ -142,14 +150,14 @@ exactly like a dead console.
   saved environment is not the cause. Copy everything the console printed and stop. Do not
   type anything.
 - **`printenv` shows something different from step 4.** Retype that line. Do not `saveenv`
-  until all three match.
+  until all four match.
 - **It reboots into the same hang after `reset`.** Stop at the prompt again and run
   `printenv bootargs` to confirm the save took.
 
 ## What is not touched
 
 The bootloader itself (eMMC `0x8400`), slot A, slot B, `misc`, `vbmeta` and `dtbo` are not
-written. Only three environment variables change.
+written. Only four environment variables change.
 
 ## Restoring the whole environment, if needed
 
