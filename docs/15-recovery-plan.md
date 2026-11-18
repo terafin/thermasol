@@ -174,3 +174,27 @@ housing is unknown.
 
 **The next step is a look, not a fix:** lower the unit, photograph the module and any access panel
 or label, and stop. Only once the board can be seen does a recovery procedure get written.
+
+### How ThermaSol's own amp update works, and why it stopped
+
+The panel can update the amp over CAN; the mechanism is visible on both sides.
+
+- **The amp side (v5 `0x159a–0x15f6`).** `BC 01` erases bank 2 page `0x7F` (the last 2 KB of
+  bank 2, `0x0807F800–0x0807FFFF`), inverts option bit BFB2 (bit 20) and resets. The chip then
+  boots the other flash bank.
+- **v5 has no updater in it.** Nothing in v5 receives the update frames (`0x101`/`0x102`). So the
+  receiving end has to be a separate image in the other bank: ThermaSol's CAN updater.
+- **The panel side (`libthermacan`).** `hvlsr_start_bootloader` sends `A5 BC 7B 01` on 0x101 and
+  0x131. `hvlsr_bootloader_load_firmware` then waits, without transmitting, for frame `0x100` from
+  the updater announcing status 1. The panel never asks; the updater must speak first.
+
+After `BC 01` was sent on 2026-11-17 the amp went silent: no `0x100`, no `0x143`, no ACKs. So the
+bank it now boots is not running a CAN updater.
+
+**The deciding check, free and harmless, once the panel is back:** do the HydroVive's lights respond
+to the panel's light control? The same chip drives them.
+
+- **Lights respond** → the chip is running application code with CAN. A panel-side recovery is
+  plausible, and the next step is to read what it reports.
+- **Lights dead** → the chip is in the ST ROM bootloader or a bank with no CAN. The ROM bootloader
+  has no CAN, so no panel-side recovery exists; the board has to be reached directly.
