@@ -57,6 +57,20 @@ What follows:
   On the next reset the G47x boots bank 1 directly and v7 runs. No firmware is flashed.
 - **Do not flash v5** to fix this. It carries the same stack pointer and would not change the outcome.
 
+### More checks from the panel (2026-11-18)
+
+- **No reset loop.** 120 s at 100k with error reporting on and the panel ACKing: 516 frames, 0 error
+  frames, only the generator and the panel. An image watchdog-looping through FDCAN init would leave
+  error bursts. The unit's CAN pins are quiet, as expected of an MCU sitting in the ROM bootloader.
+- **No CAN-FD speaker.** Listen-only FD at 100k-500k nominal and 500k-2M data: nothing but the
+  generator's 100k traffic.
+- **Every v5 code path is accounted for** (Ghidra decompile, 282 functions): the main loop polls
+  timers, the debug UART, CAN RX/TX, Bluetooth, toggles a heartbeat on PC3 and reads PB7 into an unused
+  status. The CAN dispatcher handles only `B1`-`B6`, `BA`, `BB`, `BC 01`; the debug menu has no update or
+  boot command. No hidden recovery command exists.
+- **The DSV-4000 generator cannot relay.** Its firmware (same template) dispatches only its own
+  setpoint opcodes and the same `BC 01` toggle.
+
 ## What else was ruled out (2026-11-18)
 
 - **ACK masking.** After ~7 s the generator is on the bus and ACKs everything, so an ACK at 100k
