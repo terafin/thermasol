@@ -33,7 +33,17 @@ OPTR=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.ar
 python3 -I -c "import sys;v=int(sys.argv[1],16);print('OPTR',hex(v),'BFB2=',v>>20&1,'DBANK=',v>>22&1,'nSWBOOT0=',v>>26&1,'nBOOT0=',v>>27&1,'RDP=',hex(v&0xff))" $OPTR | tee -a "$D/2-ob.txt"
 echo "[3] back up both banks (512 KB)"
 $BL read 0x08000000 0x80000 "$D/3-flash.bin"; sha256sum "$D/3-flash.bin" | tee "$D/3-flash.sha256"
-python3 -I -c "import struct,sys;d=open(sys.argv[1],'rb').read();print('bank1 SP/RV',hex(struct.unpack_from('<I',d,0)[0]),hex(struct.unpack_from('<I',d,4)[0]));print('bank2 SP/RV',hex(struct.unpack_from('<I',d,0x40000)[0]),hex(struct.unpack_from('<I',d,0x40004)[0]))" "$D/3-flash.bin" | tee -a "$D/3-flash.sha256"
+# ROM rule (ST, thread 61363; ST's own FLASH_DualBoot bank-2 binary uses SP 0x20000480): a bank's initial
+# SP must lie in SRAM1, 0x20000000-0x20017FFF (SP may equal the top+1 only on newer ROMs; treat it as rejected).
+python3 -I - "$D/3-flash.bin" <<'PY2' | tee -a "$D/3-flash.sha256"
+import struct,sys; d=open(sys.argv[1],'rb').read()
+for n,o in (("bank1",0),("bank2",0x40000)):
+    sp,rv=struct.unpack_from('<II',d,o)
+    if sp==0xffffffff: v="blank (ROM skips it)"
+    elif 0x20000000<=sp<=0x20017fff: v="inside SRAM1 (ROM accepts)"
+    else: v="outside SRAM1 (ROM rejects it)"
+    print(f"{n} SP {sp:#010x}: {v}; reset vector {rv:#010x}")
+PY2
 if [ $(( OPTR >> 20 & 1 )) -eq 0 ]; then
   echo "BFB2 is already 0: clearing it is not the fix. Inspect the bank vectors above and 3-flash.bin. Stopping."; exit 3; fi
 read -r -p "[4] write OPTR with BFB2=0 (MCU resets afterwards)? type YES: " ok; [ "$ok" = YES ] || { echo "stopped before any write"; exit 0; }
