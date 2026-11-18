@@ -10,7 +10,14 @@ if ! stm32flash -b 57600 -m 8e1 "$D/tty" | tee "$D/1-identify.txt" | grep -q 'De
   echo "No answer from the ROM bootloader. The MCU is probably running (locked up in) bank-2 code."
   echo "Hold BOOT0 (PB8) at 3.3 V through ~10k, power-cycle the shower supply, then rerun. Stopping."; exit 4; fi
 grep -q 'Device ID *: 0x0469' "$D/1-identify.txt" || { echo "not an STM32G47x (0x469) - stop"; exit 2; }
-echo "[2] read option bytes 0x1FFF7800 (48 B)"; stm32flash -b 57600 -m 8e1 -c -S 0x1FFF7800:48 -r "$D/2-ob.bin" "$D/tty"; xxd "$D/2-ob.bin" | tee "$D/2-ob.txt"
+echo "[2] read option bytes 0x1FFF7800 (48 B)"
+if ! stm32flash -b 57600 -m 8e1 -c -S 0x1FFF7800:48 -r "$D/2-ob.bin" "$D/tty" || [ ! -s "$D/2-ob.bin" ]; then
+  # Known on pre-V13.5 G474 ROMs: Read Memory NACKs above 0x1FFF73FF (ST community thread, 2021).
+  echo "Option-byte read was refused (older ROM). Not writing blind."
+  echo "Option: read FLASH_OPTR from 0x40022020 instead (register mirror), or use STM32CubeProgrammer's OB view."
+  stm32flash -b 57600 -m 8e1 -c -S 0x40022020:4 -r "$D/2-optr-reg.bin" "$D/tty" && xxd "$D/2-optr-reg.bin" | tee "$D/2-ob.txt"
+  echo "Stopping. Compare the value with 0xFFFFF8AA (expected) before any manual write."; exit 5; fi
+xxd "$D/2-ob.bin" | tee "$D/2-ob.txt"
 OPTR=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read()[0:4])[0]))" "$D/2-ob.bin")
 echo "OPTR=$OPTR"; python3 -I -c "import sys;v=int(sys.argv[1],16);print('BFB2=',v>>20&1,'DBANK=',v>>22&1,'nSWBOOT0=',v>>26&1,'nBOOT0=',v>>27&1,'RDP=',hex(v&0xff))" $OPTR | tee -a "$D/2-ob.txt"
 echo "[3] back up both banks (512 KB)"; stm32flash -b 57600 -m 8e1 -c -S 0x08000000:0x80000 -r "$D/3-flash.bin" "$D/tty"; sha256sum "$D/3-flash.bin" | tee "$D/3-flash.sha256"
