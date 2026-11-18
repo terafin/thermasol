@@ -22,12 +22,13 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
      listen for at least 3 minutes after power-on before calling it silent. Listening is receive-only:
 
      ```
-     adb shell su 0 sh -c 'cd /data/local/tmp; for i in 1 2 3 4 5 6 7 8 9; do ./cansniff; done | grep " 143 "'
+     adb shell su 0 sh -c 'cd /data/local/tmp; for i in $(seq 20); do ./cansniff; done | grep " 143 "'
      ```
 
-     The `cansniff` on the panel stops by itself after about 20 s and its argument is not a duration,
-     so the loop runs it nine times (about 3 minutes). `candump -T 180000 can0` does the same where
-     can-utils is installed.
+     The `cansniff` on the panel stops after 43 frames (about 10 s at this bus's rate), and its argument
+     is not a duration, so the loop runs it 20 times, about 3 minutes. `candump -T 180000 can0` does
+     the same where can-utils is installed. Before the fix, 9 runs (387 frames, 90 s) on 2026-11-18
+     held only `0x131` and `0x120`.
 
      Before the fix, a 20 s capture on 2026-11-18 showed only the panel (`0x131`, 33 frames) and the
      generator (`0x120`, 10 frames), nothing from the unit. 20 s is too short to prove silence on its
