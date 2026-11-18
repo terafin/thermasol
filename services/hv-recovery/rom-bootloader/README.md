@@ -16,19 +16,18 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
   4. only after you type `YES`, rewrites the full 48-byte option block with **BFB2 cleared and every other byte as read** (a Write Memory to the option area erases all of it first), then reads it back and checks nothing else changed.
   5. after `SUCCESS`, disconnect the ESP32 (at least GPIO17) **before** the final power-cycle. The MCU
      then boots v7, which powers the Bluetooth module on the same two lines.
-  6. confirm from the panel. A running unit sends status on CAN ID `0x143` by itself, with no request:
-     8 bytes `A5 <type> 8F …`, type `B0` (first data byte = firmware version) and `B8`. In v5 the
-     first one goes out only after a software-timer countdown of 50,022 ticks, then every 100,000, so
-     listen for at least 3 minutes after power-on before calling it silent. Listening is receive-only:
+  6. confirm from the panel. A running unit sends status on CAN ID `0x143` by itself, once a second:
+     `A5 B0 8F 07 00 00 00 00` (the `07` is the firmware version, v7) followed by `A5 B8 8F 00 …`.
+     Measured on this unit before the brick (2026-10-11/12 captures: 60 in 60 s, first one within
+     1 s). Listening is receive-only, and one `cansniff` run (it stops after 43 frames, about 10 s) is
+     enough:
 
      ```
-     adb shell su 0 sh -c 'cd /data/local/tmp; for i in $(seq 20); do ./cansniff; done | grep " 143 "'
+     adb shell su 0 /data/local/tmp/cansniff | grep " 143 "
      ```
 
-     The `cansniff` on the panel stops after 43 frames (about 10 s at this bus's rate), and its argument
-     is not a duration, so the loop runs it 20 times, about 3 minutes. `candump -T 180000 can0` does
-     the same where can-utils is installed. Before the fix, 9 runs (387 frames, 90 s) on 2026-11-18
-     held only `0x131` and `0x120`.
+     Before the fix, 9 runs (387 frames, 90 s) on 2026-11-18 held only the panel (`0x131`) and the
+     generator (`0x120`): about 90 status frames missing.
 
      Before the fix, a 20 s capture on 2026-11-18 showed only the panel (`0x131`, 33 frames) and the
      generator (`0x120`, 10 frames), nothing from the unit. 20 s is too short to prove silence on its
