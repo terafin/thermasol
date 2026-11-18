@@ -11,7 +11,8 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
   that under 4 mA and does not affect 57600 baud.
 - `recover.sh <esp32-ip>` — uses `an3155.py`, a small AN3155 client that talks to the ESP32 over TCP:
   1. identifies the chip (refuses anything but device ID 0x469, STM32G47x),
-  2. reads the user option bytes at `0x1FFF7800`,
+  2. reads the user option bytes at `0x1FFF7800`, and the bank-2 block at `0x1FFFF800` (PCROP2, WRP2A/B,
+     SEC2) where the ROM allows it; that block is never written, only compared afterwards,
   3. backs up the full 512 KB flash and prints both banks' vector words,
   4. only after you type `YES`, rewrites the full 48-byte option block with **BFB2 cleared and every other byte as read** (a Write Memory to the option area erases all of it first), then reads it back and checks nothing else changed.
   5. after the write it reconnects to read the option bytes back. On real silicon that usually fails:

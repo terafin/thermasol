@@ -15,14 +15,21 @@ OLD_ROM=len(sys.argv)>3 and sys.argv[3]=='old'
 log=open(sys.argv[4] if len(sys.argv)>4 else '/dev/null','a')
 # RM0440 cat-3 option words after OPTR (value, then bitwise complement), ST production values:
 def _w(v): return struct.pack('<II',v,(~v)&0xffffffff)
-OB_FACTORY_REST=_w(0xFFFFFFFF)+_w(0x00FF0000)+_w(0xFF00FFFF)+_w(0xFF00FFFF)+_w(0xFF00FF00)  # PCROP1 start/end, WRP1A, WRP2A, SEC1
+OB_FACTORY_REST=_w(0xFFFFFFFF)+_w(0x00FF0000)+_w(0xFF00FFFF)+_w(0xFF00FFFF)+_w(0xFF00FF00)  # PCROP1 start/end, WRP1A, WRP1B, SEC1 (RM0440 Table 11)
 OBREST=[bytearray(OB_FACTORY_REST)]
+# Bank-2 option block 0x1FFFF800: unused word, PCROP2 start/end, WRP2A, WRP2B, SEC2 (factory values)
+OB2_FACTORY=_w(0xFFFFFFFF)+_w(0xFFFFFFFF)+_w(0x00FF0000)+_w(0xFF00FFFF)+_w(0xFF00FFFF)+_w(0xFF00FF00)
+OB2=[bytearray(OB2_FACTORY)]
+WIPE_BANK2=os.environ.get('WIPE_BANK2','')=='1'   # model a ROM whose option erase also clears the bank-2 block
 def ob(): v=OPTR[0]; return bytearray(struct.pack('<II',v,(~v)&0xffffffff))+OBREST[0]
 def rd(a,n):
     if 0x08000000<=a and a+n<=0x08080000: return bytes(FLASH[a-0x08000000:a-0x08000000+n])
     if 0x1FFF7800<=a and a+n<=0x1FFF7840:
         if OLD_ROM: return None
         return bytes(ob()[a-0x1FFF7800:a-0x1FFF7800+n])
+    if 0x1FFFF800<=a and a+n<=0x1FFFF830:
+        if OLD_ROM: return None
+        return bytes(OB2[0][a-0x1FFFF800:a-0x1FFFF800+n])
     if a==0x40022020 and n<=4: return struct.pack('<I',OPTR[0])[:n]
     if 0x1FFF6FF0<=a and a+n<=0x1FFF7000: return bytes([ROMVER,0x00]*n)[:n] if a==0x1FFF6FFE else bytes([ROMVER]*n)
     return None
@@ -71,6 +78,7 @@ def handle(c):
                     buf=bytearray(b'\xff'*48); buf[a-0x1FFF7800:a-0x1FFF7800+N]=d   # AN3155: OB area erased, then written
                     v,cmp_=struct.unpack_from('<II',buf,0)
                     if cmp_!=(~v)&0xffffffff and N>=8: w(NACK); continue
+                    if WIPE_BANK2: OB2[0]=bytearray(b'\xff'*48)
                     OPTR[0]=v; OBREST[0]=bytearray(buf[8:48]); log.write(f'  OPTR <- {v:#010x} rest_intact={bytes(buf[8:48])==OB_FACTORY_REST}\n'); w(ACK)
                     log.write('  OB reload -> reset\n'); log.flush()
                     if POSTBOOT=='v7' and not (v>>20)&1: LEFT_ROM[0]=True; log.write('  BFB2=0 -> boots bank 1, ROM gone\n'); log.flush()

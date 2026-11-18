@@ -29,6 +29,9 @@ if ! $BL read 0x1FFF7800 48 "$D/2-ob.bin"; then
   echo "Not writing: a Write Memory to the option area erases all 48 option bytes (AN3155), and this ROM will not let them be read back first."
   echo "Use STM32CubeProgrammer: STM32_Programmer_CLI -c port=<tty> br=57600 P=EVEN -ob BFB2=0 -ob displ"; exit 5; fi
 xxd "$D/2-ob.bin" | tee "$D/2-ob.txt"
+# Bank-2 option block (PCROP2, WRP2A/B, SEC2). Not written by this script; read so step 5 can tell if the
+# ROM's option erase touched it (AN3155 says the whole option area is erased; which blocks is not documented).
+if $BL read 0x1FFFF800 48 "$D/2-ob2.bin" >/dev/null 2>&1; then echo "bank-2 option block saved (2-ob2.bin)"; else echo "bank-2 option block not readable on this ROM"; fi
 OPTR=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read()[:4])[0]))" "$D/2-ob.bin")
 python3 -I -c "import sys;v=int(sys.argv[1],16);print('OPTR',hex(v),'BFB2=',v>>20&1,'DBANK=',v>>22&1,'nSWBOOT0=',v>>26&1,'nBOOT0=',v>>27&1,'RDP=',hex(v&0xff))" $OPTR | tee -a "$D/2-ob.txt"
 echo "[3] back up both banks (512 KB)"
@@ -53,7 +56,7 @@ assert comp == (~old & 0xffffffff), f"unexpected OB layout: {old:#x} / {comp:#x}
 assert (old & 0xff) == 0xaa, "RDP is not level 0 (0xAA) - stop, never touch RDP"
 v = old & ~(1<<20)
 assert len(d)==48, f"need the full 48-byte option block, got {len(d)}"
-names=["OPTR","PCROP1_START","PCROP1_END","WRP1A","WRP2A","SEC1"]
+names=["OPTR","PCROP1_START","PCROP1_END","WRP1A","WRP1B","SEC1"]   # RM0440 Table 11, bank-1 block
 for i,n in enumerate(names):
     wv,wc=struct.unpack_from('<II',d,8*i)
     assert wc==(~wv)&0xffffffff, f"{n} @0x{0x1FFF7800+8*i:08X}: {wv:#010x}/{wc:#010x} is not value+complement - stop, read looks corrupt"
@@ -72,6 +75,15 @@ if $BL read 0x1FFF7800 48 "$D/5-ob-after.bin" 2>/dev/null; then
   NEWV=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.argv[1],'rb').read()[:4])[0]))" "$D/5-ob-after.bin")
   echo "OPTR after: $NEWV"
   python3 -I -c "import sys;a=open(sys.argv[1],'rb').read();b=open(sys.argv[2],'rb').read();diff=[i for i in range(48) if a[i]!=b[i]];print('bytes changed vs before:',diff);sys.exit(0 if set(diff)<=set(range(8)) else 1)" "$D/2-ob.bin" "$D/5-ob-after.bin" || { echo "WARNING: option bytes outside OPTR changed - inspect 2-ob.bin vs 5-ob-after.bin"; exit 8; }
+  if [ -f "$D/2-ob2.bin" ] && $BL read 0x1FFFF800 48 "$D/5-ob2-after.bin" >/dev/null 2>&1; then
+    if cmp -s "$D/2-ob2.bin" "$D/5-ob2-after.bin"; then echo "bank-2 option bytes unchanged"
+    else
+      echo "BANK-2 OPTION BYTES CHANGED by the ROM's option erase. Before / after:"; xxd "$D/2-ob2.bin"; xxd "$D/5-ob2-after.bin"
+      echo "BFB2 is cleared, so bank 1 (v7) boots regardless. Restore the bank-2 block from 2-ob2.bin before"
+      echo "relying on bank 2: STM32CubeProgrammer, Option Bytes view, set PCROP2/WRP2A/WRP2B/SEC2 to the 'before' values."
+      exit 9
+    fi
+  fi
   [ $(( NEWV >> 20 & 1 )) -eq 0 ] && echo "SUCCESS: BFB2 is clear. Disconnect the ESP32 (GPIO17 at least), then power-cycle; the MCU boots bank 1 (v7), which drives the same lines." || { echo "FAILED: BFB2 still set."; exit 6; }
 else
   # With BFB2 cleared the reset after an option-byte write boots bank 1 directly, so the ROM is gone:
