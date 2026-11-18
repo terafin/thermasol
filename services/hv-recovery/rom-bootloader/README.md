@@ -13,7 +13,8 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
   1. identifies the chip (refuses anything but device ID 0x469, STM32G47x),
   2. reads the user option bytes at `0x1FFF7800`, and the bank-2 block at `0x1FFFF800` (PCROP2, WRP2A/B,
      SEC2) where the ROM allows it; that block is never written, only compared afterwards,
-  3. backs up the full 512 KB flash and prints both banks' vector words,
+  3. backs up the full 512 KB flash and prints both banks' vector words, and stops (exit 10) unless
+     bank 1 holds a bootable image: clearing BFB2 boots bank 1 directly, with no ROM check,
   4. only after you type `YES`, rewrites the full 48-byte option block with **BFB2 cleared and every other byte as read** (a Write Memory to the option area erases all of it first), then reads it back and checks nothing else changed.
   5. after the write it reconnects to read the option bytes back. On real silicon that usually fails:
      with BFB2 cleared, the reset that follows an option-byte write boots bank 1 directly and the ROM

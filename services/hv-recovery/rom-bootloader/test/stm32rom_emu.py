@@ -9,7 +9,10 @@ DROP_AT=int(os.environ.get('DROP_AT') or '0',0)   # flash address whose read rep
 DROPPED=[False]
 ACK,NACK=0x79,0x1F
 FLASH=bytearray(b'\xff'*0x80000)
-v5=open(sys.argv[1],'rb').read(); FLASH[:len(v5)]=v5
+v5=open(sys.argv[1],'rb').read()
+IMG_BANK=os.environ.get('IMG_BANK') or '1'   # '2': image sits in bank 2, bank 1 erased
+base=0x40000 if IMG_BANK=='2' else 0
+FLASH[base:base+len(v5)]=v5
 OPTR=[int(sys.argv[2],16)]
 OLD_ROM=len(sys.argv)>3 and sys.argv[3]=='old'
 log=open(sys.argv[4] if len(sys.argv)>4 else '/dev/null','a')

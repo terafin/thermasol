@@ -47,6 +47,11 @@ for n,o in (("bank1",0),("bank2",0x40000)):
     else: v="outside SRAM1 (ROM rejects it)"
     print(f"{n} SP {sp:#010x}: {v}; reset vector {rv:#010x}")
 PY2
+# Clearing BFB2 makes the next boot run bank 1 directly, with no ROM check. Refuse unless bank 1 looks like
+# a real image: initial SP in SRAM and an odd (Thumb) reset vector inside bank 1.
+if ! python3 -I -c "import struct,sys;sp,rv=struct.unpack_from('<II',open(sys.argv[1],'rb').read(),0);sys.exit(0 if 0x20000000<sp<=0x20020000 and rv&1 and 0x08000000<=rv<0x08040000 else 1)" "$D/3-flash.bin"; then
+  echo "bank 1 has no bootable image (vector words above). Clearing BFB2 would boot it; not writing."
+  echo "If the firmware is in bank 2 instead, this is a different state from docs/14; keep 3-flash.bin and stop."; exit 10; fi
 if [ $(( OPTR >> 20 & 1 )) -eq 0 ]; then
   echo "BFB2 is already 0: clearing it is not the fix. Inspect the bank vectors above and 3-flash.bin. Stopping."; exit 3; fi
 read -r -p "[4] write OPTR with BFB2=0 (MCU resets afterwards)? type YES: " ok; [ "$ok" = YES ] || { echo "stopped before any write"; exit 0; }
