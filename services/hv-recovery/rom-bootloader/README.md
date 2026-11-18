@@ -6,7 +6,7 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
 
 - `amp-uart.yaml` — ESPHome config for an ESP32 that bridges USART2 to TCP port 6639, 57600 8E1.
   Wiring: ESP32 GND to the board's GND, GPIO17 to PA3 (USART2_RX), GPIO16 to PA2 (USART2_TX).
-- `recover.sh <esp32-ip>` — uses `socat` and `stm32flash`:
+- `recover.sh <esp32-ip>` — uses `an3155.py`, a small AN3155 client that talks to the ESP32 over TCP:
   1. identifies the chip (refuses anything but device ID 0x469, STM32G47x),
   2. reads the user option bytes at `0x1FFF7800`,
   3. backs up the full 512 KB flash and prints both banks' vector words,
@@ -24,3 +24,7 @@ ST factory default, after which the G47x boots bank 1 directly and the original 
   `0x1FFF73FF`. The script prints the FLASH_OPTR register instead and stops. Use STM32CubeProgrammer over
   the same UART (8E1): its Option Bytes view shows BFB2 as a checkbox. Untick it, Apply, and change nothing
   else. Expect `0xFFFFF8AA` before and `0xFFEFF8AA` after.
+
+## Tests
+
+`test/run-emulator-tests.sh latest.bin` runs the script against an AN3155 emulator of the bricked chip in four states (expected brick, older ROM refusing option-byte reads, BFB2 already clear, RDP level 1) and checks the exit code and final option word for each.
