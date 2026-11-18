@@ -59,10 +59,16 @@ when the MCU presses its MFB power key, which never happens while the MCU sits i
 I/O rail is internal ("do not connect", VDD_IO), so with the module shut down its UART pins may
 clamp the line to ground through their protection diodes, and the ROM would never see the `0x7F`
 sync byte. The data sheet does not state the shut-down pin state. With the shower supply on and
-the ESP32 **not** connected, measure each pad to GND: about 3.3 V on the module's TXD pad means
-the line is free (the ROM enables a pull-up on its RX pin); near 0 V or about 0.6 V means the
-module is holding it, so use the MCU's pins 14/17 instead. The MCU's own pins are the safer
-default. A factory
+the ESP32 **not** connected, measure each pad to GND. AN2606 (Rev 62, Table 101) says the G47x ROM
+sets PA2 (USART2_TX) to alternate push-pull with pull-up, so it drives that line high at idle, and
+PA3 (USART2_RX) to input with a weak pull-up (about 40 kΩ). Expect about 3.3 V on both:
+
+- the module's **RXD** pad (PA2) at 3.3 V says the ROM is running and driving its TX;
+- the module's **TXD** pad (PA3) at 3.3 V says nothing is clamping the ROM's RX line.
+
+PA3 near 0 V or about 0.6 V means the module is holding it down; use the MCU's pins 14/17 instead.
+PA2 low as well means the MCU is not in the ROM at all (see "No answer at step 1"). The MCU's own
+pins are the safer default. A factory
 header on the board, if there is one, is more likely the USART1 console on PC4/PC5 (LQFP64 pins 22/23,
 DS12288), which the ROM does not listen on. No answer from such a header says nothing about
 the ROM.
