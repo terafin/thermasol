@@ -39,24 +39,26 @@ The unit shipped with BFB2 = 0. On the G47x that boots bank 1 directly, with no 
 `BC 01`, BFB2 = 1, so every reset runs the ROM's dual-bank check (AN2606 Fig. 59): it jumps to a bank
 only if that bank's first word, the initial stack pointer, is "within internal SRAM".
 
-v5's initial stack pointer is **`0x20020000`**, the top of 128 KB (96 KB SRAM1/2 plus 32 KB CCM). Some
-G47x ROMs reject that value: a G474 example documented the rejection with ST staff in 2020
-(barafael/g4-dual-bank-example, "Challenge 1"), and AN2606 Rev 68 lists V13.4's limitation as
-"CCSRAM/ENGI not supported", fixed in V13.5. But both DSV-4000 images use the same stack pointer, and
-ThermaSol's own updates go through the same toggle, so the ROM on these units probably accepts it.
-That leaves two states that fit everything observed:
+v5's initial stack pointer is **`0x20020000`**, the top of 128 KB (96 KB SRAM1/2 plus 32 KB CCM). ST
+staff state that the G47x ROM rejects it in the dual-bank check (ST community, "Dual Boot on the STM32G4
+not quite working", thread 61363): "The Bootloader doesn't support CCM-SRAM as valid location for stack
+pointer. So in case of Dual bank boot, if a bank contains stack pointer pointing outside SRAM1 it is
+considered by the bootloader as non valid ... there is no bug in STM32G4 bootloader V13.4, this is how
+Bootloader works." The accepted range ends at `0x20017FFF`. Both DSV-4000 images and v5 use
+`0x20020000`, so ThermaSol's own bank toggle cannot boot its images through the ROM on these chips; this
+unit hit that on its first `BC 01`.
 
-- **S1, ROM rejects both banks:** the MCU stays in the ST system bootloader.
-- **S2, ROM accepts bank 2:** bank 2 held a valid-looking first word (an older image, its last page now
-  erased by `BC 01`). The ROM jumped into it and the core faulted or locked up without a watchdog. That
-  matches the quiet bus: no frames and no error bursts over 120 s, so no reset loop.
+Two states still fit the observations, but one is strongly favoured:
 
-**S1 is the more likely state.** Bank 2 was probably blank: the panel never updated the unit (the
+- **S1, ROM rejects both banks (favoured):** the MCU stays in the ST system bootloader.
+- **S2, ROM accepts bank 2:** only if bank 2 held an image with a stack pointer inside SRAM1. The ROM
+  would jump into it; a fault or lockup there would match the quiet bus.
+
+**Why S1.** Bank 2 was probably blank: the panel never updated the unit (the
 A10 app's HydroVive updater only runs when `firmware.json` lists a newer HydroVive version, and the
 server has only v5, older than the unit's v7; no backup records an update). With bank 2 reading
-`0xFFFFFFFF` the ROM rejects it and decides on bank 1. A V13.5 ROM would accept `0x20020000` and v7 would
-run and talk on CAN; it does not, so the ROM is probably V13.3 or V13.4 and the MCU is in the system
-bootloader. Those ROMs also refuse Read Memory above `0x1FFF73FF`, so reading the option bytes over the
+`0xFFFFFFFF` the ROM rejects it and decides on bank 1. The ROM then rejects bank 1's `0x20020000` too, and the MCU
+stays in the system bootloader. ROMs before V13.5 also refuse Read Memory above `0x1FFF73FF`, so reading the option bytes over the
 bootloader will likely fail; use STM32CubeProgrammer's option-byte view to clear BFB2 (see
 [`services/hv-recovery/rom-bootloader`](../services/hv-recovery/rom-bootloader/)).
 
