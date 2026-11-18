@@ -75,8 +75,13 @@ the ROM.
 
 ## If the script stops
 
-- **No answer at step 1:** the MCU is running stale bank-2 code. Hold BOOT0 (PB8) at 3.3 V through about
-  10 kΩ, power-cycle the shower supply, and run it again.
+- **No answer at step 1:** first power-cycle the shower supply with the ESP32 already connected and run
+  it again. After reset the ROM listens on every interface at once and locks onto the first that
+  shows activity (AN2606 Fig. 59: `0x7F` on any USART, its I2C address, SPI sync, USB); it then ignores
+  the rest. A glitch on another of its pins (USART1 RX on PA10, I2C2 on PC4/PA8, SPI2 on PB12-15,
+  which here runs to the LED driver) could have won the race. If PA2 reads 3.3 V and it still does
+  not answer after a clean power-cycle, the MCU may be running stale bank-2 code: hold BOOT0 (PB8,
+  LQFP64 pin 61) at 3.3 V through about 10 kΩ, power-cycle, and run it again.
 - **Option-byte read refused at step 2:** the script does not write. A Write Memory to the option area erases all 48 option bytes (AN3155), and this ROM will not let them be read back first, so a partial write could change other option fields. older G474 ROMs (before V13.5, `0xD5`) refuse reads above
   `0x1FFF73FF`. The script prints the FLASH_OPTR register instead and stops. Use STM32CubeProgrammer over
   a UART (it talks to the same ROM bootloader): its Option Bytes view shows BFB2 as a checkbox; untick it,
