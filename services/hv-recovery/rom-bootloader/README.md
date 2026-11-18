@@ -16,15 +16,18 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
   4. only after you type `YES`, rewrites the full 48-byte option block with **BFB2 cleared and every other byte as read** (a Write Memory to the option area erases all of it first), then reads it back and checks nothing else changed.
   5. after `SUCCESS`, disconnect the ESP32 (at least GPIO17) **before** the final power-cycle. The MCU
      then boots v7, which powers the Bluetooth module on the same two lines.
-  6. confirm from the panel. A running unit sends status on CAN ID `0x143` (`A5 B0 8F 07`, the last
-     byte its firmware version). Listening is receive-only:
+  6. confirm from the panel. A running unit sends status on CAN ID `0x143` by itself, with no request:
+     8 bytes `A5 <type> 8F …`, type `B0` (first data byte = firmware version) and `B8`. In v5 the
+     first one goes out only after a software-timer countdown of 50,022 ticks, then every 100,000, so
+     listen for at least 3 minutes after power-on before calling it silent. Listening is receive-only:
 
      ```
-     adb shell su 0 sh -c 'cd /data/local/tmp; timeout 20 ./cansniff | grep " 143 "'
+     adb shell su 0 sh -c 'cd /data/local/tmp; timeout 180 ./cansniff | grep " 143 "'
      ```
 
      Before the fix, a 20 s capture on 2026-11-18 showed only the panel (`0x131`, 33 frames) and the
-     generator (`0x120`, 10 frames); nothing from the unit.
+     generator (`0x120`, 10 frames), nothing from the unit. 20 s is too short to prove silence on its
+     own; together with the ACK test in docs/14 it is.
 
 Step 4 refuses unless the read-back has the value/complement layout, RDP is level 0 (`0xAA`), and the
 new value differs only in bit 20. On a unit in the state described in docs/14 it writes `0xFFEFF8AA`, the
