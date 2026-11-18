@@ -205,7 +205,8 @@ ThermaSol's HydroVive installation manual. Nothing has been tested on the unit.
 - **USART2 on PA2/PA3**, alternate function 7 (`0x8002f8a`: pins `0x0C`, mode 2, AF 7). That is
   the exact pair ST's ROM bootloader listens on for USART2 (AN2606 Rev 61, Table 101). It is the
   realistic way in without a debugger.
-- **USART1** is also active (the Bluetooth link). **USB is unused** — no USB handlers in the vector
+- **USART1** (PC4/PC5) is also active: a factory text console, not a ROM port. The Bluetooth
+  module is on USART2, so PA2/PA3 run to it. **USB is unused** — no USB handlers in the vector
   table — so USB DFU is not an option.
 - **I2C2 on PA8/PA9** (`0x8002d20`: pins `0x300`, open-drain, AF 4) to the DSP.
 - CAN has no interrupt handler; the firmware polls it. The ROM bootloader has no CAN at all, which

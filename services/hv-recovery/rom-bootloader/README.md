@@ -38,6 +38,12 @@ LQFP64 pin numbers (DS12288, Table 12). Pin 1 is at the dot; numbering runs coun
 PA2 and PA3 sit either side of the VSS/VDD pair at 15-16, so a probe slip there shorts the supply:
 use fine probes or tack wires.
 
+PA2/PA3 run to the Bluetooth module's UART (v5 talks to it there with `AA 00 …` frames), so its RX/TX
+pads are a second place to connect; the module is unpowered while the MCU sits in the ROM. A factory
+header on the board, if there is one, is more likely the USART1 console on PC4/PC5 (LQFP64 pins 22/23,
+DS12288), which the ROM does not listen on. No answer from such a header says nothing about
+the ROM.
+
 ## If the script stops
 
 - **No answer at step 1:** the MCU is running stale bank-2 code. Hold BOOT0 (PB8) at 3.3 V through about
