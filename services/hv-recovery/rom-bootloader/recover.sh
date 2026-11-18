@@ -12,6 +12,9 @@ OPTR=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.ar
 echo "OPTR=$OPTR"; python3 -I -c "import sys;v=int(sys.argv[1],16);print('BFB2=',v>>20&1,'DBANK=',v>>22&1,'nSWBOOT0=',v>>26&1,'nBOOT0=',v>>27&1,'RDP=',hex(v&0xff))" $OPTR | tee -a "$D/2-ob.txt"
 echo "[3] back up both banks (512 KB)"; stm32flash -b 57600 -m 8e1 -c -S 0x08000000:0x80000 -r "$D/3-flash.bin" "$D/tty"; sha256sum "$D/3-flash.bin" | tee "$D/3-flash.sha256"
 python3 -I -c "import struct,sys;d=open(sys.argv[1],'rb').read();print('bank1 SP/RV',hex(struct.unpack_from('<I',d,0)[0]),hex(struct.unpack_from('<I',d,4)[0]));print('bank2 SP/RV',hex(struct.unpack_from('<I',d,0x40000)[0]),hex(struct.unpack_from('<I',d,0x40004)[0]))" "$D/3-flash.bin" | tee -a "$D/3-flash.sha256"
+if [ $(( OPTR >> 20 & 1 )) -eq 0 ]; then
+  echo "BFB2 is already 0: the unit was running from a swapped bank before BC 01, so clearing BFB2 is not the fix."
+  echo "Inspect bank1/bank2 SP/RV above and 3-flash.bin before writing anything. Stopping."; exit 3; fi
 read -r -p "[4] write OPTR with BFB2=0 and reset? type YES: " ok; [ "$ok" = YES ] || { echo "stopped before any write"; exit 0; }
 NEW=$(python3 -I -c "import sys;print(hex(int(sys.argv[1],16)&~(1<<20)))" $OPTR)
 python3 -I - "$D/2-ob.bin" "$D/4-ob-new.bin" "$NEW" <<'PY'
