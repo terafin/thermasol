@@ -299,8 +299,8 @@ answers both names with it.
 
 ## Vendor-store protocol — sources
 
-Decompiled trees: `/home/terafin/tt-recovery/thermasol-apk-20261011/` (Java) and
-`installed-smali/` (smali, installed 1.2.0 image). Both agree.
+Decompiled trees: the vendor APK decompiled to Java (jadx) and the installed 1.2.0 image
+disassembled to smali. Both agree.
 
 | Claim | Evidence |
 |---|---|

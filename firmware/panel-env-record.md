@@ -12,10 +12,8 @@ repository is public. What is recorded is what identifies the image and what reg
 | Taken | 2026-11-17T00:09Z, before any payload or arming |
 | Flash location | LBA `0x2000`, 8 sectors of 512 (byte offset `0x400000`) |
 
-Working copies exist under `~/.local/state/issue-shower-amp/` on tellah, in three places
-(`env-orig-0x400000.bin`, `scratch/env-orig-0x400000.bin`, `scratch/env-orig.bin`). That is a
-session state directory: nothing prevents it being swept, and if it is, the recovery route that
-needs it has nothing to send. Copy it somewhere durable before relying on it.
+The image itself is kept with the October boot-area backup, outside this repo, because it carries
+the unit's serial number and MAC address.
 
 ## Regeneration
 

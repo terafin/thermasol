@@ -13,6 +13,22 @@ had been reporting firmware **v7** (`0x143: A5 B0 8F 07`). The only image Therma
 is **v5** (`thermatouch.tsolup.com/firmware/hydrovive/latest.bin`, 47 676 B, sha256 `37c81d0b…`).
 The panel went bus-off. The unit has sent no frame since, through many cold power cycles.
 
+## Still silent with a healthy panel (2026-11-17)
+
+After the panel was recovered, the bus was checked again from a clean boot:
+
+- 10 s listen-only at 100k: only the panel's own `0x131` traffic and the generator's `0x120`.
+- One empty frame on an unused ID (`0x7EE`) at 16.7k, 20k, 25k, 33.3k, 50k, 62.5k, 83.3k, 100k,
+  125k, 250k, 500k and 1M, counting completed transmissions (a completed transmission needs an
+  ACK from some node). Only 100k completed, and the generator is on 100k.
+
+So no CAN controller on the amp is active at any of the rates its clock tree could produce. The
+G47x ROM bootloader has no FDCAN (AN2606 Rev 61, Table 3: USART1/2/3, I2C2/3/4, SPI1/2, DFU), and
+the option byte that `BC 01` toggled survives power cycles, so nothing sent from the panel can
+reach the chip. The remaining route is the chip's own USART2 (PA2/PA3, the pair its ROM
+bootloader listens on), which needs the board in hand. If the chip is not read-protected, bank 1
+should still hold the v7 image it was running, and putting BFB2 back is the whole fix.
+
 ## The hardware
 
 - MCU: STM32G474-class, dual-bank flash (DBANK=1, 2 × 256 KB, 2 KB pages).
@@ -324,7 +340,7 @@ Four separate trees are needed to show it, and each cite below names its own:
   (`WDOG1_WDOG_B`) and `captouchgrp` in mode `0` (GPIO). The touch node (`atmel,maxtouch`,
   `touch@4b`, `status = "okay"`) names `captouchgrp` as its `pinctrl-0` and takes the pad as its
   IRQ (`irq-gpio = <&gpio1 2 1>`, `interrupt-parent` = `gpio1`).
-- **The A15 kernel tree on tellah**, `vendor/variscite/kernel_imx`, whose version string is
+- **The A15 kernel tree**, `vendor/variscite/kernel_imx`, whose version string is
   `6.6.58-4k-ga9e7dfe9bde2` — the same string the panel's boot image prints.
   `arch/arm64/boot/dts/freescale/imx8mm-pinfunc.h:24-25` is the mode table those two values come
   from (`GPIO1_IO2` = `0x0`, `WDOG1_WDOG_B` = `0x1`); `CONFIG_TOUCHSCREEN_ATMEL_MXT=y` in its
@@ -407,7 +423,7 @@ environment is not the compiled default: this unit's carries an October override
 `env default -a` replaces that with the compiled body, which sets `cma=800M` on this 2 GB board
 (`cmaargs` branches on `sdram_size = 1024`). At 800M this panel was measured with
 `workingset_refault` at 40k/s and io PSI 75% while 586 MB of its 598 MB `MemFree` sat in `CmaFree`
-— about 12 MB usable (A10, `~/tt-recovery/backstop-20261011/LEDGER.md:158-162` on tellah). With
+— about 12 MB usable (A10, October work log). With
 the device-tree default in force the same ledger records settle refault of 2,128/1,290/2,219/s
 across three runs at the 60-second mark under a six-app cold-launch burst (`:317`), falling to
 2–90/s by 90–150 s (`:231`).
@@ -425,47 +441,11 @@ its first evidence: what SPL and ATF print, or their silence.
 
 ## Recovering a panel that boots to nothing
 
-Needs hands on the unit. There is no remote path: adb is down, the network never comes up, and
-power cycles do not change the outcome.
-
-**This section is a plan, not a transcript.** Nothing below has been executed — it cannot be,
-without the unit in front of you. Two steps in particular are unverified and are the ones a
-recovery depends on: that a failed `bootcmd` really does leave U-Boot at a prompt you can type
-into, and that `tftpboot` works from that prompt with the network not yet brought up. Treat the
-commands as the intended sequence and verify each result as you go.
-
-**Console.** The SoC's UART4 is `ttymxc3`, `0x30a60000`, **115200 8N1**, three-wire (TX, RX,
-GND) on the SoM header. `bootdelay=0` leaves no countdown to interrupt. Whether a prompt is
-waiting follows from the link: U-Boot powers the PHY itself before `bootcmd` runs, so a unit that
-links and then goes quiet is one whose `bootcmd` failed, and its prompt should be there; a unit
-that never links may not be reaching `board_init_r` at all, and nothing appears. Send a carriage
-return first to confirm.
-
-**Restore the environment.** From the prompt, either:
-
-```
-env default -a; saveenv; reset
-```
-
-or write the saved original back over the environment area (LBA `0x2000`, 8 sectors of 512):
-
-```
-tftpboot 0x41000000 env-orig-0x400000.bin     # the 4 KB blob, md5 1b1533ff43325d1a0c437826dd9aad88
-mmc dev 1
-mmc write 0x41000000 0x2000 8
-reset
-```
-
-Either way the panel then boots Android from slot `_b`, which is unmodified.
-
-**Where the blob is, and its fragility.** Working copies live under
-`~/.local/state/issue-shower-amp/` on tellah — three of them, all md5
-`1b1533ff43325d1a0c437826dd9aad88`. That is a session state directory and nothing sweeps it on
-purpose or protects it by accident, so treat the copies as provisional: before relying on the TFTP
-route, copy the image somewhere durable and serve it from there. `firmware/panel-env-record.md`
-carries its hash, its flash location and every assignment except the two device identifiers, so a
-regenerated image is possible if the copies are lost — but a regenerated image is not the original
-and the document should not be read as saying it is.
+**Superseded.** The dark panel was recovered on 2026-11-17 through the U6 console; the procedure
+that worked, and the read-back it found, are in [15-recovery-plan.md](15-recovery-plan.md). Since
+then U-Boot fetches a fix script over the network on every boot
+([16-network-recovery-hook.md](16-network-recovery-hook.md)), so a console is the last resort, not
+the first. Do **not** use `env default -a`: it drops that hook and puts CMA back to 800M.
 
 **If there is no prompt**, the SoC did not reach U-Boot. What the console shows next is the
 evidence: SPL and ATF print before `board_init_r`, so their output narrows the fault to the stage

@@ -43,10 +43,10 @@ Traps we hit (details in `../docs/04-android15-port.md`):
 
 ## Then the panel-specific layer
 
-1. **Device tree** — merge [`devicetree/tt10v2-port.dtsi`](devicetree/tt10v2-port.dtsi) and
-   [`devicetree/bluetooth-uart2.dtsi`](devicetree/bluetooth-uart2.dtsi) into the Variscite
+1. **Device tree** — merge [`devicetree/tt10v2-port.dtsi`](../devicetree/tt10v2-port.dtsi) and
+   [`devicetree/bluetooth-uart2.dtsi`](../devicetree/bluetooth-uart2.dtsi) into the Variscite
    DART DT. Display timings are measured, not guessed.
-2. **Bluetooth HAL** — apply [`patches/bluetooth-hci-command-drain.patch`](patches/bluetooth-hci-command-drain.patch)
+2. **Bluetooth HAL** — apply [`patches/bluetooth-hci-command-drain.patch`](../patches/bluetooth-hci-command-drain.patch)
    to `hardware/interfaces/bluetooth/aidl/default/`. This is the bounded command drain that
    stops the second OFF/ON cycle from timing out the HCI RESET.
 3. **Vendor APK** — the navigation/layout and volume fixes are app-side; see

@@ -8,7 +8,7 @@ This began as the **source of the daemon deployed through v1.1** at `/vendor/bin
 (sha256 `e1ff56f27454ebdcbf466e1757426bb67b644794b520a3c9b4018a6cb66fd28c`) and its
 supervisor `tt_idle_dim_super.jar` (`e25666ac…e2e65706`).
 
-Provenance: recovered from this project's session transcript after the original
+Provenance: recovered from this project's work log after the original
 scratch directory was lost. The import is verified by **reproducing the deployed
 binary byte-for-byte** before any change was made — see "Verification" below.
 

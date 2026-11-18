@@ -33,6 +33,7 @@ documented recovery. Consequences below are not stylistic preferences.
 | What should I avoid? | [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md) |
 | How was this written / what went wrong | [`docs/08-lessons.md`](docs/08-lessons.md) |
 | The HydroVive amp and why it is silent | [`docs/14-hydrovive-recovery.md`](docs/14-hydrovive-recovery.md) |
+| The panel will not boot | [`docs/16-network-recovery-hook.md`](docs/16-network-recovery-hook.md), then [`docs/15-recovery-plan.md`](docs/15-recovery-plan.md) |
 
 ---
 
@@ -75,13 +76,17 @@ evidence are in [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
 
 3. **Never chain `boot` in vbmeta.** A chain descriptor parks the slot in fastboot
    permanently — an AVB I/O error skips the tries decrement, so no reboot can drain it.
-4. **Never send guessed CAN frames** to the shower peripherals. Doing so destroyed working
+4. **Never write the U-Boot environment without keeping `run tt_nethook;` first in `bootcmd`**,
+   and never use `env default -a`. The hook is the only way in when Android does not boot
+   ([`docs/16`](docs/16-network-recovery-hook.md)); the panel was dark for a week on 2026-11-17
+   because a saved environment dropped the Android command line.
+5. **Never send guessed CAN frames** to the shower peripherals. Doing so destroyed working
    audio and took hours to diagnose. Capture what the vendor app emits and mirror it.
-5. **Never call `Utils.ShutdownAll` as an idle action** — it stops steam and runs a water
+6. **Never call `Utils.ShutdownAll` as an idle action** — it stops steam and runs a water
    flush. Do not launch `PowerFlushActivity` or `FirmwareUpdateActivity` to "look".
-6. **Never pull the touch CHG pin low, and never do raw MMIO on a suspended GPIO bank.**
+7. **Never pull the touch CHG pin low, and never do raw MMIO on a suspended GPIO bank.**
    It caused a board reset.
-7. **Never set `force_wifi true`.** The vendor `MainControl` takes `eth0` **down** at startup
+8. **Never set `force_wifi true`.** The vendor `MainControl` takes `eth0` **down** at startup
    when it is set. The panel runs on Ethernet.
 
 ### Never do these in the build
