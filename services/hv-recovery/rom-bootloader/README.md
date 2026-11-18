@@ -33,6 +33,10 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
 
      Before the fix, 9 runs (387 frames, 90 s) on 2026-11-18 held only the panel (`0x131`) and the
      generator (`0x120`): about 90 status frames missing.
+  7. optional bench check, with the board still open: the firmware's own "Thermasol debug Terminal"
+     is on USART1, PC4 (TX) / PC5 (RX), LQFP64 pins 22/23, 115200 8N1. At power-on it prints
+     `HydroVive, firmware version 7.x`; `h` lists its commands (`lcs1` lights on, `s` sensor values).
+     This is the running firmware, not the ROM; it only answers once the fix has taken.
 
      Before the fix, a 20 s capture on 2026-11-18 showed only the panel (`0x131`, 33 frames) and the
      generator (`0x120`, 10 frames), nothing from the unit. 20 s is too short to prove silence on its

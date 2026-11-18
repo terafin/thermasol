@@ -119,9 +119,12 @@ What follows:
 - Application CAN: FDCAN2 on PB5/PB6. 24 MHz HSE → PLL → 96 MHz FDCAN clock, prescaler 60,
   1+13+2 TQ = **100 kbit/s**. ThermaSol's DSV-4000 generator firmware uses the same template.
 - Other interfaces in v5: I2C2 to the ADAU1701 DSP (PA8/PA9); USART2 at 19200 8N1 (PA2/PA3) to
-  the Bluetooth module (`AA 00 …` command frames, parser at `0x08000E7C`); USART1 (PC4/PC5) is a
-  factory text console that echoes input, ends a line on CR and dispatches on its first letter
-  (`0x080031A0`: `?`/`H` help, `L…` lights). None of them is on the CAN harness.
+  the Bluetooth module (`AA 00 …` command frames, parser at `0x08000E7C`); USART1 (PC4/PC5) at
+  115200 8N1 is ThermaSol's "debug Terminal": it echoes input, ends a line on CR and dispatches on
+  the first letter (`0x080031A0`). Its own help text lists `h` (help), `lc<value>` (LED: `s` on/off,
+  `q` sequence, `r`/`g`/`b`/`w` level 0-255), `s` (sensor values) and `p` (system parameters; in v5
+  it re-runs the DSP download). The boot banner is `HydroVive, firmware version %d.%d`. Nothing in
+  it touches flash or option bytes. None of these interfaces is on the CAN harness.
 - For the recovery wiring this means: the ROM listens on PA2/PA3, which go to the BT module, not to
   a debug header. A factory header, if the board has one, most likely carries the USART1 console on
   PC4/PC5, which the ROM does not use; nothing will answer there.
