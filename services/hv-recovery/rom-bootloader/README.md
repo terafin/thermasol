@@ -108,6 +108,14 @@ header on the board, if there is one, is more likely the USART1 console on PC4/P
 DS12288), which the ROM does not listen on. No answer from such a header says nothing about
 the ROM.
 
+## Reading the backup (v7)
+
+Step 3 saves the whole flash as `run-*/3-flash.bin`; if the unit ran v7, bank 1 holds it. 
+`analyze-backup.sh run-*/3-flash.bin [latest.bin]` splits the banks, prints each one's stack pointer,
+reset vector, `HydroVive, firmware version` banner, strings and sha256, says whether bank 1 equals v5,
+and with `GHIDRA=<ghidra install dir>` decompiles each non-blank bank with the same Ghidra script used
+for v5 (`tools/DecompAll.java`; Raw Binary at 0x08000000, ARM Cortex).
+
 ## If bank 1 cannot boot (exit 10)
 
 `recover.sh` refuses to clear BFB2 unless bank 1 holds a bootable image. If it stops there, run
