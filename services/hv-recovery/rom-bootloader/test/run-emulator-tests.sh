@@ -6,6 +6,7 @@ ONLY=${2:-}   # optional: run only the named case
 check(){ [ -n "$ONLY" ] && [ "$1" != "$ONLY" ] && return; name=$1 optr=$2 rom=$3 port=$4 want_exit=$5 want_optr=$6 answer=${7:-YES} romver=${8:-0xD4} want_text=${9:-} postboot=${10:-} dropat=${11:-} wipe2=${12:-} imgbank=${13:-}
   IMG_BANK=$imgbank WIPE_BANK2=$wipe2 DROP_AT=$dropat POSTBOOT=$postboot ROMVER=$romver python3 -I "$H/stm32rom_emu.py" "$IMG" "$optr" "$rom" "$LOG/$name.log" "$port" 2>/dev/null & EP=$!
   for _ in $(seq 50); do python3 -I -c "import socket,sys;socket.create_connection((\"127.0.0.1\",int(sys.argv[1])),0.2).close()" "$port" 2>/dev/null && break; sleep 0.1; done
+  kill -0 $EP 2>/dev/null || { echo "FAIL: emulator did not start (port in use by a leftover emulator?)"; exit 2; }
   echo "$answer" | timeout 300 bash "$H/../recover.sh" 127.0.0.1 "$port" > "$LOG/$name.out" 2>&1; rc=$?
   got=$(cat "$LOG/$name.log.optr"); rest=$(cat "$LOG/$name.log.rest" 2>/dev/null); kill $EP 2>/dev/null; wait $EP 2>/dev/null
   want_rest=ffffffff000000000000ff00ffff00ffffff00ff0000ff00ffff00ff0000ff0000ff00ffff00ff00  # RM0440 factory PCROP1/WRP1A/WRP2A/SEC1

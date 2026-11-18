@@ -108,6 +108,18 @@ header on the board, if there is one, is more likely the USART1 console on PC4/P
 DS12288), which the ROM does not listen on. No answer from such a header says nothing about
 the ROM.
 
+## If bank 1 cannot boot (exit 10)
+
+`recover.sh` refuses to clear BFB2 unless bank 1 holds a bootable image. If it stops there, run
+`restore-bank1.sh <esp32-ip> [port] <source>` first, then `recover.sh` again:
+
+- `slot2` copies bank 2's image into bank 1. Use this if bank 2 holds the working firmware (v7).
+- `latest.bin` writes ThermaSol's v5 (`firmware/hydrovive/latest.bin`; checked against its sha256).
+  Bank 1 boots directly with BFB2 clear, so v5's stack pointer is not a problem there.
+
+It backs up both banks, refuses if bank 1 already boots, erases only the bank-1 pages the image needs,
+writes, and reads it back. It never touches bank 2 or the option bytes.
+
 ## Connecting without a header
 
 The board has no known header for USART2. Ways onto the pins without soldering, from easiest:
@@ -146,4 +158,4 @@ the chip, and the board's parts layout is not known.
 
 ## Tests
 
-`test/run-emulator-tests.sh latest.bin` runs the script against an AN3155 emulator of the bricked chip: the expected brick on a V13.4 and a V13.3 ROM, an older ROM refusing option-byte reads, BFB2 already clear, and RDP level 1. It checks the exit code, the final option block and the printed ROM build for each.
+`test/run-restore-tests.sh latest.bin` covers `restore-bank1.sh`. `test/run-emulator-tests.sh latest.bin` runs the script against an AN3155 emulator of the bricked chip: the expected brick on a V13.4 and a V13.3 ROM, an older ROM refusing option-byte reads, BFB2 already clear, and RDP level 1. It checks the exit code, the final option block and the printed ROM build for each.

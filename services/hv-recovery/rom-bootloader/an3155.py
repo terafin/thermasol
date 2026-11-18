@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tiny AN3155 (STM32 USART bootloader) client over TCP, for an ESP32 stream-server bridge running 8E1.
-Commands: id | read ADDR LEN OUTFILE | write ADDR INFILE. Never erases. Exits non-zero on any NACK/timeout."""
+Commands: id | read ADDR LEN OUTFILE | write ADDR INFILE | erase-bank1 LEN | write-flash ADDR INFILE.
+erase-bank1 only ever erases bank-1 pages (0x08000000-0x0803FFFF); nothing else erases. Exits non-zero on any NACK/timeout."""
 import socket,struct,sys,time
 ACK,NACK=0x79,0x1F
 class BL:
@@ -57,11 +58,24 @@ class BL:
         s.cmd(0x31); s.addr(a); n=len(d)-1; cs=n
         for x in d: cs^=x
         s.s.sendall(bytes([n])+d+bytes([cs])); s.ack('write data')
+    def erase_pages(s,pages):
+        # AN3155 Extended Erase (0x44): N-1 (2 bytes BE), N page numbers (2 bytes BE each), XOR checksum.
+        assert pages and all(0<=p<128 for p in pages), 'only bank-1 pages 0-127 are ever erased here'
+        s.cmd(0x44); d=struct.pack('>H',len(pages)-1)+b''.join(struct.pack('>H',p) for p in pages)
+        cs=0
+        for x in d: cs^=x
+        s.s.settimeout(30); s.s.sendall(d+bytes([cs])); s.ack('erase'); s.s.settimeout(3)
 if __name__=='__main__':
     h,p,op=sys.argv[1],int(sys.argv[2]),sys.argv[3]
     b=BL(h,p)
     if op=='id': print(f'device_id={b.getid():#06x} bl_version={b.getver():#04x}')
     elif op=='read':
         a=int(sys.argv[4],0); n=int(sys.argv[5],0); open(sys.argv[6],'wb').write(b.read(a,n)); print(f'read {n} bytes @ {a:#x}')
+    elif op=='erase-bank1':
+        n=int(sys.argv[4],0); pages=list(range((n+0x7FF)//0x800)); b.erase_pages(pages); print(f'erased bank-1 pages 0-{pages[-1]}')
+    elif op=='write-flash':
+        a=int(sys.argv[4],0); d=open(sys.argv[5],'rb').read(); d+=b'\xff'*(-len(d)%8)
+        for o in range(0,len(d),256): b.write(a+o,d[o:o+256])
+        print(f'wrote {len(d)} bytes @ {a:#x}')
     elif op=='write':
         a=int(sys.argv[4],0); d=open(sys.argv[5],'rb').read(); b.write(a,d); print(f'wrote {len(d)} bytes @ {a:#x}')

@@ -12,7 +12,7 @@ FLASH=bytearray(b'\xff'*0x80000)
 v5=open(sys.argv[1],'rb').read()
 IMG_BANK=os.environ.get('IMG_BANK') or '1'   # '2': image sits in bank 2, bank 1 erased
 base=0x40000 if IMG_BANK=='2' else 0
-FLASH[base:base+len(v5)]=v5
+if IMG_BANK!='none': FLASH[base:base+len(v5)]=v5
 OPTR=[int(sys.argv[2],16)]
 OLD_ROM=len(sys.argv)>3 and sys.argv[3]=='old'
 log=open(sys.argv[4] if len(sys.argv)>4 else '/dev/null','a')
@@ -87,13 +87,20 @@ def handle(c):
                     if POSTBOOT=='v7' and not (v>>20)&1: LEFT_ROM[0]=True; log.write('  BFB2=0 -> boots bank 1, ROM gone\n'); log.flush()
                     c.close(); return
                 elif 0x08000000<=a<0x08080000:
-                    FLASH[a-0x08000000:a-0x08000000+N]=d; w(ACK)
+                    o=a-0x08000000
+                    if any(FLASH[o+i]&d[i]!=d[i] for i in range(N)): w(NACK); log.write(f'  write to unerased flash @{a:#x}\n'); continue   # flash only clears bits
+                    FLASH[o:o+N]=d; w(ACK)
                 else: w(NACK)
             elif b==0x44:
                 w(ACK); hdr=r(2)
                 if hdr==b'\xff\xff': r(1); w(ACK)
                 else:
-                    n=struct.unpack('>H',hdr)[0]+1; r(2*n+1); w(ACK)
+                    n=struct.unpack('>H',hdr)[0]+1; pl=r(2*n); r(1)
+                    for i in range(n):
+                        pg=struct.unpack_from('>H',pl,2*i)[0]   # dual bank: pages 0-127 bank 1, 256-383 bank 2
+                        off=pg*0x800 if pg<128 else 0x40000+(pg-256)*0x800
+                        FLASH[off:off+0x800]=b'\xff'*0x800
+                    log.write(f'  erased {n} pages\n'); w(ACK)
             elif b==0x21: w(ACK); a=addr(); w(ACK); return
             else: w(NACK)
     except (EOFError, BrokenPipeError, ConnectionResetError): pass
@@ -103,4 +110,4 @@ while True:
     c,_=s.accept()
     if LEFT_ROM[0]: c.close(); continue   # v7 is running: nothing answers 0x7F on USART2
     handle(c)
-    if len(sys.argv)>4: open(sys.argv[4]+'.optr','w').write(hex(OPTR[0])); open(sys.argv[4]+'.rest','w').write(OBREST[0].hex())
+    if len(sys.argv)>4: open(sys.argv[4]+'.optr','w').write(hex(OPTR[0])); open(sys.argv[4]+'.rest','w').write(OBREST[0].hex()); open(sys.argv[4]+'.flash','wb').write(bytes(FLASH))
