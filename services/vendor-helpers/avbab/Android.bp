@@ -1,7 +1,6 @@
 // TT10V2 — avbab, the A/B slot metadata tool for the ThermaSol panel.
 //
-// Written and owned by the Shower Firmware Helper session. This module exists
-// only so B's image carries it.
+// This module exists only so B's image carries it.
 //
 // It reads and writes the libavb_ab AvbABData record at misc+0x800 (magic
 // "\0AB0", version 1.0) and NOT the AOSP bootloader_control struct, whose magic

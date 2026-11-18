@@ -1,10 +1,28 @@
-# 15 — Panel recovery plan
+# 15 — Panel recovery: the dark panel of 2026-11-17
 
-One trip, one fix. Read the whole page before opening the wall. Nothing on it has been run yet.
+**Status: done.** On 2026-11-17 the panel was recovered through the U6 console with the steps
+below, and it booted slot `_b` with verified boot green, CMA at 320M and the v1.2 idle daemon
+running. The same night a network recovery hook was added to U-Boot so the next dark panel can be
+fixed without opening the wall: see [16-network-recovery-hook.md](16-network-recovery-hook.md).
+The page is kept as the record of the failure, and as the procedure if the hook itself is ever lost.
 
-Every fact below was checked directly against one of these, and nothing else:
+## What the console showed, before anything was changed
 
-- **The October backup** — `~/tt-recovery/bootarea-20261011/`, taken 2026-10-11 after the CMA
+```
+bootcmd=run bootcmd_orig
+bootargs=console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 clk_ignore_unused keep_bootcon panic=1
+stage=prebooti
+bootdelay=0
+cmaargs=echo cma: using device-tree default
+```
+
+That is the state predicted below: the one-shot chain ran to `prebooti`, saved the payload's
+command line as `bootargs`, and left `bootcmd` stock. The four values in step 4 were set, each was
+compared byte for byte with the October backup, then `saveenv` and `reset`.
+
+## What the plan was checked against
+
+- **The October backup** — `uboot_env.img` from the boot-area backup taken 2026-10-11 after the CMA
   fix. Its `host-sha256.txt` verifies. `uboot_env.img` (md5 `1b1533ff43325d1a0c437826dd9aad88`)
   is the environment the panel ran on until 2026-11-17, and `mmcblk2_first8M.img` holds the
   bootloader the panel runs (`U-Boot 2019.04-41468-ge20d4ecd9f`, May 31 2022).
@@ -55,7 +73,7 @@ cmaargs=if test $sdram_size = 1024; then setenv cmavar 320M@0x400M-0xb80M; else 
 
 On this 2 GB panel that is `cma=800M`. That is the vendor's intended value, and it caused the
 30-second touch lag fixed on 2026-10-11. Measured on this panel at 800M (Android 10,
-`~/tt-recovery/backstop-20261011/LEDGER.md` lines 158–162, 3.5 minutes after a clean boot):
+the October work log, 3.5 minutes after a clean boot):
 `workingset_refault` 40k/s and I/O pressure 75%. At the same moment `MemFree` was 598 MB, and
 586 MB of that was `CmaFree`. About 600 MB sat idle in CMA while the rest of memory thrashed.
 `cmaargs` was overridden to use the device-tree default (320M) at 20:21:53 that evening
@@ -64,6 +82,11 @@ the panel now still carries it. It has not been re-measured at 800M on Android 1
 restores the October values instead.
 
 ## Tools
+
+The recovery itself used an ESP32 dev board (NodeMCU-32S) running ESPHome with
+`oxan/esphome-stream-server`, which bridges its UART2 to a TCP port. Wiring: ESP32 `GND` → U6 GND,
+`GPIO16` → U6 TX, `GPIO17` → U6 RX, ESP32 powered from its own USB supply. Any 3.3 V USB-serial
+adapter works the same way:
 
 - The **FT232R** USB-serial adapter, with **VCCIO set to 3.3 V**. VCC stays at 5 V from USB;
   that is normal. VCCIO is the one setting that can damage the panel.
@@ -172,12 +195,7 @@ adb shell su 0 dd if=/data/local/tmp/uboot_env.img of=/dev/block/mmcblk2 bs=4096
 This removes the leftover variables from the v10 experiment (`payargs`, `fdtaddr`,
 `bootcmd_safe`, `bootcmd_orig`). It is optional; step 4 alone fixes the boot.
 
-## The amp
-
-Not part of this trip. There is no known way into the amp's board yet, and no evidence about
-its connectors. Planning for it starts only once the board can be seen.
-
-## The amp — research only, nothing to act on yet
+## The amp — research only
 
 Everything below is read from the v5 firmware image (`latest.bin`, sha256 `37c81d0b…`) and
 ThermaSol's HydroVive installation manual. Nothing has been tested on the unit.

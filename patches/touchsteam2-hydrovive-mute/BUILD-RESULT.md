@@ -2,7 +2,7 @@
 
 ## CORRECTION: the first build used the wrong base
 
-The patch was first applied to `/home/terafin/tt-recovery/apks/com.thermasol.touchsteam2.apk`
+The patch was first applied to an older backup copy of `com.thermasol.touchsteam2.apk`
 (the recovery-tree copy). That is **not** what is installed:
 
 | | recovery copy | installed base.apk |

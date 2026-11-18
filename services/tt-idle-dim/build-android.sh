@@ -2,7 +2,7 @@
 # Cross-build tt-idle-dim for aarch64 Android (bionic) using the AOSP clang.
 # Usage: build-android.sh [output-name]   (default: idle_dim)
 set -e
-ROOT=${AOSP_ROOT:-/home/terafin/android15-build/imx-android-15.0.0_1.2.0/android_build}
+ROOT=${AOSP_ROOT:?set AOSP_ROOT to the imx-android-15.0.0_1.2.0 android_build tree}
 CLANG="$ROOT/prebuilts/clang/host/linux-x86/clang-r536225/bin/clang"
 SYS="$ROOT/out/soong/ndk/sysroot"
 HERE=$(cd "$(dirname "$0")" && pwd)

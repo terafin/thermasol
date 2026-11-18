@@ -151,6 +151,6 @@ ordering rather than being sent opportunistically:
 
 - TX layout: `hvlsr_*` in the installed library, 0x1e3d8–0x1ec4c.
 - RX dispatch and fields: `process_msg` at 0x1ec4c.
-- Captures: `~/tt-recovery/canlisten/cap-thermasol-start.txt` (`0x143 A5 B0 8F 07` and
+- Captures: `cap-thermasol-start.txt` (`0x143 A5 B0 8F 07` and
   `A5 B8 8F 00` at 1 Hz, pre-failure), `idle-steam-off.txt` and `cap-musicon.txt` (`0x131`
   command sequences), plus the live capture described in `docs/14`.

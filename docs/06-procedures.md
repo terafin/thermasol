@@ -118,7 +118,9 @@ Order of attempts:
    `command ps -A | command grep 'adb -L tcp:5037'`. If present:
    `su 0 kill -9 <pid>` then `setprop ctl.restart adbd`.
 4. IPv6 link-local ADB: `$A connect '[fe80::...%ens160]:5555'`.
-5. UART.
+5. The U-Boot network hook: put a fix script on the TFTP server and power-cycle
+   ([16-network-recovery-hook.md](16-network-recovery-hook.md)).
+6. UART.
 
 `ro.init.updatable_crashing=1` means init has latched and stopped restarting `adbd` for this
 boot. It clears on reboot — but only reboot if you have a second way back.

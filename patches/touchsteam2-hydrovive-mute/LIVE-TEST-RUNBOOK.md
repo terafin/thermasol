@@ -10,7 +10,7 @@ Nothing here has been executed.
 | candidate | `scratch/apkbuild/touchsteam2-patched-v4.apk` | `341e68be0ca6280f92a008d29e309dd90aa341e25aa83c43256ee5a4e0ee0bfe` |
 | original (pulled from the panel) | `scratch/apkbuild/installed-base.apk` | `8ad27395b106aaf37ade580b374680338fbf8f40b5509b16b16db33652698a19` |
 
-`scratch` = `/home/terafin/.local/state/issue-thermasol-vendor-a`. The candidate
+`scratch` = your local working directory. The candidate
 is the installed APK with **only `classes2.dex` replaced**; the other 868 entries
 are byte-identical, and both files carry signer `7fbae817…a4d6d804`.
 
