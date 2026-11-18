@@ -80,13 +80,17 @@ evidence are in [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
    and never use `env default -a`. The hook is the only way in when Android does not boot
    ([`docs/16`](docs/16-network-recovery-hook.md)); the panel was dark for a week on 2026-11-17
    because a saved environment dropped the Android command line.
-5. **Never send guessed CAN frames** to the shower peripherals. Doing so destroyed working
+5. **Never send `A5 BC 7B 01` (or `BD 01`) to any ThermaSol peripheral.** It toggles the MCU's BFB2
+   option bit; the ST ROM then rejects ThermaSol's own images (stack pointer `0x20020000`) and the unit
+   drops into the system bootloader, unreachable over CAN. This is how the HydroVive was lost on
+   2026-11-16 ([`docs/14`](docs/14-hydrovive-recovery.md)). The DSV-4000 generator has the same handler.
+6. **Never send guessed CAN frames** to the shower peripherals. Doing so destroyed working
    audio and took hours to diagnose. Capture what the vendor app emits and mirror it.
-6. **Never call `Utils.ShutdownAll` as an idle action** — it stops steam and runs a water
+7. **Never call `Utils.ShutdownAll` as an idle action** — it stops steam and runs a water
    flush. Do not launch `PowerFlushActivity` or `FirmwareUpdateActivity` to "look".
-7. **Never pull the touch CHG pin low, and never do raw MMIO on a suspended GPIO bank.**
+8. **Never pull the touch CHG pin low, and never do raw MMIO on a suspended GPIO bank.**
    It caused a board reset.
-8. **Never set `force_wifi true`.** The vendor `MainControl` takes `eth0` **down** at startup
+9. **Never set `force_wifi true`.** The vendor `MainControl` takes `eth0` **down** at startup
    when it is set. The panel runs on Ethernet.
 
 ### Never do these in the build
