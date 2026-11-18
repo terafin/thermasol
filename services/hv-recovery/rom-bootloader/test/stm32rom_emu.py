@@ -3,6 +3,8 @@ like the ESP32 stream-server. Models: flash 512 KB @0x08000000, option bytes @0x
 FLASH_OPTR register mirror @0x40022020. Write Memory to 0x1FFF7800 updates OPTR (as the ROM does)."""
 import os,socket,struct,sys,threading
 ROMVER=int(os.environ.get('ROMVER','0xD4'),16)
+POSTBOOT=os.environ.get('POSTBOOT','')   # 'v7': after BFB2 is cleared the chip boots bank 1 and the ROM never answers again
+LEFT_ROM=[False]
 ACK,NACK=0x79,0x1F
 FLASH=bytearray(b'\xff'*0x80000)
 v5=open(sys.argv[1],'rb').read(); FLASH[:len(v5)]=v5
@@ -66,7 +68,9 @@ def handle(c):
                     v,cmp_=struct.unpack_from('<II',buf,0)
                     if cmp_!=(~v)&0xffffffff and N>=8: w(NACK); continue
                     OPTR[0]=v; OBREST[0]=bytearray(buf[8:48]); log.write(f'  OPTR <- {v:#010x} rest_intact={bytes(buf[8:48])==OB_FACTORY_REST}\n'); w(ACK)
-                    log.write('  OB reload -> reset\n'); log.flush(); c.close(); return
+                    log.write('  OB reload -> reset\n'); log.flush()
+                    if POSTBOOT=='v7' and not (v>>20)&1: LEFT_ROM[0]=True; log.write('  BFB2=0 -> boots bank 1, ROM gone\n'); log.flush()
+                    c.close(); return
                 elif 0x08000000<=a<0x08080000:
                     FLASH[a-0x08000000:a-0x08000000+N]=d; w(ACK)
                 else: w(NACK)
@@ -81,5 +85,7 @@ def handle(c):
 s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind(('127.0.0.1',int(sys.argv[5]) if len(sys.argv)>5 else 16639)); s.listen(5)
 open(sys.argv[4]+'.optr','w').write(hex(OPTR[0])) if len(sys.argv)>4 else None
 while True:
-    c,_=s.accept(); handle(c)
+    c,_=s.accept()
+    if LEFT_ROM[0]: c.close(); continue   # v7 is running: nothing answers 0x7F on USART2
+    handle(c)
     if len(sys.argv)>4: open(sys.argv[4]+'.optr','w').write(hex(OPTR[0])); open(sys.argv[4]+'.rest','w').write(OBREST[0].hex())

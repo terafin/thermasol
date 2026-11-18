@@ -74,6 +74,11 @@ if $BL read 0x1FFF7800 48 "$D/5-ob-after.bin" 2>/dev/null; then
   python3 -I -c "import sys;a=open(sys.argv[1],'rb').read();b=open(sys.argv[2],'rb').read();diff=[i for i in range(48) if a[i]!=b[i]];print('bytes changed vs before:',diff);sys.exit(0 if set(diff)<=set(range(8)) else 1)" "$D/2-ob.bin" "$D/5-ob-after.bin" || { echo "WARNING: option bytes outside OPTR changed - inspect 2-ob.bin vs 5-ob-after.bin"; exit 8; }
   [ $(( NEWV >> 20 & 1 )) -eq 0 ] && echo "SUCCESS: BFB2 is clear. Disconnect the ESP32 (GPIO17 at least), then power-cycle; the MCU boots bank 1 (v7), which drives the same lines." || { echo "FAILED: BFB2 still set."; exit 6; }
 else
-  echo "No bootloader answer after the write. That is expected if the MCU left the ROM and is now running v7."
-  echo "Confirm on the panel: power-cycle and look for 0x143 'A5 B0 8F 07' frames. If absent, rerun this script."; exit 7
+  # With BFB2 cleared the reset after an option-byte write boots bank 1 directly, so the ROM is gone:
+  # this is what a successful write looks like on real silicon, but the new bytes could not be read back.
+  echo "WRITE SENT, NOT READ BACK: the MCU left the ROM after the write, which is what clearing BFB2 does."
+  echo "Disconnect the ESP32 (GPIO17 at least), power-cycle, and confirm from the panel (README step 6):"
+  echo "  0x143 'A5 B0 8F 07' once a second means v7 is running and the fix took."
+  echo "  Nothing on 0x143 after that: reconnect and rerun this script; step 1 will say what state it is in."
+  exit 0
 fi

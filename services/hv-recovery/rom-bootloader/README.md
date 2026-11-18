@@ -14,8 +14,12 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
   2. reads the user option bytes at `0x1FFF7800`,
   3. backs up the full 512 KB flash and prints both banks' vector words,
   4. only after you type `YES`, rewrites the full 48-byte option block with **BFB2 cleared and every other byte as read** (a Write Memory to the option area erases all of it first), then reads it back and checks nothing else changed.
-  5. after `SUCCESS`, disconnect the ESP32 (at least GPIO17) **before** the final power-cycle. The MCU
-     then boots v7, which powers the Bluetooth module on the same two lines.
+  5. after the write it reconnects to read the option bytes back. On real silicon that usually fails:
+     with BFB2 cleared, the reset that follows an option-byte write boots bank 1 directly and the ROM
+     never answers again. The script then prints `WRITE SENT, NOT READ BACK` and exits 0; if BFB2 had
+     stayed set, the ROM would come back and the read-back would report it. Either way, disconnect the
+     ESP32 (at least GPIO17) **before** the final power-cycle: the MCU then boots v7, which powers the
+     Bluetooth module on the same two lines.
   6. confirm from the panel. A running unit sends status on CAN ID `0x143` by itself, once a second:
      `A5 B0 8F 07 00 00 00 00` (the `07` is the firmware version, v7) followed by `A5 B8 8F 00 …`.
      Measured on this unit before the brick (2026-10-11/12 captures: 60 in 60 s, first one within
