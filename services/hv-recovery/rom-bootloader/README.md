@@ -38,8 +38,21 @@ LQFP64 pin numbers (DS12288, Table 12). Pin 1 is at the dot; numbering runs coun
 PA2 and PA3 sit either side of the VSS/VDD pair at 15-16, so a probe slip there shorts the supply:
 use fine probes or tack wires.
 
-PA2/PA3 run to the Bluetooth module's UART (v5 talks to it there with `AA 00 …` frames), so its RX/TX
-pads are a second place to connect; the module is unpowered while the MCU sits in the ROM. A factory
+PA2/PA3 run to the Bluetooth module's UART, so its RX/TX pads are a second place to connect; the
+module is unpowered while the MCU sits in the ROM. v5 sends it `AA 00 03 02 00 <action> <chk>` at
+19200 baud: Microchip's MMI_Action command (actions 0x51-0x54, 0x5D), so it is a Microchip
+BM62/BM64-class module (a 15 x 29 or 15 x 32 mm can with castellated edge pads). From the BM62/64
+data sheet (DS60001403F, Tables 1-2/1-3), with the module's TXD going to the MCU's RX:
+
+| Module | Its TXD (to PA3) | Its RXD (from PA2) | GND |
+|---|---|---|---|
+| BM62 | pin 32 | pin 33 | 23, 37 |
+| BM64 | pin 20 | pin 19 | 14, 43 |
+
+So the ESP32's TX (GPIO17) goes on the module's **TXD** pad (that line is PA3, the MCU's RX), and the
+ESP32's RX (GPIO16) on the module's **RXD** pad (PA2). Read the marking on the can first; if it is not
+a BM62/BM64, find that module's UART pins. A series resistor between module and MCU, if fitted, is
+fine at 57600. A factory
 header on the board, if there is one, is more likely the USART1 console on PC4/PC5 (LQFP64 pins 22/23,
 DS12288), which the ROM does not listen on. No answer from such a header says nothing about
 the ROM.
