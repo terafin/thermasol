@@ -29,6 +29,28 @@ reach the chip. The remaining route is the chip's own USART2 (PA2/PA3, the pair 
 bootloader listens on), which needs the board in hand. If the chip is not read-protected, bank 1
 should still hold the v7 image it was running, and putting BFB2 back is the whole fix.
 
+## What else was ruled out (2026-11-18)
+
+- **ACK masking.** After ~7 s the generator is on the bus and ACKs everything, so an ACK at 100k
+  could come from either node. With the panel in listen-only it cannot ACK, so only the unit can:
+  the generator's frames go from ~4/s (panel ACKing) to ~830/s (panel silent, retransmit flood),
+  hours after power-on as well as in the cold window. The unit's FDCAN does not ACK at any time.
+- **Bluetooth.** The unit's BT module is not discoverable (classic or LE). It is powered by the MCU
+  (command `BB`) and wired to USART1 alternate pins (PC4/PC5) that the ROM bootloader does not
+  use, so it is no route to the chip even when powered.
+- **The other bank's updater.** ThermaSol's server lists no HydroVive image other than v5
+  (`firmware.json`; `bootloader.bin`, `v7.bin`, `updater.bin` and similar all 404). No ThermaSol APK
+  embeds a Cortex-M image. The DSV-4000 generator firmware (same G4 template) has the same bank
+  toggle and no page-receive code either; its flash writes go only to an 8 x 2 KB settings table at
+  `0x0803C000`. Both products rely on an updater resident in the other bank that is not distributed.
+- **Which bank boots.** Working AN2606 Fig. 59 against a toggle of BFB2: if v7 was in bank 1, BFB2
+  is 1 and the ROM decides; a valid updater in bank 2 would bring FDCAN up and an empty bank 2
+  would fall back to v7, and neither is what is seen. That leaves the ROM bootloader (consistent
+  with ROM V13.3's "boot from bank2 is not working") or a bank-2 image that never starts FDCAN. If
+  v7 ran from bank 2 under swap, BFB2 is 0 and bank 1 runs directly with no ROM check, so bank 1
+  would have to be invalid or non-CAN. Every consistent state is unreachable over CAN. In the ROM
+  state, USART2 (PA2/PA3, 8E1, `0x7F`) answers without touching BOOT0.
+
 ## The hardware
 
 - MCU: STM32G474-class, dual-bank flash (DBANK=1, 2 × 256 KB, 2 KB pages).

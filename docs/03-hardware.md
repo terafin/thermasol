@@ -177,7 +177,37 @@ Subsystems behind CAN:
 | `slsr_*` | Legacy speaker/light — **not present** |
 | `hvlsr_*` | HydroVive ceiling speaker/light — **the live one** |
 
+## Video decode (Hantro VPU)
+
+Hardware decode works and is what YouTube uses. Checked on 2026-11-17 on v1.2, slot `_b`:
+
+- `hantrodec` prints `vpu driver probe fail! nr=0xb7000000 ret=-1. Use normal mode.` at boot. That
+  is its secure-mode (Trusty) probe falling back to normal mode, **not** a failed probe:
+  `38300000.vpu_g1` and `38310000.vpu_g2` bind to `mxc_hantro_845`, `38320000.vpu_h1` to
+  `mxc_hantro_h1`, and `/dev/mxc_hantro`, `/dev/mxc_hantro_h1` and `/dev/video0-2` exist.
+- `media_codecs_c2.xml` declares `c2.imx.avc`, `hevc`, `vp8` and `vp9` decoders. Playing a YouTube
+  video allocates `c2.imx.vp9.decoder`, which opens the V4L2 decoder at `/dev/video2`; YouTube logs
+  `Codec created: c2.imx.vp9.decoder`.
+- Frame pacing on YouTube's `SurfaceView`, steady playback of a 30 fps stream: 121 frames in 4.0 s,
+  interval p50 34.6 ms, max 34.7 ms, no gap over 50 ms.
+
+Two things look like stutter and are not decode problems:
+
+- **`dumpsys media.player` lists `codec2::software` owners.** Those are idle software codec
+  instances, not what is decoding.
+- **`dumpsys SurfaceFlinger` stalls composition by ~100-140 ms each time it runs.** Sampling the
+  latency in a loop puts a hitch at every sample. Clear once, wait, read once.
+
+The real stutter is the first few minutes after boot: on a 2 GB panel, Play Store auto-updates,
+GMS and the app restarts compete for memory (measured at 6 min: load 14, `workingset_refault`
+7,400/s, low-memory-killer kills, 70% janky YouTube UI frames; at 8 min: load 3.5, 55/s). Setting
+Play's auto-update to Wi-Fi only or off removes most of it.
+
 ## Bluetooth
+
+The HydroVive ceiling unit's Bluetooth module is not discoverable from the panel (classic inquiry
+and LE scan, 2026-11-17). It is powered by the unit's MCU, which is not running. The panel has never
+been paired with it.
 
 Broadcom **BCM4335C0** on **UART2** (`30890000.serial`) via serdev, `hci_uart_bcm`, firmware
 `brcm/BCM4335C0.hcd` build 0809. Bring-up baud is **115200**, which is enough to connect but
