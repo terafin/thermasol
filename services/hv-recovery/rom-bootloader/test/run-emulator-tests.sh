@@ -16,5 +16,6 @@ check romver   0xFFFFF8AA new 16695 0 0xffeff8aa YES 0xD4 "ROM build V13.4"
 check rom133    0xFFFFF8AA new 16694 0 0xffeff8aa YES 0xD3 "ROM build V13.3 (byte 0xD3) (dual-bank boot erratum"
 check oldrom    0xFFFFF8AA old 16691 5 0xfffff8aa no
 check bfb2clear 0xFFEFF8AA new 16692 3 0xffeff8aa
+check success   0xFFFFF8AA new 16696 0 0xffeff8aa YES 0xD4 "Disconnect the ESP32"
 check rdp1      0xFFFFF8BB new 16693 1 0xfffff8bb
 echo "$pass passed, $fail failed"; [ $fail -eq 0 ]

@@ -5,12 +5,17 @@ For a unit whose MCU sits in the ST system bootloader after `BC 01` (see
 Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the CAN harness reaches it.
 
 - `amp-uart.yaml` — ESPHome config for an ESP32 that bridges USART2 to TCP port 6639, 57600 8E1.
-  Wiring: ESP32 GND to the board's GND, GPIO17 to PA3 (USART2_RX), GPIO16 to PA2 (USART2_TX).
+  Wiring: ESP32 GND to the board's GND, GPIO17 to PA3 (USART2_RX) **through a 1 kΩ resistor**, GPIO16
+  to PA2 (USART2_TX). The resistor matters: PA3 is also driven by the Bluetooth module's TX once the
+  real firmware runs, and two outputs fighting on that line can damage the module's pin. 1 kΩ keeps
+  that under 4 mA and does not affect 57600 baud.
 - `recover.sh <esp32-ip>` — uses `an3155.py`, a small AN3155 client that talks to the ESP32 over TCP:
   1. identifies the chip (refuses anything but device ID 0x469, STM32G47x),
   2. reads the user option bytes at `0x1FFF7800`,
   3. backs up the full 512 KB flash and prints both banks' vector words,
   4. only after you type `YES`, rewrites the full 48-byte option block with **BFB2 cleared and every other byte as read** (a Write Memory to the option area erases all of it first), then reads it back and checks nothing else changed.
+  5. after `SUCCESS`, disconnect the ESP32 (at least GPIO17) **before** the final power-cycle. The MCU
+     then boots v7, which powers the Bluetooth module on the same two lines.
 
 Step 4 refuses unless the read-back has the value/complement layout, RDP is level 0 (`0xAA`), and the
 new value differs only in bit 20. On a unit in the state described in docs/14 it writes `0xFFEFF8AA`, the
