@@ -44,13 +44,15 @@ The compiled default environment in the panel's own bootloader binary contains:
 cmaargs=if test $sdram_size = 1024; then setenv cmavar 320M@0x400M-0xb80M; else setenv cmavar 800M@0x400M-0xb80M; fi; setenv bootargs ${bootargs} cma=${cmavar};
 ```
 
-On this 2 GB panel that is `cma=800M`. That is the vendor's intended value, and it is the cause of
-the 30-second touch lag fixed on 2026-10-11. Measured on this panel at 800M (Android 10,
-`~/tt-recovery/backstop-20261011/LEDGER.md`): `workingset_refault` 86,130/s and `pgsteal_kswapd`
-86,495/s, with about 600 MB idle in CMA while the rest of memory thrashed. Overriding `cmaargs`
-to use the device-tree default (320M) dropped refaults to about 5,400/s. The saved environment
-has carried that override since. It has not been re-measured at 800M on Android 15. The fix
-below restores the October values instead.
+On this 2 GB panel that is `cma=800M`. That is the vendor's intended value, and it caused the
+30-second touch lag fixed on 2026-10-11. Measured on this panel at 800M (Android 10,
+`~/tt-recovery/backstop-20261011/LEDGER.md` lines 158–162, 3.5 minutes after a clean boot):
+`workingset_refault` 40k/s and I/O pressure 75%. At the same moment `MemFree` was 598 MB, and
+586 MB of that was `CmaFree`. About 600 MB sat idle in CMA while the rest of memory thrashed.
+`cmaargs` was overridden to use the device-tree default (320M) at 20:21:53 that evening
+(line 173). The saved environment has carried that override since, and the v10 environment on
+the panel now still carries it. It has not been re-measured at 800M on Android 15. The fix below
+restores the October values instead.
 
 ## Tools
 
@@ -110,8 +112,8 @@ exactly like a dead console.
    ```
 
 7. Watch the console. Within about a minute, check from a host:
-   - `ping 10.0.1.32` answers
-   - `adb connect 10.0.1.32:5555` connects
+   - `ping <panel-ip>` answers
+   - `adb connect <panel-ip>:5555` connects
    - `adb shell getprop sys.boot_completed` prints `1`
    - `adb shell getprop ro.boot.slot_suffix` prints `_b`
 
