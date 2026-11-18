@@ -152,6 +152,20 @@ I2C2/3/4, SPI1/2 and DFU only, **never FDCAN**.
 - Then status 1 → `101#01` → status 2 → `101#02` → status 3 → 2 KB pages on 0x102, each followed
   by `101#05` with that page's CRC → `101#03`, `101#04`. Every wait comes before its command.
 
+### The panel would offer a downgrade
+
+touchsteam2's update check (`FirmwareUpdateActivity.java:77`) asks
+`Utility.packageUpdateNeeded(firmware.json, "com.thermatouch.tsolup.firmware.hydrovive", <unit's version>)`
+and treats any non-null result as "update needed". As jadx renders it, that function returns the
+HydroVive entry whenever one is listed: it returns early when the server is newer, and otherwise
+keeps the matching entry and returns it at the end instead of null. So a listed v5 (older than
+this unit's v7) or a listed v7 (equal) would still prompt, then download `hydrovive/latest.bin`
+and send it through `hvlsr_update_fw`, which starts with `BC 01`, the command that bricked this unit.
+
+On 2026-11-18 `firmware.json` (sha256 `6e5f8cd9…`) has no HydroVive entry, so nothing is offered.
+If ThermaSol adds one, decline the prompt on the panel. This is read from the decompiled app, not
+run: jadx can mis-render control flow, and nobody has started `FirmwareUpdateActivity` to see it.
+
 ## Observations since the command
 
 | Test | Result |
