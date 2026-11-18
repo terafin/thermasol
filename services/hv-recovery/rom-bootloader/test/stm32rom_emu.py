@@ -8,7 +8,10 @@ v5=open(sys.argv[1],'rb').read(); FLASH[:len(v5)]=v5
 OPTR=[int(sys.argv[2],16)]
 OLD_ROM=len(sys.argv)>3 and sys.argv[3]=='old'
 log=open(sys.argv[4] if len(sys.argv)>4 else '/dev/null','a')
-OBREST=[bytearray(b'\xff\xff\x00\xff\x00\xff\xff\xff'*5)]   # non-0xFF "rest" so an 8-byte write that erases it is detectable
+# RM0440 cat-3 option words after OPTR (value, then bitwise complement), ST production values:
+def _w(v): return struct.pack('<II',v,(~v)&0xffffffff)
+OB_FACTORY_REST=_w(0xFFFFFFFF)+_w(0x00FF0000)+_w(0xFF00FFFF)+_w(0xFF00FFFF)+_w(0xFF00FF00)  # PCROP1 start/end, WRP1A, WRP2A, SEC1
+OBREST=[bytearray(OB_FACTORY_REST)]
 def ob(): v=OPTR[0]; return bytearray(struct.pack('<II',v,(~v)&0xffffffff))+OBREST[0]
 def rd(a,n):
     if 0x08000000<=a and a+n<=0x08080000: return bytes(FLASH[a-0x08000000:a-0x08000000+n])
@@ -61,7 +64,7 @@ def handle(c):
                     buf=bytearray(b'\xff'*48); buf[a-0x1FFF7800:a-0x1FFF7800+N]=d   # AN3155: OB area erased, then written
                     v,cmp_=struct.unpack_from('<II',buf,0)
                     if cmp_!=(~v)&0xffffffff and N>=8: w(NACK); continue
-                    OPTR[0]=v; OBREST[0]=bytearray(buf[8:48]); log.write(f'  OPTR <- {v:#010x} rest_intact={bytes(buf[8:48])==b"\xff\xff\x00\xff\x00\xff\xff\xff"*5}\n'); w(ACK)
+                    OPTR[0]=v; OBREST[0]=bytearray(buf[8:48]); log.write(f'  OPTR <- {v:#010x} rest_intact={bytes(buf[8:48])==OB_FACTORY_REST}\n'); w(ACK)
                     log.write('  OB reload -> reset\n'); log.flush(); c.close(); return
                 elif 0x08000000<=a<0x08080000:
                     FLASH[a-0x08000000:a-0x08000000+N]=d; w(ACK)

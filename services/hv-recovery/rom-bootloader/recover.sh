@@ -35,6 +35,12 @@ assert comp == (~old & 0xffffffff), f"unexpected OB layout: {old:#x} / {comp:#x}
 assert (old & 0xff) == 0xaa, "RDP is not level 0 (0xAA) - stop, never touch RDP"
 v = old & ~(1<<20)
 assert len(d)==48, f"need the full 48-byte option block, got {len(d)}"
+names=["OPTR","PCROP1_START","PCROP1_END","WRP1A","WRP2A","SEC1"]
+for i,n in enumerate(names):
+    wv,wc=struct.unpack_from('<II',d,8*i)
+    assert wc==(~wv)&0xffffffff, f"{n} @0x{0x1FFF7800+8*i:08X}: {wv:#010x}/{wc:#010x} is not value+complement - stop, read looks corrupt"
+    print(f"  {n:13s} {wv:#010x}")
+assert v == old & ~(1<<20) and (v & 0xff) == 0xaa, f"internal: new OPTR {v:#010x} is not old {old:#010x} with only BFB2 cleared - stop"
 struct.pack_into('<II',d,0,v,(~v)&0xffffffff)
 # AN3155: a Write Memory to the option area erases ALL option bytes first, so write back the whole
 # 48-byte block as read, with only OPTR/its complement changed.

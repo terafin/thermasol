@@ -6,7 +6,7 @@ check(){ name=$1 optr=$2 rom=$3 port=$4 want_exit=$5 want_optr=$6 answer=${7:-YE
   python3 -I "$H/stm32rom_emu.py" "$IMG" "$optr" "$rom" "$LOG/$name.log" "$port" 2>/dev/null & EP=$!; sleep 1
   echo "$answer" | timeout 300 bash "$H/../recover.sh" 127.0.0.1 "$port" > "$LOG/$name.out" 2>&1; rc=$?
   got=$(cat "$LOG/$name.log.optr"); rest=$(cat "$LOG/$name.log.rest" 2>/dev/null); kill $EP 2>/dev/null; wait $EP 2>/dev/null
-  want_rest=$(printf 'ffff00ff00ffffff%.0s' 1 2 3 4 5)
+  want_rest=ffffffff000000000000ff00ffff00ffffff00ff0000ff00ffff00ff0000ff0000ff00ffff00ff00  # RM0440 factory PCROP1/WRP1A/WRP2A/SEC1
   if [ "$rc" = "$want_exit" ] && [ "$got" = "$want_optr" ] && [ "$rest" = "$want_rest" ]; then echo "PASS $name (exit $rc, OPTR $got)"; pass=$((pass+1))
   else echo "FAIL $name (exit $rc want $want_exit, OPTR $got want $want_optr, rest-of-OB intact: $([ "$rest" = "$want_rest" ] && echo yes || echo NO))"; fail=$((fail+1)); fi; }
 check bricked   0xFFFFF8AA new 16690 0 0xffeff8aa

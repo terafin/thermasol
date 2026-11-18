@@ -1,1 +1,0 @@
-device_id=0x0469 bl_version=0x31
