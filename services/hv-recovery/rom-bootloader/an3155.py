@@ -6,14 +6,17 @@ import socket,struct,sys,time
 ACK,NACK=0x79,0x1F
 class BL:
     def __init__(s,host,port):
-        s.s=socket.create_connection((host,port),5); s.s.settimeout(3)
-        for _ in range(5):
+        s.s=socket.create_connection((host,port),5)
+        # AN3155: the ROM autobauds on the first 0x7F after reset and ACKs. Once synced, a lone 0x7F is taken
+        # as the first byte of a command: no reply, and the next 0x7F completes a bad pair and gets NACK
+        # (stm32flash's stm32_send_init_seq does the same). So a short wait, then resend, and treat NACK as synced.
+        s.s.settimeout(1)
+        for _ in range(6):
             s.s.sendall(b'\x7f')
             try:
                 b=s.s.recv(1)
-                if b and b[0] in (ACK,NACK): return  # NACK = already synced
+                if b and b[0] in (ACK,NACK): s.s.settimeout(3); return
             except socket.timeout: pass
-            time.sleep(0.2)
         raise SystemExit('no answer from ROM bootloader')
     def rx(s,n):
         b=b''

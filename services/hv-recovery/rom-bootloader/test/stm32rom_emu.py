@@ -5,6 +5,7 @@ import os,socket,struct,sys,threading
 ROMVER=int(os.environ.get('ROMVER','0xD4'),16)
 POSTBOOT=os.environ.get('POSTBOOT','')   # 'v7': after BFB2 is cleared the chip boots bank 1 and the ROM never answers again
 LEFT_ROM=[False]
+SYNCED=[False]   # AN3155: the ROM autobauds on the first 0x7F after reset; later a 0x7F is just a command byte
 DROP_AT=int(os.environ.get('DROP_AT') or '0',0)   # flash address whose read reply loses its last byte once (models a Wi-Fi drop)
 DROPPED=[False]
 ACK,NACK=0x79,0x1F
@@ -54,7 +55,7 @@ def handle(c):
     try:
         while True:
             b=r(1)[0]
-            if b==0x7F: w(ACK); log.write('sync\n'); continue
+            if b==0x7F and not SYNCED[0]: SYNCED[0]=True; w(ACK); log.write('sync\n'); continue
             x=r(1)[0]
             if x!=(b^0xFF): w(NACK); continue
             log.write(f'cmd {b:#04x}\n'); log.flush()
@@ -84,7 +85,7 @@ def handle(c):
                     if cmp_!=(~v)&0xffffffff and N>=8: w(NACK); continue
                     if WIPE_BANK2: OB2[0]=bytearray(b'\xff'*48)
                     OPTR[0]=v; OBREST[0]=bytearray(buf[8:48]); log.write(f'  OPTR <- {v:#010x} rest_intact={bytes(buf[8:48])==OB_FACTORY_REST}\n'); w(ACK)
-                    log.write('  OB reload -> reset\n'); log.flush()
+                    log.write('  OB reload -> reset\n'); log.flush(); SYNCED[0]=False
                     if POSTBOOT=='v7' and not (v>>20)&1: LEFT_ROM[0]=True; log.write('  BFB2=0 -> boots bank 1, ROM gone\n'); log.flush()
                     c.close(); return
                 elif 0x08000000<=a<0x08080000:
