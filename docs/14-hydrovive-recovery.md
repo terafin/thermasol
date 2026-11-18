@@ -44,7 +44,8 @@ staff state that the G47x ROM rejects it in the dual-bank check (ST community, "
 not quite working", thread 61363): "The Bootloader doesn't support CCM-SRAM as valid location for stack
 pointer. So in case of Dual bank boot, if a bank contains stack pointer pointing outside SRAM1 it is
 considered by the bootloader as non valid ... there is no bug in STM32G4 bootloader V13.4, this is how
-Bootloader works." The accepted range ends at `0x20017FFF`. Both DSV-4000 images and v5 use
+Bootloader works." The accepted range ends at `0x20017FFF`, and the same reply says CCM support was added
+only on newer series, so this holds for every G47x ROM version. Both DSV-4000 images and v5 use
 `0x20020000`, so ThermaSol's own bank toggle cannot boot its images through the ROM on these chips; this
 unit hit that on its first `BC 01`.
 
