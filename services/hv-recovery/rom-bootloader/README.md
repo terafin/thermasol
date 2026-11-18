@@ -16,6 +16,28 @@ Step 4 refuses unless the read-back has the value/complement layout, RDP is leve
 new value differs only in bit 20. On a unit in the state described in docs/14 it writes `0xFFEFF8AA`, the
 ST factory default, after which the G47x boots bank 1 directly and the original firmware runs.
 
+## Where the pins are on the chip
+
+The firmware drives PC0, PC3 and PC5, which the 48-pin G474 packages do not have, so the MCU is at least
+a 64-pin part; with 512 KB of flash it is most likely the STM32G474RE in LQFP64. Not confirmed on a real
+board: read the chip's marking first. If it is not a 64-pin LQFP, use the datasheet's table for that package.
+
+LQFP64 pin numbers (DS12288, Table 12). Pin 1 is at the dot; numbering runs counter-clockwise seen from the top.
+
+| Signal | Pin | Use here |
+|---|---|---|
+| PA2 (USART2_TX) | 14 | to the ESP32's RX (GPIO16) |
+| VSS | 15, 31, 47 | ground for the ESP32 |
+| VDD | 16, 32, 48, 64 | 3.3 V; do not power the board from the ESP32 |
+| PA3 (USART2_RX) | 17 | to the ESP32's TX (GPIO17) |
+| PB8-BOOT0 | 61 | only if step 1 gets no answer (below) |
+| PG10-NRST | 7 | reset, if needed |
+| PB5 / PB6 (FDCAN2) | 58 / 59 | the CAN transceiver; leave alone |
+| PA13 / PA14 (SWD) | 49 / 50 | SWDIO / SWCLK, if an ST-LINK is used instead |
+
+PA2 and PA3 sit either side of the VSS/VDD pair at 15-16, so a probe slip there shorts the supply:
+use fine probes or tack wires.
+
 ## If the script stops
 
 - **No answer at step 1:** the MCU is running stale bank-2 code. Hold BOOT0 (PB8) at 3.3 V through about
@@ -34,4 +56,4 @@ ST factory default, after which the G47x boots bank 1 directly and the original 
 
 ## Tests
 
-`test/run-emulator-tests.sh latest.bin` runs the script against an AN3155 emulator of the bricked chip in four states (expected brick, older ROM refusing option-byte reads, BFB2 already clear, RDP level 1) and checks the exit code and final option word for each.
+`test/run-emulator-tests.sh latest.bin` runs the script against an AN3155 emulator of the bricked chip: the expected brick on a V13.4 and a V13.3 ROM, an older ROM refusing option-byte reads, BFB2 already clear, and RDP level 1. It checks the exit code, the final option block and the printed ROM build for each.
