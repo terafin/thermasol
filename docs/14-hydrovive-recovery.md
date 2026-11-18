@@ -152,19 +152,18 @@ I2C2/3/4, SPI1/2 and DFU only, **never FDCAN**.
 - Then status 1 → `101#01` → status 2 → `101#02` → status 3 → 2 KB pages on 0x102, each followed
   by `101#05` with that page's CRC → `101#03`, `101#04`. Every wait comes before its command.
 
-### The panel would offer a downgrade
+### When the panel would offer an amp update
 
 touchsteam2's update check (`FirmwareUpdateActivity.java:77`) asks
-`Utility.packageUpdateNeeded(firmware.json, "com.thermatouch.tsolup.firmware.hydrovive", <unit's version>)`
-and treats any non-null result as "update needed". As jadx renders it, that function returns the
-HydroVive entry whenever one is listed: it returns early when the server is newer, and otherwise
-keeps the matching entry and returns it at the end instead of null. So a listed v5 (older than
-this unit's v7) or a listed v7 (equal) would still prompt, then download `hydrovive/latest.bin`
-and send it through `hvlsr_update_fw`, which starts with `BC 01`, the command that bricked this unit.
+`Utility.packageUpdateNeeded(firmware.json, "com.thermatouch.tsolup.firmware.hydrovive", <unit's version>)`.
+Read as instructions (jadx `--decompilation-mode fallback`), that returns the listed entry only when
+its version is newer than the unit's (Maven-style `ComparableVersion`, so "10" > "7"), and null
+otherwise. jadx's default Java output for this method has the two returns swapped and reads as if
+any listed version prompts; the instruction listing shows it does not.
 
-On 2026-11-18 `firmware.json` (sha256 `6e5f8cd9…`) has no HydroVive entry, so nothing is offered.
-If ThermaSol adds one, decline the prompt on the panel. This is read from the decompiled app, not
-run: jadx can mis-render control flow, and nobody has started `FirmwareUpdateActivity` to see it.
+So a listed v5 would not be offered to a v7 unit. A listed version above 7 would be, and the update
+downloads `hydrovive/latest.bin` and starts with `BC 01`. On 2026-11-18 `firmware.json` (sha256
+`6e5f8cd9…`) has no HydroVive entry.
 
 ## Observations since the command
 
