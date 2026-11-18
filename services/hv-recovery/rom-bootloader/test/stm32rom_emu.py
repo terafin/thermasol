@@ -1,7 +1,8 @@
 """Minimal AN3155 USART bootloader emulator of a bricked STM32G474 (device 0x469), served over TCP
 like the ESP32 stream-server. Models: flash 512 KB @0x08000000, option bytes @0x1FFF7800 (OPTR+complement),
 FLASH_OPTR register mirror @0x40022020. Write Memory to 0x1FFF7800 updates OPTR (as the ROM does)."""
-import socket,struct,sys,threading
+import os,socket,struct,sys,threading
+ROMVER=int(os.environ.get('ROMVER','0xD4'),16)
 ACK,NACK=0x79,0x1F
 FLASH=bytearray(b'\xff'*0x80000)
 v5=open(sys.argv[1],'rb').read(); FLASH[:len(v5)]=v5
@@ -19,7 +20,7 @@ def rd(a,n):
         if OLD_ROM: return None
         return bytes(ob()[a-0x1FFF7800:a-0x1FFF7800+n])
     if a==0x40022020 and n<=4: return struct.pack('<I',OPTR[0])[:n]
-    if 0x1FFF6FF0<=a<0x1FFF7000: return bytes([0xD4]*n)
+    if 0x1FFF6FF0<=a and a+n<=0x1FFF7000: return bytes([ROMVER,0x00]*n)[:n] if a==0x1FFF6FFE else bytes([ROMVER]*n)
     return None
 def handle(c):
     f=c.makefile('rwb',buffering=0)

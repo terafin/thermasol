@@ -10,6 +10,14 @@ if ! $BL id | tee "$D/1-identify.txt"; then
   echo "No answer from the ROM bootloader. Check wiring (GND, GPIO17->PA3, GPIO16<-PA2)."
   echo "If wiring is right, the MCU is running bank-2 code: hold BOOT0 (PB8) at 3.3 V via ~10k, power-cycle, rerun."; exit 4; fi
 grep -q 'device_id=0x0469' "$D/1-identify.txt" || { echo "not an STM32G47x (0x469) - stop"; exit 2; }
+# ROM build byte (ST, community.st.com thread 61363): 0x1FFF6FFE, high nibble = major-0, low = minor; 0xD4 = V13.4.
+# V13.3 and older cannot boot bank 2 at all; V13.4 and later reject a bank whose SP is outside SRAM1.
+if $BL read 0x1FFF6FFE 1 "$D/1-romver.bin" >/dev/null 2>&1; then
+  RV=$(od -An -tu1 "$D/1-romver.bin" | tr -d ' ')
+  printf 'ROM build V%d.%d (byte 0x%02X)' $(( (RV>>4) )) $(( RV & 15 )) "$RV" | sed 's/V\([0-9]\)\./V1\1./' | tee -a "$D/1-identify.txt"
+  if [ "$RV" -lt $((0xD4)) ]; then echo " (dual-bank boot erratum: this ROM never boots bank 2)" | tee -a "$D/1-identify.txt"
+  else echo " (rejects a bank whose initial SP is above 0x20017FFF)" | tee -a "$D/1-identify.txt"; fi
+else echo "ROM build byte at 0x1FFF6FFE not readable - continuing" | tee -a "$D/1-identify.txt"; fi
 echo "[2] read option bytes 0x1FFF7800 (48 B)"
 if ! $BL read 0x1FFF7800 48 "$D/2-ob.bin"; then
   echo "Option-byte read refused (pre-V13.5 ROM limit). Reading FLASH_OPTR register mirror instead:"
