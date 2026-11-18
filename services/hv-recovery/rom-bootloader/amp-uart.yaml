@@ -19,7 +19,9 @@ packages:
   time: !include common/time.yaml
   logger: !include common/logger.yaml
 external_components:
-  - source: github://oxan/esphome-stream-server
+  # Upstream oxan/esphome-stream-server does not build on ESPHome >= 2026.7 (get_use_address renamed);
+  # this is the fix from upstream PR #82, pinned to the commit that compiled on ESPHome 2026.10.2.
+  - source: github://MMeinhardt1/esphome-stream-server@d2c2ac3684baadb8c4b61ddc724e752dd8cc7fdd
 uart:
   id: amp
   tx_pin: GPIO17
