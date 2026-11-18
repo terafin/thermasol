@@ -22,8 +22,15 @@ ST factory default, after which the G47x boots bank 1 directly and the original 
   10 kΩ, power-cycle the shower supply, and run it again.
 - **Option-byte read refused at step 2:** older G474 ROMs (before V13.5, `0xD5`) refuse reads above
   `0x1FFF73FF`. The script prints the FLASH_OPTR register instead and stops. Use STM32CubeProgrammer over
-  the same UART (8E1): its Option Bytes view shows BFB2 as a checkbox. Untick it, Apply, and change nothing
-  else. Expect `0xFFFFF8AA` before and `0xFFEFF8AA` after.
+  a UART (it talks to the same ROM bootloader): its Option Bytes view shows BFB2 as a checkbox; untick it,
+  Apply, change nothing else. Or from the command line, with a USB-serial adapter on PA2/PA3:
+
+  ```
+  STM32_Programmer_CLI -c port=/dev/ttyUSB0 br=57600 P=EVEN -ob BFB2=0 -ob displ
+  ```
+
+  `-ob BFB2=0` writes that one field; `-ob displ` prints the result (expect BFB2 0, RDP 0xAA). The ESP32
+  bridge is TCP, so CubeProgrammer needs a real serial port for this path.
 
 ## Tests
 
