@@ -108,6 +108,21 @@ header on the board, if there is one, is more likely the USART1 console on PC4/P
 DS12288), which the ROM does not listen on. No answer from such a header says nothing about
 the ROM.
 
+## Connecting without a header
+
+The board has no known header for USART2. Ways onto the pins without soldering, from easiest:
+
+- **Spring-needle probes on a magnetic base** (Sensepeek PCBite SP10, 0.5 mm tip, made for fine-pitch
+  legs). Two of them, one on pin 14 and one on pin 17. Those two are 1.5 mm apart, not neighbours, so
+  each probe has room. Take ground from any large ground point on the board, not pin 15, so no probe
+  sits next to another. The run takes a few minutes, so nothing may move during it.
+- **The Bluetooth module's edge pads** (BM64 19/20, BM62 32/33), about 1 mm wide, with the same probes
+  or micro-grabbers.
+- **Soldering** a thin wire (30 AWG wire-wrap) to each leg or pad, if the probes will not hold.
+
+A full QFP64 test clip that grips all 64 legs at once exists, but it needs room on all four sides of
+the chip, and the board's parts layout is not known.
+
 ## If the script stops
 
 - **No answer at step 1:** first power-cycle the shower supply with the ESP32 already connected and run
