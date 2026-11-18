@@ -31,11 +31,27 @@ class BL:
         s.cmd(0x02); n=s.rx(1)[0]+1; pid=s.rx(n); s.ack('getid'); return int.from_bytes(pid,'big')
     def getver(s):
         s.cmd(0x01); v=s.rx(3); s.ack('getver'); return v[0]
+    def drain(s):
+        s.s.settimeout(0.3)
+        try:
+            while s.s.recv(4096): pass
+        except socket.timeout: pass
+        finally: s.s.settimeout(3)
+    def read_chunk(s,a,k):
+        s.cmd(0x11); s.addr(a); s.s.sendall(bytes([k-1,(k-1)^0xFF])); s.ack('len')
+        return s.rx(k)
     def read(s,a,n):
-        out=b''
+        out=b''; total=n; start=a
         while n>0:
-            k=min(256,n); s.cmd(0x11); s.addr(a); s.s.sendall(bytes([k-1,(k-1)^0xFF])); s.ack('len')
-            out+=s.rx(k); a+=k; n-=k
+            k=min(256,n)
+            for tries in range(4):
+                try: d=s.read_chunk(a,k); break
+                except (socket.timeout, SystemExit) as e:
+                    if tries==3: raise SystemExit(f'read @ {a:#x} failed 4 times: {e}')
+                    print(f'  read @ {a:#x}: {e or "timeout"}; retrying', file=sys.stderr, flush=True)
+                    s.drain()
+            out+=d; a+=k; n-=k
+            if total>65536 and (a-start)%65536==0: print(f'  {a-start:7d}/{total} bytes', file=sys.stderr, flush=True)
         return out
     def write(s,a,d):
         s.cmd(0x31); s.addr(a); n=len(d)-1; cs=n

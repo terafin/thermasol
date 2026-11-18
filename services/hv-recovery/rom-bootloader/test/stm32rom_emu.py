@@ -5,6 +5,8 @@ import os,socket,struct,sys,threading
 ROMVER=int(os.environ.get('ROMVER','0xD4'),16)
 POSTBOOT=os.environ.get('POSTBOOT','')   # 'v7': after BFB2 is cleared the chip boots bank 1 and the ROM never answers again
 LEFT_ROM=[False]
+DROP_AT=int(os.environ.get('DROP_AT') or '0',0)   # flash address whose read reply loses its last byte once (models a Wi-Fi drop)
+DROPPED=[False]
 ACK,NACK=0x79,0x1F
 FLASH=bytearray(b'\xff'*0x80000)
 v5=open(sys.argv[1],'rb').read(); FLASH[:len(v5)]=v5
@@ -55,7 +57,9 @@ def handle(c):
                 if n[1]!=(n[0]^0xFF): w(NACK); continue
                 d=rd(a,N)
                 if d is None: w(NACK); log.write(f'  read NACK {a:#x}\n'); continue
-                w(ACK); f.write(d)
+                w(ACK)
+                if DROP_AT and a==DROP_AT and not DROPPED[0]: DROPPED[0]=True; f.write(d[:-1]); log.write(f'  dropped last byte of read @{a:#x}\n'); continue
+                f.write(d)
             elif b==0x31:
                 w(ACK); a=addr()
                 if a is None: continue
