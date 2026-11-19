@@ -9,6 +9,8 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
   to PA2 (USART2_TX). The resistor matters: PA3 is also driven by the Bluetooth module's TX once the
   real firmware runs, and two outputs fighting on that line can damage the module's pin. 1 kΩ keeps
   that under 4 mA and does not affect 57600 baud.
+- `bridge-check.sh <esp32-ip>` — run first, before any wiring: confirms the ESP32 is on the network and the
+  stream server answers, so a later "no answer" from `recover.sh` points at the wiring or the chip.
 - `recover.sh <esp32-ip>` — uses `an3155.py`, a small AN3155 client that talks to the ESP32 over TCP:
   1. identifies the chip (refuses anything but device ID 0x469, STM32G47x),
   2. reads the user option bytes at `0x1FFF7800`, and the bank-2 block at `0x1FFFF800` (PCROP2, WRP2A/B,
