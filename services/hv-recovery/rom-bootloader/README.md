@@ -8,7 +8,9 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
   Wiring: ESP32 GND to the board's GND, GPIO17 to PA3 (USART2_RX) **through a 1 kΩ resistor**, GPIO16
   to PA2 (USART2_TX). The resistor matters: PA3 is also driven by the Bluetooth module's TX once the
   real firmware runs, and two outputs fighting on that line can damage the module's pin. 1 kΩ keeps
-  that under 4 mA and does not affect 57600 baud.
+  that under 4 mA and does not affect 57600 baud. These are the same NodeMCU-32S pins (left row: GND
+  6th, P17 11th, P16 12th) that bridged the panel's U6 console on 2026-11-17, so they are known free on
+  that board; on an ESP32-WROVER module GPIO16/17 belong to the PSRAM and must not be used.
 - `bridge-check.sh <esp32-ip>` — run first, before any wiring: confirms the ESP32 is on the network and the
   stream server answers, so a later "no answer" from `recover.sh` points at the wiring or the chip.
 - `recover.sh <esp32-ip>` — uses `an3155.py`, a small AN3155 client that talks to the ESP32 over TCP:
