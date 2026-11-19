@@ -1,6 +1,7 @@
 # ESPHome: ESP32 <-> HydroVive MCU USART2 (ST ROM bootloader). Same board as remote-uart.
 # Wiring (amp board side): ESP32 GND -> amp GND; ESP32 GPIO17 (TX) -> 1 kOhm -> MCU PA3 (USART2_RX);
-# ESP32 GPIO16 (RX) <- MCU PA2 (USART2_TX). 3.3 V logic both sides. Do not connect power.
+# ESP32 GPIO16 (RX) <- 1 kOhm <- MCU PA2 (USART2_TX). 3.3 V logic both sides. Do not connect power;
+# power the ESP32 before the shower supply.
 esphome:
   name: amp-uart
   friendly_name: Amp UART

@@ -6,7 +6,9 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
 
 - `amp-uart.yaml` — ESPHome config for an ESP32 that bridges USART2 to TCP port 6639, 57600 8E1.
   Wiring: ESP32 GND to the board's GND, GPIO17 to PA3 (USART2_RX) **through a 1 kΩ resistor**, GPIO16
-  to PA2 (USART2_TX). The resistor matters: PA3 is also driven by the Bluetooth module's TX once the
+  to PA2 (USART2_TX) **through a second 1 kΩ**. Power the ESP32 before the shower supply: if the amp is
+  up while the ESP32 is not, PA2 drives the ESP32's unpowered GPIO16, and the second resistor keeps that
+  current to about 3 mA (PA2 is FT_a, PA3 TT_a per DS12288, so 3.3 V signals are within limits either way). The resistor matters: PA3 is also driven by the Bluetooth module's TX once the
   real firmware runs, and two outputs fighting on that line can damage the module's pin. 1 kΩ keeps
   that under 4 mA and does not affect 57600 baud. These are the same NodeMCU-32S pins (left row: GND
   6th, P17 11th, P16 12th) that bridged the panel's U6 console on 2026-11-17, so they are known free on
@@ -61,10 +63,10 @@ LQFP64 pin numbers (DS12288, Table 12). Pin 1 is at the dot; numbering runs coun
 
 | Signal | Pin | Use here |
 |---|---|---|
-| PA2 (USART2_TX) | 14 | to the ESP32's RX (GPIO16) |
+| PA2 (USART2_TX) | 14 | to the ESP32's RX (GPIO16), through 1 kΩ |
 | VSS | 15, 31, 47 | ground for the ESP32 |
 | VDD | 16, 32, 48, 64 | 3.3 V; do not power the board from the ESP32 |
-| PA3 (USART2_RX) | 17 | to the ESP32's TX (GPIO17) |
+| PA3 (USART2_RX) | 17 | to the ESP32's TX (GPIO17), through 1 kΩ |
 | PB8-BOOT0 | 61 | only if step 1 gets no answer (below) |
 | PG10-NRST | 7 | reset, if needed |
 | PB5 / PB6 (FDCAN2) | 58 / 59 | the CAN transceiver; leave alone |
