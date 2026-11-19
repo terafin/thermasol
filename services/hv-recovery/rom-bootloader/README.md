@@ -82,12 +82,21 @@ PA2 and PA3 sit on the same side, three pins apart, with VSS and VDD between the
 probe with sharp tips or tack wires, and take ground from a large ground point, not pin 30.
 
 **J10** is a 6-pin 2.54 mm right-angle header on the right edge of the board, pin 1 marked with a ▼,
-next to U9 (an SOIC-8, probably the CAN transceiver). What it carries is not known from the photo.
-Check with a meter, board unpowered: continuity from each J10 pin to MCU pins 29 and 32 (and 96/98, and
-ground). If J10 carries PA2/PA3, clip the ESP32 to J10 instead of probing the chip.
+next to U9 (an SOIC-8, probably the CAN transceiver). Checked with a meter on 2026-11-18: one J10 pin is
+ground (it beeps to MCU pin 30 and to the BM64 can); no J10 pin reaches pins 29, 31 or 32. **J10 does
+not carry USART2.** Its ground pin is still a convenient ground for the ESP32.
 
-PA2/PA3 also run to the BM64's UART pads (BM64: HCI_RXD pad 19, HCI_TXD pad 20, GND 14/43), which are
-larger than the chip's legs; see the check below before using them.
+**J7** is a Tag-Connect-style footprint: two rows of seven pads with locating holes. MCU pin 96 (PA13,
+SWDIO) reaches one J7 pad and ground another; pin 98 (PA14, SWCLK) reaches none of them. So J7 alone is
+not enough for SWD, and the serial route below is the plan.
+
+PA2/PA3 also run to the BM64's UART pads, the easiest small targets on this board (about 1 mm, castellated).
+The module on this board is confirmed as a **BM64SPKS1MC2**. From Microchip's pad diagram (DS60001403F,
+Figure 1-5), with the antenna end at the top: pads 1-17 run down the left side, **18-26 along the bottom
+edge from left to right**, and 27-43 up the right side. **Pad 19 (HCI_RXD) is PA2; pad 20 (HCI_TXD) is
+PA3**: the 2nd and 3rd pads from the left on the bottom edge. Ground is pad 14 or 43, or the metal can.
+Confirm with a meter that pad 19 beeps to MCU pin 29 and pad 20 to pin 32 before relying on them, and do
+the idle-voltage check below.
 
 ## If bank 1 cannot boot (exit 10)
 
