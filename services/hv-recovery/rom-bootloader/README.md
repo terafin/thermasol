@@ -44,7 +44,7 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
      Before the fix, 9 runs (387 frames, 90 s) on 2026-11-18 held only the panel (`0x131`) and the
      generator (`0x120`): about 90 status frames missing.
   7. optional bench check, with the board still open: the firmware's own "Thermasol debug Terminal"
-     is on USART1, PC4 (TX) / PC5 (RX), LQFP64 pins 22/23, 115200 8N1. At power-on it prints
+     is on USART1, PC4 (TX) / PC5 (RX), LQFP128 pins 37/38, 115200 8N1. At power-on it prints
      `HydroVive, firmware version 7.x`; `h` lists its commands (`lcs1` lights on, `s` sensor values).
      This is the running firmware, not the ROM; it only answers once the fix has taken.
 
@@ -58,72 +58,36 @@ ST factory default, after which the G47x boots bank 1 directly and the original 
 
 ## Where the pins are on the chip
 
-The firmware drives PC0, PC3 and PC5, which the 48-pin G474 packages do not have, so the MCU is at least
-a 64-pin part; with 512 KB of flash it is most likely the STM32G474RE in LQFP64. Not confirmed on a real
-board: read the chip's marking first. If it is not a 64-pin LQFP, use the datasheet's table for that package.
+The owner's board photo (2026-11-18, board AS03-7225 Rev A) shows the MCU is an **STM32G474QET6**:
+LQFP128, 14 x 14 mm, **0.4 mm pitch**, 32 pins per side. (The firmware alone suggested LQFP64; it is
+not.) The Bluetooth module is a **BM64SPKS1MC2**, the DSP an ADAU1701, the power amp a TPA3116. The
+board has no conformal coating.
 
-LQFP64 pin numbers (DS12288, Table 12). Pin 1 is at the dot; numbering runs counter-clockwise seen from the top.
+LQFP128 pin numbers (DS12288 Table 12). Pin 1 is at the dot; numbering runs counter-clockwise seen
+from the top.
 
 | Signal | Pin | Use here |
 |---|---|---|
-| PA2 (USART2_TX) | 14 | to the ESP32's RX (GPIO16), through 1 kΩ |
-| VSS | 15, 31, 47 | ground for the ESP32 |
-| VDD | 16, 32, 48, 64 | 3.3 V; do not power the board from the ESP32 |
-| PA3 (USART2_RX) | 17 | to the ESP32's TX (GPIO17), through 1 kΩ |
-| PB8-BOOT0 | 61 | only if step 1 gets no answer (below) |
-| PG10-NRST | 7 | reset, if needed |
-| PB5 / PB6 (FDCAN2) | 58 / 59 | the CAN transceiver; leave alone |
-| PA13 / PA14 (SWD) | 49 / 50 | SWDIO / SWCLK, if an ST-LINK is used instead |
+| PA2 (USART2_TX) | **29** | to the ESP32's RX (GPIO16), through 1 kΩ |
+| VSS | 30 | between the two signals: do not probe here |
+| VDD | 31 | 3.3 V: do not touch |
+| PA3 (USART2_RX) | **32** | to the ESP32's TX (GPIO17), through 1 kΩ |
+| PG10-NRST | 21 | reset, if needed |
+| PB8-BOOT0 | 123 | only if step 1 gets no answer (below) |
+| PB5 / PB6 (FDCAN2) | 120 / 121 | the CAN transceiver; leave alone |
+| PA13 / PA14 (SWD) | 96 / 98 | debug port |
+| PC4 / PC5 (USART1 console) | 37 / 38 | ThermaSol debug terminal, 115200 |
 
-PA2 and PA3 sit either side of the corner, with VSS/VDD (15-16) between them on PA2's side, so a probe
-slip from pin 14 can short the supply: use fine probes or tack wires.
+PA2 and PA3 sit on the same side, three pins apart, with VSS and VDD between them at 0.4 mm spacing:
+probe with sharp tips or tack wires, and take ground from a large ground point, not pin 30.
 
-PA2/PA3 run to the Bluetooth module's UART, so its RX/TX pads are a second place to connect; the
-module is unpowered while the MCU sits in the ROM. v5 sends it `AA 00 03 02 00 <action> <chk>` at
-19200 baud: Microchip's MMI_Action command (actions 0x51-0x54, 0x5D), so it is a Microchip
-BM62/BM64-class module (a 15 x 29 or 15 x 32 mm can with castellated edge pads). From the BM62/64
-data sheet (DS60001403F, Tables 1-2/1-3), with the module's TXD going to the MCU's RX:
+**J10** is a 6-pin 2.54 mm right-angle header on the right edge of the board, pin 1 marked with a ▼,
+next to U9 (an SOIC-8, probably the CAN transceiver). What it carries is not known from the photo.
+Check with a meter, board unpowered: continuity from each J10 pin to MCU pins 29 and 32 (and 96/98, and
+ground). If J10 carries PA2/PA3, clip the ESP32 to J10 instead of probing the chip.
 
-| Module | Its TXD (to PA3) | Its RXD (from PA2) | GND |
-|---|---|---|---|
-| BM62 | pin 32 | pin 33 | 23, 37 |
-| BM64 | pin 20 | pin 19 | 14, 43 |
-
-So the ESP32's TX (GPIO17) goes on the module's **TXD** pad (that line is PA3, the MCU's RX), and the
-ESP32's RX (GPIO16) on the module's **RXD** pad (PA2). Read the marking on the can first; if it is not
-a BM62/BM64, find that module's UART pins. A series resistor between module and MCU, if fitted, is
-fine at 57600.
-
-Check before using the module pads. The module runs from its own BAT_IN supply and only comes up
-when the MCU presses its MFB power key, which never happens while the MCU sits in the ROM. Its
-I/O rail is internal ("do not connect", VDD_IO), so with the module shut down its UART pins may
-clamp the line to ground through their protection diodes, and the ROM would never see the `0x7F`
-sync byte. The data sheet does not state the shut-down pin state. With the shower supply on and
-the ESP32 **not** connected, measure each pad to GND. AN2606 (Rev 62, Table 101) says the G47x ROM
-sets PA2 (USART2_TX) to alternate push-pull with pull-up, so it drives that line high at idle, and
-PA3 (USART2_RX) to input with a weak pull-up (about 40 kΩ). Expect about 3.3 V on both:
-
-- the module's **RXD** pad (PA2) at 3.3 V says the ROM is running and driving its TX;
-- the module's **TXD** pad (PA3) at 3.3 V says nothing is clamping the ROM's RX line.
-
-The MCU pin and the module pad are the same net, so the reading is the same at either end, and
-moving the clip does not get around a clamp. PA3 near 0 V or about 0.6 V means something on that net
-is holding it down. Look for a series resistor between the MCU and the module on that line: wiring
-on the MCU side of it (pin 17) lets the ESP32 drive PA3 through the resistor's isolation. With no
-such resistor, the ESP32 (through its own 1 kΩ) may still drive a 0.6 V clamp high enough; if
-`recover.sh` gets no answer, lifting the module's TXD pad or that resistor frees the line. PA2 low as
-well means the MCU is not in the ROM at all (see "No answer at step 1"). A factory
-header on the board, if there is one, is more likely the USART1 console on PC4/PC5 (LQFP64 pins 22/23,
-DS12288), which the ROM does not listen on. No answer from such a header says nothing about
-the ROM.
-
-## Reading the backup (v7)
-
-Step 3 saves the whole flash as `run-*/3-flash.bin`; if the unit ran v7, bank 1 holds it. 
-`analyze-backup.sh run-*/3-flash.bin [latest.bin]` splits the banks, prints each one's stack pointer,
-reset vector, `HydroVive, firmware version` banner, strings and sha256, says whether bank 1 equals v5,
-and with `GHIDRA=<ghidra install dir>` decompiles each non-blank bank with the same Ghidra script used
-for v5 (`tools/DecompAll.java`; Raw Binary at 0x08000000, ARM Cortex).
+PA2/PA3 also run to the BM64's UART pads (BM64: HCI_RXD pad 19, HCI_TXD pad 20, GND 14/43), which are
+larger than the chip's legs; see the check below before using them.
 
 ## If bank 1 cannot boot (exit 10)
 
@@ -142,10 +106,10 @@ writes, and reads it back. It never touches bank 2 or the option bytes.
 The board has no known header for USART2. Ways onto the pins without soldering, from easiest:
 
 - **Spring-needle probes on a magnetic base** (Sensepeek PCBite SP10, 0.5 mm tip, made for fine-pitch
-  legs; the 4-probe kit is Sensepeek PCBITE-7028, Mouser 90-PCBITE-7028). Two of them, one on pin 14 and one on pin 17. On the LQFP64 pins 1-16 run
-  down one side, so 14 (PA2), 15 (VSS) and 16 (VDD) are the last three before a corner and 17 (PA3) is
-  the first pin round it: the two probes come in from different sides and cannot touch. Watch pin 14's
-  neighbour 16 (3.3 V) two pins along; a slip there shorts the supply through the probe. Take ground from any large ground point on the board, not pin 15, so no probe
+  legs; the 4-probe kit is Sensepeek PCBITE-7028, Mouser 90-PCBITE-7028). Two of them, one on pin 29 and one on pin 32. They are on the same side of
+  the LQFP128, three pins apart at 0.4 mm pitch, with VSS (30) and VDD (31, 3.3 V) between them: a slip
+  from either probe can short the supply. Take ground from any large ground point on the board, not
+  pin 30.
   sits next to another. The run takes a few minutes, so nothing may move during it.
 - **The Bluetooth module's edge pads** (BM64 19/20, BM62 32/33), about 1 mm wide, with the same probes
   or micro-grabbers.
@@ -196,7 +160,7 @@ writing, 11 FB_MODE=1.
   the rest. A glitch on another of its pins (USART1 RX on PA10, I2C2 on PC4/PA8, SPI2 on PB12-15,
   which here runs to the LED driver) could have won the race. If PA2 reads 3.3 V and it still does
   not answer after a clean power-cycle, the MCU may be running stale bank-2 code: hold BOOT0 (PB8,
-  LQFP64 pin 61) at 3.3 V through about 10 kΩ, power-cycle, and run it again.
+  LQFP128 pin 123) at 3.3 V through about 10 kΩ, power-cycle, and run it again.
 - **Option-byte read refused at step 2:** the script does not write. A Write Memory to the option area erases all 48 option bytes (AN3155), and this ROM will not let them be read back first, so a partial write could change other option fields. older G474 ROMs (before V13.5, `0xD5`) refuse reads above
   `0x1FFF73FF`. The script prints the FLASH_OPTR register instead and stops. Use STM32CubeProgrammer over
   a UART (it talks to the same ROM bootloader): its Option Bytes view shows BFB2 as a checkbox; untick it,

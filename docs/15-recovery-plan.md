@@ -216,8 +216,9 @@ power/data cable to the PDM and an audio cable, so it can be unplugged without c
 The electronics are a separate black enclosure screwed to the top (ceiling side) of the unit, with
 the yellow M12 cable (right-angle plug) and the RCA audio leads going into it, as the manual's step 5
 drawing shows and the owner's photo of this unit confirmed on 2026-11-18. The board should be inside
-that box, so it may be reachable by opening the box rather than the whole housing. The box has not
-been opened yet.
+that box, so it may be reachable by opening the box rather than the whole housing. The owner opened it on 2026-11-18:
+board AS03-7225 Rev A, MCU STM32G474QET6 (LQFP128), Bluetooth BM64SPKS1MC2, DSP ADAU1701, amp TPA3116,
+no conformal coating, and a 6-pin 2.54 mm header J10 whose wiring is still to be checked.
 
 Mounting: on this unit the black slotted guide straps are fixed to the framing and a tab on the unit
 rides in them. The J-shaped notches open toward the gap between the two straps, so a tab caught in a
