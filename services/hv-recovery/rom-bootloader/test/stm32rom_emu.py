@@ -108,8 +108,32 @@ def handle(c):
     except (EOFError, BrokenPipeError, ConnectionResetError): pass
 s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind(('127.0.0.1',int(sys.argv[5]) if len(sys.argv)>5 else 16639)); s.listen(5)
 open(sys.argv[4]+'.optr','w').write(hex(OPTR[0])) if len(sys.argv)>4 else None
+# One serial line, like the ESP32 stream server: a new TCP client takes over, and any older connection is
+# shut so a handler still blocked reading it returns at once instead of holding the line.
+import queue
+newest=queue.Queue(); CUR=[None]
+def acceptor():
+    while True:
+        c,_=s.accept()
+        # Something on a dev host may probe local ports (an HTTP 'GET / ...' was seen taking over the line
+        # and failing a test). Only a client whose first byte is 0x7F (sync) or an AN3155 command may take it.
+        try:
+            c.settimeout(5); first=c.recv(1, socket.MSG_PEEK); c.settimeout(None)
+        except OSError: first=b''
+        if not first or first[0] not in (0x7F,0x00,0x01,0x02,0x11,0x21,0x31,0x44):
+            c.close(); continue
+        old=CUR[0]
+        if old is not None:
+            try: old.shutdown(socket.SHUT_RDWR)
+            except OSError: pass
+        newest.put(c)
+threading.Thread(target=acceptor,daemon=True).start()
+def dump():
+    if len(sys.argv)>4: open(sys.argv[4]+'.optr','w').write(hex(OPTR[0])); open(sys.argv[4]+'.rest','w').write(OBREST[0].hex()); open(sys.argv[4]+'.flash','wb').write(bytes(FLASH))
 while True:
-    c,_=s.accept()
+    c=newest.get(); CUR[0]=c
     if LEFT_ROM[0]: c.close(); continue   # v7 is running: nothing answers 0x7F on USART2
     handle(c)
-    if len(sys.argv)>4: open(sys.argv[4]+'.optr','w').write(hex(OPTR[0])); open(sys.argv[4]+'.rest','w').write(OBREST[0].hex()); open(sys.argv[4]+'.flash','wb').write(bytes(FLASH))
+    try: c.close()
+    except OSError: pass
+    dump()

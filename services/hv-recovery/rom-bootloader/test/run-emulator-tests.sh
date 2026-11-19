@@ -13,7 +13,7 @@ check(){ [ -n "$ONLY" ] && [ "$1" != "$ONLY" ] && return; name=$1 optr=$2 rom=$3
   want_rest=ffffffff000000000000ff00ffff00ffffff00ff0000ff00ffff00ff0000ff0000ff00ffff00ff00  # RM0440 factory PCROP1/WRP1A/WRP2A/SEC1
   txt_ok=yes; [ -n "$want_text" ] && ! grep -qF "$want_text" "$LOG/$name.out" && txt_ok=no
   if [ "$rc" = "$want_exit" ] && [ "$got" = "$want_optr" ] && [ "$rest" = "$want_rest" ] && [ $txt_ok = yes ]; then echo "PASS $name (exit $rc, OPTR $got)"; pass=$((pass+1))
-  else echo "FAIL $name (exit $rc want $want_exit, OPTR $got want $want_optr, rest-of-OB intact: $([ "$rest" = "$want_rest" ] && echo yes || echo NO), text ok: $txt_ok)"; fail=$((fail+1)); fi; }
+  else echo "FAIL $name (exit $rc want $want_exit, OPTR $got want $want_optr, rest-of-OB intact: $([ "$rest" = "$want_rest" ] && echo yes || echo NO), text ok: $txt_ok)"; sed 's/^/    | /' "$LOG/$name.out" | tail -8; fail=$((fail+1)); fi; }
 check bricked   0xFFFFF8AA new 16690 0 0xffeff8aa YES 0xD4 "bank-2 option bytes unchanged"
 check romver   0xFFFFF8AA new 16695 0 0xffeff8aa YES 0xD4 "ROM build V13.4"
 check rom133    0xFFFFF8AA new 16694 0 0xffeff8aa YES 0xD3 "ROM build V13.3 (byte 0xD3) (dual-bank boot erratum"

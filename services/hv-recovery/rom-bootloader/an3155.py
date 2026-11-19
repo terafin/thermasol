@@ -68,9 +68,16 @@ class BL:
         cs=0
         for x in d: cs^=x
         s.s.settimeout(30); s.s.sendall(d+bytes([cs])); s.ack('erase'); s.s.settimeout(3)
+    def close(s):
+        # Close explicitly so the far end sees EOF now, not when the OS reaps this process: the next
+        # an3155.py call opens a new connection, and the bridge must be done with this one first.
+        try: s.s.shutdown(socket.SHUT_RDWR)
+        except OSError: pass
+        s.s.close()
 if __name__=='__main__':
     h,p,op=sys.argv[1],int(sys.argv[2]),sys.argv[3]
     b=BL(h,p)
+    import atexit; atexit.register(b.close)
     if op=='id': print(f'device_id={b.getid():#06x} bl_version={b.getver():#04x}')
     elif op=='read':
         a=int(sys.argv[4],0); n=int(sys.argv[5],0); open(sys.argv[6],'wb').write(b.read(a,n)); print(f'read {n} bytes @ {a:#x}')

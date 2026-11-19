@@ -7,7 +7,7 @@ emu(){ IMG_BANK=$1 python3 -I "$H/stm32rom_emu.py" "$IMG" 0xFFFFF8AA new "$LOG/$
   sleep 0.3; kill -0 $EP 2>/dev/null || { echo "FAIL: emulator did not start (port in use by a leftover emulator?)"; exit 2; }
   ss -ltnp 2>/dev/null | grep ":$3 " | grep -q "pid=$EP," || { echo "FAIL: port $3 is not held by this emulator"; kill $EP; exit 2; }; }
 bank1_is(){ python3 -I -c "import sys;f=open(sys.argv[1],'rb').read();i=open(sys.argv[2],'rb').read();sys.exit(0 if f[:len(i)]==i and set(f[len(i):0x40000])<={0xff} else 1)" "$LOG/$1.log.flash" "$2"; }
-res(){ if [ "$2" = ok ]; then echo "PASS $1"; pass=$((pass+1)); else echo "FAIL $1 ($3)"; fail=$((fail+1)); fi; }
+res(){ if [ "$2" = ok ]; then echo "PASS $1"; pass=$((pass+1)); else echo "FAIL $1 ($3)"; sed 's/^/    | /' "$LOG/$1.out" | tail -8; fail=$((fail+1)); fi; }
 case_on(){ [ -z "$ONLY" ] || [ "$ONLY" = "$1" ]; }
 
 if case_on fromslot2; then emu 2 fromslot2 16801

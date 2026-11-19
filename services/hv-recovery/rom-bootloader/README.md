@@ -145,6 +145,19 @@ The board has no known header for USART2. Ways onto the pins without soldering, 
 A full QFP64 test clip that grips all 64 legs at once exists, but it needs room on all four sides of
 the chip, and the board's parts layout is not known.
 
+## The bridge during a run
+
+The ESP32's stream server (pinned commit `d2c2ac3`) accepts any number of TCP clients, writes every
+client's bytes to the UART and copies every UART byte to every client. It has no client limit or
+address filter. Anything that connects to port 6639 during a run, such as a network scanner probing
+with `GET / HTTP...`, puts its bytes straight into the ROM bootloader. The ROM checks every command
+and data frame, so stray bytes cannot cause a wrong write, but they can break the step in progress.
+
+Run recovery on a network where nothing scans the ESP32, ideally the ESP32's own access point or an
+isolated VLAN, and keep other clients (Home Assistant, a browser tab on the ESP32) off port 6639.
+A reply reaches the laptop within about 20-100 ms (ESPHome loop plus Wi-Fi), inside the client's
+1 s sync and 3 s command timeouts.
+
 ## If the script stops
 
 - **No answer at step 1:** first power-cycle the shower supply with the ESP32 already connected and run
