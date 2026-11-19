@@ -43,6 +43,7 @@ OPTR=$(python3 -I -c "import struct,sys;print(hex(struct.unpack('<I',open(sys.ar
 python3 -I -c "import sys;v=int(sys.argv[1],16);print('OPTR',hex(v),'BFB2=',v>>20&1,'DBANK=',v>>22&1,'nSWBOOT0=',v>>26&1,'nBOOT0=',v>>27&1,'RDP=',hex(v&0xff))" $OPTR | tee -a "$D/2-ob.txt"
 echo "[3] back up both banks (512 KB)"
 $BL read 0x08000000 0x80000 "$D/3-flash.bin"; sha256sum "$D/3-flash.bin" | tee "$D/3-flash.sha256"
+echo "backup verified: every 256-byte block read twice and matched"
 # ROM rule (ST, thread 61363; ST's own FLASH_DualBoot bank-2 binary uses SP 0x20000480): a bank's initial
 # SP must lie in SRAM1, 0x20000000-0x20017FFF (SP may equal the top+1 only on newer ROMs; treat it as rejected).
 python3 -I - "$D/3-flash.bin" <<'PY2' | tee -a "$D/3-flash.sha256"

@@ -3,8 +3,8 @@
 # usage: run-emulator-tests.sh <image.bin> [case]   (image e.g. ThermaSol's latest.bin, not in this repo)
 set -u; H=$(cd "$(dirname "$0")" && pwd); IMG=${1:?image}; LOG=$(mktemp -d); pass=0; fail=0
 ONLY=${2:-}   # optional: run only the named case
-check(){ [ -n "$ONLY" ] && [ "$1" != "$ONLY" ] && return; name=$1 optr=$2 rom=$3 port=$4 want_exit=$5 want_optr=$6 answer=${7:-YES} romver=${8:-0xD4} want_text=${9:-} postboot=${10:-} dropat=${11:-} wipe2=${12:-} imgbank=${13:-} fbmode=${14:-} corrupt=${15:-}
-  CORRUPT_OB=$corrupt FB_MODE=$fbmode IMG_BANK=$imgbank WIPE_BANK2=$wipe2 DROP_AT=$dropat POSTBOOT=$postboot ROMVER=$romver python3 -I "$H/stm32rom_emu.py" "$IMG" "$optr" "$rom" "$LOG/$name.log" "$port" 2>/dev/null & EP=$!
+check(){ [ -n "$ONLY" ] && [ "$1" != "$ONLY" ] && return; name=$1 optr=$2 rom=$3 port=$4 want_exit=$5 want_optr=$6 answer=${7:-YES} romver=${8:-0xD4} want_text=${9:-} postboot=${10:-} dropat=${11:-} wipe2=${12:-} imgbank=${13:-} fbmode=${14:-} corrupt=${15:-} flipat=${16:-}
+  FLIP_AT=$flipat CORRUPT_OB=$corrupt FB_MODE=$fbmode IMG_BANK=$imgbank WIPE_BANK2=$wipe2 DROP_AT=$dropat POSTBOOT=$postboot ROMVER=$romver python3 -I "$H/stm32rom_emu.py" "$IMG" "$optr" "$rom" "$LOG/$name.log" "$port" 2>/dev/null & EP=$!
   for _ in $(seq 50); do python3 -I -c "import socket,sys;socket.create_connection((\"127.0.0.1\",int(sys.argv[1])),0.2).close()" "$port" 2>/dev/null && break; sleep 0.1; done
   sleep 0.3; kill -0 $EP 2>/dev/null || { echo "FAIL: emulator did not start (port in use by a leftover emulator?)"; exit 2; }
   ss -ltnp 2>/dev/null | grep ":$port " | grep -q "pid=$EP," || { echo "FAIL: port $port is not held by this emulator"; kill $EP; exit 2; }
@@ -27,5 +27,6 @@ check bank1blank 0xFFFFF8AA new 16700 10 0xfffff8aa YES 0xD4 "bank 1 has no boot
 check fbswap    0xFFFFF8AA new 16701 11 0xfffff8aa YES 0xD4 "FB_MODE=1" "" "" "" "" 1
 check rom135    0xFFFFF8AA new 16702 12 0xfffff8aa YES 0xD5 "V13.5 or later, which accepts a CCM stack pointer"
 check corrupt   0xFFFFF8AA new 16703 6 0xfffff8aa YES 0xD4 "FAILED: BFB2 still set" "" "" "" "" "" 1
+check flip      0xFFFFF8AA new 16704 0 0xffeff8aa YES 0xD4 "backup verified" "" "" "" "" "" "" 0x08001000
 check rdp1      0xFFFFF8BB new 16693 1 0xfffff8bb
 echo "$pass passed, $fail failed"; [ $fail -eq 0 ]

@@ -45,15 +45,21 @@ class BL:
         s.cmd(0x11); s.addr(a); s.s.sendall(bytes([k-1,(k-1)^0xFF])); s.ack('len')
         return s.rx(k)
     def read(s,a,n):
+        # AN3155 Read Memory has no checksum, so a flipped bit would land in the backup silently.
+        # Each 256-byte chunk is accepted only when two consecutive reads agree; a timeout or NACK
+        # drains the line and tries again. Six attempts per chunk, then give up.
         out=b''; total=n; start=a
         while n>0:
-            k=min(256,n)
-            for tries in range(4):
-                try: d=s.read_chunk(a,k); break
+            k=min(256,n); d=None
+            for tries in range(6):
+                try:
+                    d1=s.read_chunk(a,k); d2=s.read_chunk(a,k)
                 except (socket.timeout, SystemExit) as e:
-                    if tries==3: raise SystemExit(f'read @ {a:#x} failed 4 times: {e}')
                     print(f'  read @ {a:#x}: {e or "timeout"}; retrying', file=sys.stderr, flush=True)
-                    s.drain()
+                    s.drain(); continue
+                if d1==d2: d=d1; break
+                print(f'  read @ {a:#x}: two reads differ; reading again', file=sys.stderr, flush=True)
+            if d is None: raise SystemExit(f'read @ {a:#x}: no two matching reads in 6 attempts')
             out+=d; a+=k; n-=k
             if total>65536 and (a-start)%65536==0: print(f'  {a-start:7d}/{total} bytes', file=sys.stderr, flush=True)
         return out

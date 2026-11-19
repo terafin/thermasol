@@ -8,7 +8,9 @@ LEFT_ROM=[False]
 SYNCED=[False]   # AN3155: the ROM autobauds on the first 0x7F after reset; later a 0x7F is just a command byte
 DROP_AT=int(os.environ.get('DROP_AT') or '0',0)   # flash address whose read reply loses its last byte once (models a Wi-Fi drop)
 DROPPED=[False]
-CORRUPT_OB=os.environ.get('CORRUPT_OB')=='1'   # flip a bit in the option-byte write's data, as noise on the line would
+CORRUPT_OB=os.environ.get('CORRUPT_OB')=='1'
+FLIP_AT=int(os.environ.get('FLIP_AT') or '0',0)   # flash address whose read reply has one bit flipped once (no checksum on reads)
+FLIPPED=[False]   # flip a bit in the option-byte write's data, as noise on the line would
 ACK,NACK=0x79,0x1F
 FLASH=bytearray(b'\xff'*0x80000)
 v5=open(sys.argv[1],'rb').read()
@@ -71,6 +73,7 @@ def handle(c):
                 d=rd(a,N)
                 if d is None: w(NACK); log.write(f'  read NACK {a:#x}\n'); continue
                 w(ACK)
+                if FLIP_AT and a==FLIP_AT and not FLIPPED[0]: FLIPPED[0]=True; d=bytes([d[0]^0x04])+d[1:]; log.write(f'  flipped a bit in read @{a:#x}\n')
                 if DROP_AT and a==DROP_AT and not DROPPED[0]: DROPPED[0]=True; f.write(d[:-1]); log.write(f'  dropped last byte of read @{a:#x}\n'); continue
                 f.write(d)
             elif b==0x31:
