@@ -213,8 +213,16 @@ FDCAN2 on PB5/PB6 to the CAN transceiver. USB is unused.
 **How the unit comes down (installation manual):** it is held by 3.5-inch screws under screw covers,
 sealed with silicone, and hangs on its lanyards when lowered. It connects by two plugs, an M12
 power/data cable to the PDM and an audio cable, so it can be unplugged without cutting anything.
-Whether the board is reachable without opening a sealed housing is unknown; no photos of the inside
-are public.
+The electronics are a separate black enclosure screwed to the top (ceiling side) of the unit, with
+the yellow M12 cable (right-angle plug) and the RCA audio leads going into it, as the manual's step 5
+drawing shows and the owner's photo of this unit confirmed on 2026-11-18. The board should be inside
+that box, so it may be reachable by opening the box rather than the whole housing. The box has not
+been opened yet.
+
+Mounting: on this unit the black slotted guide straps are fixed to the framing and a tab on the unit
+rides in them. The J-shaped notches open toward the gap between the two straps, so a tab caught in a
+notch has to lift slightly and move toward that gap before the unit drops; while the unit hangs
+crooked, its weight pins the tab.
 
 **The next step:** lower the unit and photograph the board, then follow the recovery README: read the
 chip marking, check PA2/PA3 with a voltmeter, attach the ESP32 bridge, and run `recover.sh`. Its first
