@@ -8,6 +8,7 @@ LEFT_ROM=[False]
 SYNCED=[False]   # AN3155: the ROM autobauds on the first 0x7F after reset; later a 0x7F is just a command byte
 DROP_AT=int(os.environ.get('DROP_AT') or '0',0)   # flash address whose read reply loses its last byte once (models a Wi-Fi drop)
 DROPPED=[False]
+CORRUPT_OB=os.environ.get('CORRUPT_OB')=='1'   # flip a bit in the option-byte write's data, as noise on the line would
 ACK,NACK=0x79,0x1F
 FLASH=bytearray(b'\xff'*0x80000)
 v5=open(sys.argv[1],'rb').read()
@@ -76,6 +77,7 @@ def handle(c):
                 w(ACK); a=addr()
                 if a is None: continue
                 N=r(1)[0]+1; d=r(N); ck=r(1)[0]
+                if CORRUPT_OB and a is not None and 0x1FFF7800<=a<0x1FFF7840: d=bytes([d[0]^0x10])+d[1:]; log.write('  corrupted OB write data\n')
                 cs=N-1
                 for y in d: cs^=y
                 if cs!=ck: w(NACK); continue
