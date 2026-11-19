@@ -167,6 +167,27 @@ isolated VLAN, and keep other clients (Home Assistant, a browser tab on the ESP3
 A reply reaches the laptop within about 20-100 ms (ESPHome loop plus Wi-Fi), inside the client's
 1 s sync and 3 s command timeouts.
 
+## What each exit code means
+
+| `recover.sh` | Meaning | Written? |
+|---|---|---|
+| 0 | BFB2 cleared and read back, or `WRITE SENT, NOT READ BACK` (the chip left the ROM, as clearing BFB2 does); also "stopped before any write" if you did not type YES | yes / no |
+| 1 | the option block failed a check (RDP not level 0, or not value + complement) | no |
+| 2 | not an STM32G47x (device ID is not 0x469) | no |
+| 3 | BFB2 is already clear, so clearing it is not the fix | no |
+| 4 | no answer from the ROM: wiring, or the chip is not in the ROM (see below) | no |
+| 5 | this ROM refuses option-byte reads; use STM32CubeProgrammer (printed) | no |
+| 6 | the write was sent but BFB2 still reads set | no |
+| 8 | option bytes other than OPTR changed; compare `2-ob.bin` and `5-ob-after.bin` | yes |
+| 9 | the bank-2 option block changed; bank 1 still boots, restore it from `2-ob2.bin` | yes |
+| 10 | bank 1 cannot boot; run `restore-bank1.sh` first | no |
+| 11 | FB_MODE=1, banks are swapped in the address map | no |
+| 12 | ROM V13.5 or later, which should have booted the firmware; the diagnosis does not fit | no |
+
+`restore-bank1.sh`: 0 written and verified (or stopped before writing), 2 bank 1 already boots,
+3 bank 2 blank for `slot2`, 4 no answer or not a G47x, 5 source file rejected, 6 verify failed after
+writing, 11 FB_MODE=1.
+
 ## If the script stops
 
 - **No answer at step 1:** first power-cycle the shower supply with the ESP32 already connected and run
