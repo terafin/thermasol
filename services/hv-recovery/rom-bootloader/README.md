@@ -8,7 +8,10 @@ Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the
   Wiring: ESP32 GND to the board's GND, GPIO17 to PA3 (USART2_RX) **through a 1 kΩ resistor**, GPIO16
   to PA2 (USART2_TX) **through a second 1 kΩ**. Power the ESP32 before the shower supply: if the amp is
   up while the ESP32 is not, PA2 drives the ESP32's unpowered GPIO16, and the second resistor keeps that
-  current to about 3 mA (PA2 is FT_a, PA3 TT_a per DS12288, so 3.3 V signals are within limits either way). The resistor matters: PA3 is also driven by the Bluetooth module's TX once the
+  current to about 3 mA (PA2 is FT_a, PA3 TT_a per DS12288, so 3.3 V signals are within limits either way).
+  Neither resistor hurts the signal (DS12288): against the ROM's PA3 pull-up (RPU 25-55 kΩ) a low from the
+  ESP32 reads at most 0.13 V, under VIL 0.3 x VDD = 0.99 V; and 1 kΩ with about 35 pF of pin, wire and
+  probe slows each edge by about 35 ns against a 17.4 µs bit at 57600 baud. The resistor matters: PA3 is also driven by the Bluetooth module's TX once the
   real firmware runs, and two outputs fighting on that line can damage the module's pin. 1 kΩ keeps
   that under 4 mA and does not affect 57600 baud. These are the same NodeMCU-32S pins (left row: GND
   6th, P17 11th, P16 12th) that bridged the panel's U6 console on 2026-11-17, so they are known free on
