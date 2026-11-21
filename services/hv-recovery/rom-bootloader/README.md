@@ -118,14 +118,13 @@ The board has no known header for USART2. Ways onto the pins without soldering, 
   legs; the 4-probe kit is Sensepeek PCBITE-7028, Mouser 90-PCBITE-7028). Two of them, one on pin 29 and one on pin 32. They are on the same side of
   the LQFP128, three pins apart at 0.4 mm pitch, with VSS (30) and VDD (31, 3.3 V) between them: a slip
   from either probe can short the supply. Take ground from any large ground point on the board, not
-  pin 30.
-  sits next to another. The run takes a few minutes, so nothing may move during it.
-- **The Bluetooth module's edge pads** (BM64 19/20, BM62 32/33), about 1 mm wide, with the same probes
+  pin 30. The run takes a few minutes, so nothing may move during it.
+- **The Bluetooth module's edge pads** (BM64 19/20), about 1 mm wide, with the same probes
   or micro-grabbers.
 - **Soldering** a thin wire (30 AWG wire-wrap) to each leg or pad, if the probes will not hold.
 
-A full QFP64 test clip that grips all 64 legs at once exists, but it needs room on all four sides of
-the chip, and the board's parts layout is not known.
+A full LQFP128 test clip that grips all 128 legs at once exists, but it needs room on all four sides
+of the chip, and the board's parts layout is not known.
 
 ## The bridge during a run
 

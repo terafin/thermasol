@@ -4,7 +4,9 @@
 # (ThermaSol's latest.bin, v5, sha256 37c81d0b...). Refuses if bank 1 already boots. Never touches bank 2
 # or the option bytes; run recover.sh afterwards to clear BFB2.
 set -euo pipefail
-HOST=${1:?usage: restore-bank1.sh <esp32-ip> [port] slot2|<image.bin>}; PORT=${2:-6639}; SRC=${3:?source: slot2 or an image file}
+HOST=${1:?usage: restore-bank1.sh <esp32-ip> [port] slot2|<image.bin>}
+if [[ ${2:-} =~ ^[0-9]+$ ]]; then PORT=$2; SRC=${3:?source: slot2 or an image file}
+else PORT=6639; SRC=${2:?source: slot2 or an image file}; fi
 H=$(cd "$(dirname "$0")" && pwd); BL="python3 -I $H/an3155.py $HOST $PORT"; D=$H/restore-$(date +%Y%m%d-%H%M%S); mkdir -p "$D"
 V5_SHA=37c81d0b020d0be55287a2ac836909cff0473f08a5ccc74a12eeb8c33083279f
 boots(){ python3 -I -c "import struct,sys;sp,rv=struct.unpack_from('<II',open(sys.argv[1],'rb').read(),0);sys.exit(0 if 0x20000000<sp<=0x20020000 and rv&1 and 0x08000000<=rv<0x08040000 else 1)" "$1"; }
