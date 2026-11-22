@@ -105,6 +105,7 @@ class SonosSink(
     // ---- per-client streaming --------------------------------------------
 
     private fun handleClient(sock: Socket) {
+        var counted = false
         try {
             sock.soTimeout = 15000
             val os = sock.getOutputStream()
@@ -124,6 +125,7 @@ class SonosSink(
             os.write(head); os.flush()
             csend(riff, 0, riff.size); os.flush()
             clients.incrementAndGet()
+            counted = true
             val r = ring
             val tone = gain < 0f
             val myPos = arrayOf(r?.pos() ?: 0L)
@@ -170,7 +172,7 @@ class SonosSink(
         } catch (e: Exception) {
             LogBus.log("[client] dropped: ${e.message}")
         } finally {
-            clients.decrementAndGet()
+            if (counted) clients.decrementAndGet()
             try { sock.close() } catch (_: Exception) {}
         }
     }

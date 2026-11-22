@@ -29,7 +29,7 @@ class CaptureEngine(private val gain: Float) {
     private val running = AtomicBoolean(false)
 
     fun start() {
-        if (!running.getAndSet(true)) return
+        if (running.getAndSet(true)) return
         val fmt = AudioFormat.Builder()
             .setSampleRate(RATE)
             .setChannelMask(CH)
