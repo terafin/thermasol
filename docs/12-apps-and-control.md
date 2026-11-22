@@ -228,3 +228,10 @@ completely wrong conclusion that had to be retracted. See [08-lessons.md](08-les
   not a panel defect — a lighter dashboard is the fix, not code.
 - **Bluetooth audio** is not usable at 115200 baud (issue
   [#4](https://github.com/terafin/thermasol/issues/4)).
+
+## 7. Selectable Sonos output (added speaker)
+
+Routing the panel's app audio (incl. DRM) to a Sonos renderer as an opt-in *added* output —
+pluggable, default-off, so other units are unaffected — is documented separately: see
+[`17-showercast-selectable-output.md`](17-showercast-selectable-output.md). Source lives in
+[`apps/showercast/`](../apps/showercast/).
