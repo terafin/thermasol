@@ -195,30 +195,39 @@ adb shell su 0 dd if=/data/local/tmp/uboot_env.img of=/dev/block/mmcblk2 bs=4096
 This removes the leftover variables from the v10 experiment (`payargs`, `fdtaddr`,
 `bootcmd_safe`, `bootcmd_orig`). It is optional; step 4 alone fixes the boot.
 
-## The amp — research only
+## The amp
 
-Everything below is read from the v5 firmware image (`latest.bin`, sha256 `37c81d0b…`) and
-ThermaSol's HydroVive installation manual. Nothing has been tested on the unit.
+The cause and the recovery are in [docs/14](14-hydrovive-recovery.md) and
+[`services/hv-recovery/rom-bootloader/`](../services/hv-recovery/rom-bootloader/README.md); this
+section only says where things stand.
 
-**What the chip uses, from its interrupt table and pin setup:**
+**State.** The MCU sits in ST's system bootloader with BFB2 set; v7 should be intact in bank 1. The
+deciding check below has been done: no light control, no CAN frames, nothing ACKs on the bus. A
+90 s receive-only capture on 2026-11-18 held no `0x143` status frames, where the working unit sent one
+a second (October captures).
 
-- **USART2 on PA2/PA3**, alternate function 7 (`0x8002f8a`: pins `0x0C`, mode 2, AF 7). That is
-  the exact pair ST's ROM bootloader listens on for USART2 (AN2606 Rev 61, Table 101). It is the
-  realistic way in without a debugger.
-- **USART1** is also active (the Bluetooth link). **USB is unused** — no USB handlers in the vector
-  table — so USB DFU is not an option.
-- **I2C2 on PA8/PA9** (`0x8002d20`: pins `0x300`, open-drain, AF 4) to the DSP.
-- CAN has no interrupt handler; the firmware polls it. The ROM bootloader has no CAN at all, which
-  is why nothing on the panel can reach the chip now.
+**What the chip uses** (from v5): USART2 on PA2/PA3 runs to the Bluetooth module and is the ROM's
+USART2; USART1 on PC4/PC5 is ThermaSol's debug terminal (115200); I2C2 on PA8/PA9 to the DSP;
+FDCAN2 on PB5/PB6 to the CAN transceiver. USB is unused.
 
 **How the unit comes down (installation manual):** it is held by 3.5-inch screws under screw covers,
-sealed with silicone, and hangs on its brackets when lowered. It connects by two plugs, an M12
+sealed with silicone, and hangs on its lanyards when lowered. It connects by two plugs, an M12
 power/data cable to the PDM and an audio cable, so it can be unplugged without cutting anything.
-Its electronics are inside a sealed module; whether the board is reachable without opening that
-housing is unknown.
+The electronics are a separate black enclosure screwed to the top (ceiling side) of the unit, with
+the yellow M12 cable (right-angle plug) and the RCA audio leads going into it, as the manual's step 5
+drawing shows and the owner's photo of this unit confirmed on 2026-11-18. The board should be inside
+that box, so it may be reachable by opening the box rather than the whole housing. The owner opened it on 2026-11-18:
+board AS03-7225 Rev A, MCU STM32G474QET6 (LQFP128), Bluetooth BM64SPKS1MC2, DSP ADAU1701, amp TPA3116,
+no conformal coating, and a 6-pin 2.54 mm header J10 whose wiring is still to be checked.
 
-**The next step is a look, not a fix:** lower the unit, photograph the module and any access panel
-or label, and stop. Only once the board can be seen does a recovery procedure get written.
+Mounting: on this unit the black slotted guide straps are fixed to the framing and a tab on the unit
+rides in them. The J-shaped notches open toward the gap between the two straps, so a tab caught in a
+notch has to lift slightly and move toward that gap before the unit drops; while the unit hangs
+crooked, its weight pins the tab.
+
+**The next step:** lower the unit and photograph the board, then follow the recovery README: read the
+chip marking, check PA2/PA3 with a voltmeter, attach the ESP32 bridge, and run `recover.sh`. Its first
+act is a full flash backup, which `analyze-backup.sh` turns into a v7 decompile.
 
 ### How ThermaSol's own amp update works, and why it stopped
 
@@ -236,10 +245,4 @@ The panel can update the amp over CAN; the mechanism is visible on both sides.
 After `BC 01` was sent on 2026-11-17 the amp went silent: no `0x100`, no `0x143`, no ACKs. So the
 bank it now boots is not running a CAN updater.
 
-**The deciding check, free and harmless, once the panel is back:** do the HydroVive's lights respond
-to the panel's light control? The same chip drives them.
-
-- **Lights respond** → the chip is running application code with CAN. A panel-side recovery is
-  plausible, and the next step is to read what it reports.
-- **Lights dead** → the chip is in the ST ROM bootloader or a bank with no CAN. The ROM bootloader
-  has no CAN, so no panel-side recovery exists; the board has to be reached directly.
+That check came out the second way: the lights are dead, so the board has to be reached directly.

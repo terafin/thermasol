@@ -1,0 +1,37 @@
+# ESPHome: ESP32 <-> HydroVive MCU USART2 (ST ROM bootloader). Same board as remote-uart.
+# Wiring (amp board side): ESP32 GND -> amp GND; ESP32 GPIO17 (TX) -> 1 kOhm -> MCU PA3 (USART2_RX);
+# ESP32 GPIO16 (RX) <- 1 kOhm <- MCU PA2 (USART2_TX). 3.3 V logic both sides. Do not connect power;
+# power the ESP32 before the shower supply.
+esphome:
+  name: amp-uart
+  friendly_name: Amp UART
+esp32:
+  board: nodemcu-32s
+  framework:
+    type: arduino
+substitutions:
+  log_level: INFO
+# packages: point these at your own ESPHome common files
+packages:
+  base: !include common/base.yaml
+  wifi: !include common/wifi.yaml
+  web_server: !include common/webserver.yaml
+  ota: !include common/ota.yaml
+  time: !include common/time.yaml
+  logger: !include common/logger.yaml
+external_components:
+  # Upstream oxan/esphome-stream-server does not build on ESPHome >= 2026.7 (get_use_address renamed);
+  # this is the fix from upstream PR #82, pinned to the commit that compiled on ESPHome 2026.10.2.
+  - source: github://MMeinhardt1/esphome-stream-server@d2c2ac3684baadb8c4b61ddc724e752dd8cc7fdd
+uart:
+  id: amp
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 57600        # ROM bootloader autobauds on 0x7F; 57600 is stm32flash's default
+  parity: EVEN            # AN3155: 8 data bits, EVEN parity, 1 stop bit
+  stop_bits: 1
+  rx_buffer_size: 4096
+stream_server:
+  uart_id: amp
+  port: 6639
+  buffer_size: 4096

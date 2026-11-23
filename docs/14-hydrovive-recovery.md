@@ -73,7 +73,8 @@ What follows:
 - **The fix is one option-byte write.** Connect to USART2 (PA2/PA3, 8E1, send `0x7F`). If it answers, the
   MCU is in S1; if not, it is in S2: hold BOOT0 high, power-cycle and connect again. Then write the user
   option bytes with BFB2 = 0. On the next reset the G47x boots bank 1 directly and v7 runs. No firmware is flashed.
-- **Do not flash v5** to fix this. v7 is already in bank 1; clearing BFB2 is enough.
+- **Do not flash v5** to fix this. v7 is already in bank 1; clearing BFB2 is enough. v5 is a fine bank-1
+  image once BFB2 is clear, which `restore-bank1.sh` relies on if bank 1 turns out not to hold one.
 
 ### More checks from the panel (2026-11-18)
 
@@ -96,8 +97,10 @@ What follows:
   the generator's frames go from ~4/s (panel ACKing) to ~830/s (panel silent, retransmit flood),
   hours after power-on as well as in the cold window. The unit's FDCAN does not ACK at any time.
 - **Bluetooth.** The unit's BT module is not discoverable (classic or LE). It is powered by the MCU
-  (command `BB`) and wired to USART1 alternate pins (PC4/PC5) that the ROM bootloader does not
-  use, so it is no route to the chip even when powered.
+  (command `BB`), so with the MCU in the ROM it is off and no route to the chip. It sits on USART2
+  (PA2/PA3), the ROM's own USART2 pins: v5's USART2 handler feeds a parser that waits for `AA 00`,
+  the start of Microchip BM6x/BM8x UART command frames. That makes the BT module's UART pads a
+  place to reach the ROM bootloader on the board (see below).
 - **The other bank's updater.** ThermaSol's server lists no HydroVive image other than v5
   (`firmware.json`; `bootloader.bin`, `v7.bin`, `updater.bin` and similar all 404). No ThermaSol APK
   embeds a Cortex-M image. The DSV-4000 generator firmware (same G4 template) has the same bank
@@ -116,8 +119,16 @@ What follows:
 - MCU: STM32G474-class, dual-bank flash (DBANK=1, 2 × 256 KB, 2 KB pages).
 - Application CAN: FDCAN2 on PB5/PB6. 24 MHz HSE → PLL → 96 MHz FDCAN clock, prescaler 60,
   1+13+2 TQ = **100 kbit/s**. ThermaSol's DSV-4000 generator firmware uses the same template.
-- Other interfaces in v5: I2C2 to the ADAU1701 DSP (PA8/PA9), USART2 debug at 19200 (PA2/PA3),
-  USART1 to the Bluetooth module (PC4/PC5). None of them is on the CAN harness.
+- Other interfaces in v5: I2C2 to the ADAU1701 DSP (PA8/PA9); USART2 at 19200 8N1 (PA2/PA3) to
+  the Bluetooth module (`AA 00 …` command frames, parser at `0x08000E7C`); USART1 (PC4/PC5) at
+  115200 8N1 is ThermaSol's "debug Terminal": it echoes input, ends a line on CR and dispatches on
+  the first letter (`0x080031A0`). Its own help text lists `h` (help), `lc<value>` (LED: `s` on/off,
+  `q` sequence, `r`/`g`/`b`/`w` level 0-255), `s` (sensor values) and `p` (system parameters; in v5
+  it re-runs the DSP download). The boot banner is `HydroVive, firmware version %d.%d`. Nothing in
+  it touches flash or option bytes. None of these interfaces is on the CAN harness.
+- For the recovery wiring this means: the ROM listens on PA2/PA3, which go to the BT module, not to
+  a debug header. A factory header, if the board has one, most likely carries the USART1 console on
+  PC4/PC5, which the ROM does not use; nothing will answer there.
 - The panel, the amp and the steam generator share one supply. Cycling it reboots all three
   at the same instant.
 
@@ -144,6 +155,19 @@ I2C2/3/4, SPI1/2 and DFU only, **never FDCAN**.
   status 1 **without transmitting**: the panel never solicits; the device must announce itself.
 - Then status 1 → `101#01` → status 2 → `101#02` → status 3 → 2 KB pages on 0x102, each followed
   by `101#05` with that page's CRC → `101#03`, `101#04`. Every wait comes before its command.
+
+### When the panel would offer an amp update
+
+touchsteam2's update check (`FirmwareUpdateActivity.java:77`) asks
+`Utility.packageUpdateNeeded(firmware.json, "com.thermatouch.tsolup.firmware.hydrovive", <unit's version>)`.
+Read as instructions (jadx `--decompilation-mode fallback`), that returns the listed entry only when
+its version is newer than the unit's (Maven-style `ComparableVersion`, so "10" > "7"), and null
+otherwise. jadx's default Java output for this method has the two returns swapped and reads as if
+any listed version prompts; the instruction listing shows it does not.
+
+So a listed v5 would not be offered to a v7 unit. A listed version above 7 would be, and the update
+downloads `hydrovive/latest.bin` and starts with `BC 01`. On 2026-11-18 `firmware.json` (sha256
+`6e5f8cd9…`) has no HydroVive entry.
 
 ## Observations since the command
 
