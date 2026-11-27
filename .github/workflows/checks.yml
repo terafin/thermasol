@@ -64,8 +64,7 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" >/dev/null
       - name: Build the helper apps (ttidle needs the AOSP framework.jar and is not built here)
-        env:
-          ANDROID_SDK: ${{ env.ANDROID_HOME }}
         run: |
+          export ANDROID_SDK="$ANDROID_HOME"
           for a in apps/*/; do n=$(basename "$a"); [ "$n" = ttidle ] && continue
             apps/build-app.sh "$a" "$RUNNER_TEMP/$n.apk"; done
