@@ -57,6 +57,7 @@ App (YouTube, Netflix, Plex, Apple TV, ThermaSol, ...)  -- ordinary Android medi
 | Keep it: mark good, copy to the fallback slot | `commit.sh` | **yes** |
 | Back out / switch slots | `rollback.sh` / `swap.sh <_a\|_b>` | **yes** |
 | Remove retired apps, reclaim space | `remove-apps.sh` | yes |
+| Install a published release onto the inactive slot (backup, verify, trial boot, keep) | `install.sh <release-tag\|dir>` | **yes** (inactive slot only) |
 | Full backup to the build host (do this first) | `backup.sh` | read-only |
 | Put one slot back from a backup | `restore.sh latest <slot> [--parts "..."]` | **yes** (inactive slot only) |
 | Recover a panel that won't boot | `recover.sh <slot>` | **yes** (U-Boot over TFTP + power cycle) |
@@ -107,6 +108,12 @@ script.
   panel; `adb exec-in` corrupted data in testing), and `lib.sh` refuses any write to the raw eMMC
   device or boot0/boot1, so no script can reach the bootloader, GPT or U-Boot environment.
 
+- **install.sh** refuses a release whose `SHA256SUMS` or `imgcheck.py` check fails, a panel that is not a
+  TT10V2 on Android 15, an invalid A/B record or a partition-size mismatch, and runs without a verified
+  backup of the current boot. It writes only the inactive slot, trial-boots it, and keeps it only if it
+  comes up enforcing with the release's vbmeta digest. This U-Boot picks slots by priority only, so a
+  slot that fails to boot does not fall back on its own: `recover.sh <running slot>` brings it back.
+  `test_install.sh` runs it against a fake panel (`fake-adb.sh`) in CI.
 - **imgcheck.py** verifies an image set the way the panel's U-Boot does (vbmeta signature with the
   public test key, flags 0, no chain descriptors, every hash and hashtree, kernel under 32 MiB) and
   prints the vbmeta digest the panel reports as `ro.boot.vbmeta.digest`; decodes an A/B record to the

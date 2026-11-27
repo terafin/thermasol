@@ -40,6 +40,9 @@ jobs:
       - name: imgcheck (A/B record and U-Boot env checks)
         working-directory: scripts/panel
         run: python3 -I test_imgcheck.py
+      - name: install.sh against a fake panel
+        working-directory: scripts/panel
+        run: bash test_install.sh
       - name: store mirror
         working-directory: scripts/store-mirror
         run: python3 -I test_serve_store.py
