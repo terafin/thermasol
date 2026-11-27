@@ -144,7 +144,16 @@ since=$(date '+%Y-%m-%d %H:%M:%S')   # before the power cycle: only this run's f
 # From here U-Boot may be mid-transfer: on any exit, remove only the script (so it cannot run on
 # the next power-on) and leave the chunks; they are removed after the panel has booted.
 trap 'sudo rm -f /srv/tt-tftp/tt-recover.scr; echo "chunks left in /srv/tt-tftp/rst — remove after the panel boots: sudo rm -rf /srv/tt-tftp/rst"' EXIT
-power_cycle
+# U-Boot asks for the script once per boot; if that one request is lost (link not up yet), the
+# panel boots normally. Power-cycle again until the script is fetched, at most 3 times.
+for attempt in 1 2 3; do
+  power_cycle
+  for _ in $(seq 1 18); do journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/tt-recover.scr" && break; sleep 5; done
+  journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/tt-recover.scr" && break
+  [ "$attempt" -lt 3 ] || die "U-Boot did not fetch the restore script after 3 power cycles; nothing was written"
+  ok "U-Boot did not ask for the script (attempt $attempt); power-cycling again"
+done
+ok "U-Boot fetched the restore script"
 step "wait for U-Boot to fetch every chunk (last: $LAST)"
 # lib.sh runs under set -euo pipefail: a grep that matches nothing must not end the script, or
 # the EXIT trap removes the chunks while U-Boot is still fetching them.

@@ -30,10 +30,16 @@ ok "staged /srv/tt-tftp/tt-recover.scr"
 # Only a fetch after this power cycle counts: an earlier recovery's "sent" line in the log would
 # otherwise read as this one and remove the script before U-Boot asks for it.
 since=$(date "+%Y-%m-%d %H:%M:%S")
-power_cycle
-step "wait for U-Boot to fetch the recovery script"
 fetched() { journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent /srv/tt-tftp/tt-recover.scr"; }
-for i in $(seq 1 24); do fetched && break; sleep 5; done
+# U-Boot asks once per boot; if that request is lost the panel boots normally. Retry up to 3 times.
+for attempt in 1 2 3; do
+  power_cycle
+  step "wait for U-Boot to fetch the recovery script"
+  for i in $(seq 1 18); do fetched && break; sleep 5; done
+  fetched && break
+  [ "$attempt" -lt 3 ] || break
+  ok "U-Boot did not ask for the script (attempt $attempt); power-cycling again"
+done
 sudo rm -f /srv/tt-tftp/tt-recover.scr
 fetched || die "U-Boot never fetched the recovery script"
 ok "recovery script served; TFTP cleared"
