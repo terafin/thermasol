@@ -90,8 +90,11 @@ if timeout 8 "$ADB" connect "$PANEL" >/dev/null 2>&1 && [ "$(timeout 8 "$ADB" -s
   die "the panel is up and running $S; --uboot rewrites $S while it is the slot U-Boot falls back to — restore the other slot, or use the adb path"
 fi
 [ -z "$(ls -A "$T" 2>/dev/null)" ] || die "$T is not empty; clear it first (anything there runs on every boot)"
-step "stage chunks in $T/$R"
-sudo mkdir -p "$T/$R"
+# Literal paths only: a cleanup built from variables could delete the wrong tree if one were empty.
+cleanup() { sudo rm -f /srv/tt-tftp/tt-recover.scr; sudo rm -rf /srv/tt-tftp/rst; }
+trap cleanup EXIT
+step "stage chunks in /srv/tt-tftp/rst"
+sudo mkdir -p /srv/tt-tftp/rst; : > "$X/chunks.list"
 {
   echo "mmc dev 1"
   echo "setenv ttfail 0"
@@ -104,7 +107,7 @@ sudo mkdir -p "$T/$R"
     i=0
     for c in "$X/${p}${S}".[0-9][0-9][0-9]; do
       cn=$(( ($(stat -c %s "$c") + 511) / 512 ))
-      sudo cp "$c" "$T/$R/$(basename "$c")"
+      echo "$c" >> "$X/chunks.list"
       cf=$R/$(basename "$c"); off=$(printf '0x%x' $((st + i * CS))); cnt=$(printf '0x%x' "$cn")
       echo "if test \$ttfail = 0; then setenv ttok 0; for try in 1 2 3; do if test \$ttok = 0; then if tftpboot $ADDR $cf; then setenv ttok 1; fi; fi; done; if test \$ttok = 1; then mmc write $ADDR $off $cnt; else setenv ttfail 1; echo tt-restore: FAILED $cf; fi; fi"
       i=$((i + 1))
@@ -125,13 +128,18 @@ sudo mkdir -p "$T/$R"
   echo "fi"
 } > "$X/tt-recover.cmd"
 grep -q '^misc ' <<< "$PT" || die "misc not in the backup's partition table"
+# Every chunk must be on the TFTP server, byte-identical, before U-Boot can see the script:
+# U-Boot fetches them back to back and gives up on the first one that is missing.
+while read -r c; do
+  sudo cp "$c" "/srv/tt-tftp/rst/$(basename "$c")" || die "stage $(basename "$c")"
+  [ "$(sudo sha256sum "/srv/tt-tftp/rst/$(basename "$c")" | cut -d' ' -f1)" = "$(sha "$c")" ] || die "staged $(basename "$c") differs"
+done < "$X/chunks.list"
+[ "$(sudo ls /srv/tt-tftp/rst | wc -l)" = "$(wc -l < "$X/chunks.list")" ] || die "chunk count on the TFTP server does not match"
 NCH=$(grep -c tftpboot "$X/tt-recover.cmd")
 LAST=$(grep -o "$R/[a-z_]*\.[0-9]*" "$X/tt-recover.cmd" | tail -1)
 /usr/bin/mkimage -A arm64 -T script -C none -n tt-restore -d "$X/tt-recover.cmd" "$X/tt-recover.scr" >/dev/null || die "mkimage failed"
 sudo cp "$X/tt-recover.scr" "$T/tt-recover.scr"
 ok "staged $NCH chunks + tt-recover.scr"
-cleanup() { sudo rm -rf "$T/tt-recover.scr" "$T/$R"; rm -rf "$X"; }
-trap cleanup EXIT
 since=$(date '+%Y-%m-%d %H:%M:%S')   # before the power cycle: only this run's fetches count
 power_cycle
 step "wait for U-Boot to fetch every chunk (last: $LAST)"
@@ -143,7 +151,7 @@ until journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/$LAST
   [ "$idle" -lt 300 ] || die "no chunk fetched for 5 minutes ($last of $NCH); the A/B record is unchanged"
 done
 ok "U-Boot fetched every chunk ($(sent) transfers for $NCH chunks)"
-sudo rm -f "$T/tt-recover.scr"   # never leave it: it would run again on the next power-on
+sudo rm -f /srv/tt-tftp/tt-recover.scr   # never leave it: it would run again on the next power-on
 wait_boot "$S" 300
 for p in $PARTS; do
   [ "$(part_sha "${p}${S}")" = "$(sha "$X/${p}${S}.img")" ] || die "${p}${S} on the panel differs from the backup"
