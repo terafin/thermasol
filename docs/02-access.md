@@ -43,7 +43,7 @@ panel ever sees them.
 
 ## SSH
 
-Termux `sshd` on **port 8022** (stock Android 10 only; not present on the A15 images v1.0–v1.4). The original installation used **password authentication** with a
+Termux `sshd` on **port 8022** (stock Android 10 only; not present on any A15 image). The original installation used **password authentication** with a
 zero-byte `authorized_keys` — the setuid `su` lives at `/system/xbin/su` and Termux cannot run it,
 so a key-only setup has to be added deliberately. Set a key (`~/.ssh/authorized_keys`, mode 600)
 before you rely on this path; the key is **not** in this repo and cannot be recovered from it.
