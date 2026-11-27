@@ -58,25 +58,12 @@ if [ "$S" = _a ]; then REC=$(ab_make 15 0 1 14 0 1); else REC=$(ab_make 14 0 1 1
 if [ "$MODE" != --uboot ]; then
   adb_up; booted || die "panel not booted — use --uboot"
   [ "$(slot)" != "$S" ] || die "$S is the running slot; restore the other one, or use rollback.sh first"
-  # Send each image in 256 MiB chunks (system/product are 1.8 GB and do not fit in /data), check
-  # each chunk on the panel, dd it to its offset, then read the whole partition back.
-  CHB=268435456
   for p in $PARTS; do
-    f=$X/${p}${S}.img; want=$(sha "$f"); size=$(stat -c %s "$f")
-    [ "$(sh_p "blockdev --getsize64 /dev/block/by-name/${p}${S}")" = "$size" ] || die "${p}${S}: size differs from the backup"
-    if [ "$(part_sha "${p}${S}")" = "$want" ]; then ok "${p}${S} already matches the backup"; continue; fi
-    n=$(( (size + CHB - 1) / CHB ))
-    for i in $(seq 0 $((n - 1))); do
-      c=$X/chunk; dd if="$f" of="$c" bs=$CHB skip="$i" count=1 status=none || die "split ${p}${S}"
-      cw=$(sha "$c")
-      "$ADB" -s "$PANEL" push "$c" /data/local/tmp/rst.chunk >/dev/null || die "push ${p}${S} chunk $i"
-      [ "$(sh_p "sha256sum /data/local/tmp/rst.chunk" | cut -d' ' -f1)" = "$cw" ] || die "${p}${S} chunk $i: pushed copy differs"
-      sh_p "dd if=/data/local/tmp/rst.chunk of=/dev/block/by-name/${p}${S} bs=$CHB seek=$i conv=notrunc,fsync 2>/dev/null; rm -f /data/local/tmp/rst.chunk"
-      rm -f "$c"
-    done
-    sh_p "sync; blockdev --flushbufs /dev/block/by-name/${p}${S}"
-    [ "$(part_sha "${p}${S}")" = "$want" ] || die "${p}${S}: readback differs — do not boot $S"
-    ok "${p}${S} written and verified ($n chunks)"
+    f=$X/${p}${S}.img
+    [ "$(sh_p "blockdev --getsize64 /dev/block/by-name/${p}${S}")" = "$(stat -c %s "$f")" ] || die "${p}${S}: size differs from the backup"
+    if [ "$(part_sha "${p}${S}")" = "$(sha "$f")" ]; then ok "${p}${S} already matches the backup"; continue; fi
+    write_part_verified "$f" "${p}${S}"
+    ok "${p}${S} written and verified"
   done
   rm -rf "$X"
   "$(dirname "$0")/swap.sh" "$S"
@@ -108,6 +95,7 @@ sudo mkdir -p /srv/tt-tftp/rst; : > "$X/chunks.list"
     for c in "$X/${p}${S}".[0-9][0-9][0-9]; do
       cn=$(( ($(stat -c %s "$c") + 511) / 512 ))
       echo "$c" >> "$X/chunks.list"
+      [ $((st + i * CS)) -ge "$FIRST_PART_SECTOR" ] || die "refused: chunk would land in the first 8 MB (bootloader/GPT/env)"
       cf=$R/$(basename "$c"); off=$(printf '0x%x' $((st + i * CS))); cnt=$(printf '0x%x' "$cn")
       echo "if test \$ttfail = 0; then setenv ttok 0; for try in 1 2 3; do if test \$ttok = 0; then if tftpboot $ADDR $cf; then setenv ttok 1; fi; fi; done; if test \$ttok = 1; then mmc write $ADDR $off $cnt; else setenv ttfail 1; echo tt-restore: FAILED $cf; fi; fi"
       i=$((i + 1))

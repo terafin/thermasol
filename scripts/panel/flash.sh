@@ -58,16 +58,7 @@ write_part() {  # $1 file $2 partition
   local f=$1 p=$2 want; want=$(sha "$f")
   step "write $(basename "$f") -> $p"
   [ "$(slot)" = _b ] || die "slot changed under us"
-  "$ADB" -s "$PANEL" exec-in "dd of=/dev/block/by-name/$p bs=4194304 conv=notrunc,fsync" < "$f" \
-    || die "write to $p failed"
-  sh_p "sync; echo 3 > /proc/sys/vm/drop_caches"
-  # read back from the partition (caches dropped); retry once before calling it a failure
-  local got; got=$(part_sha "$p" "$(stat -c%s "$f")")
-  if [ "$got" != "$want" ]; then
-    sleep 5; sh_p "sync; echo 3 > /proc/sys/vm/drop_caches"
-    got=$(part_sha "$p" "$(stat -c%s "$f")")
-  fi
-  [ "$got" = "$want" ] || die "$p readback $got != $want"
+  write_part_verified "$f" "$p"
   ok "$p readback matches"
 }
 [ -n "$SSHA" ] && write_part "$D/system.img" system_a
