@@ -1,14 +1,16 @@
 #!/bin/bash
 # Build the vendor audio APEX (reference AIDL audio service, NXP's copy, plus the Sonos module)
 # from the pinned tree. Records its sha so build.sh refuses an APEX it did not produce.
-source "$(dirname "$0")/lib.sh"
-P=$REPO/scripts/panel/overlay/audio-tree.patch
-if [ -s "$P" ]; then
-  step "apply audio-tree.patch (reference audio service + Sonos module, against NXP android-15.0.0_1.2.0)"
-  cd "$BT" || die "no build tree"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
+# audio-tree.patch: reference audio service + Sonos module. audio-policy.patch: the "sonos" module in
+# the vendor audio policy, without which the audio service never creates the Sonos outputs.
+cd "$BT" || die "no build tree"
+for P in "$REPO"/scripts/panel/overlay/audio-tree.patch "$REPO"/scripts/panel/overlay/audio-policy.patch; do
+  n=$(basename "$P"); [ -s "$P" ] || die "missing $n"
+  step "apply $n (against NXP android-15.0.0_1.2.0)"
   if patch -p1 -R --dry-run -s -f < "$P" >/dev/null 2>&1; then ok "already applied"
-  else patch -p1 -s -f < "$P" || die "audio-tree.patch does not apply"; ok "applied"; fi
-fi
+  else patch -p1 -s -f < "$P" || die "$n does not apply"; ok "applied"; fi
+done
 # The Sonos module runs inside the shared audio service: a send() to a player that hung up raises
 # SIGPIPE and kills every audio module, silently (no tombstone). Every send() must use MSG_NOSIGNAL.
 SRC=$BT/vendor/nxp-opensource/imx/audio/default/sonos

@@ -2,7 +2,7 @@
 # Pass/fail check of the running panel. Read-only. Exit 0 only if EVERY check passes.
 # Expected Sonos rooms come from the Sonos system itself (sonos-rooms.sh), so the panel must
 # show every visible room by its real name. Override with EXPECT_ROOMS_FILE=<ip TAB name list>.
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 OV=$REPO/scripts/panel/overlay
 EXPECT=${EXPECT_ROOMS_FILE:-}
 if [ -z "$EXPECT" ]; then EXPECT=$WORK/expected-rooms.tsv; "$(dirname "$0")/sonos-rooms.sh" > "$EXPECT" || die "could not read the Sonos room list"; fi

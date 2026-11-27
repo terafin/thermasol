@@ -3,7 +3,7 @@
 # then reboot and confirm. Only ever changes the A/B record in misc.
 #   swap.sh <_a|_b>            -> target becomes {pri15,tries0,succ1}, other {pri14,tries0,succ1}
 #   swap.sh <_a|_b> --trial    -> target {pri15,tries4,succ0} (falls back after 4 failed boots)
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 T=${1:?usage: swap.sh <_a|_b> [--trial]}; MODE=${2:-}
 [ "$T" = _a ] || [ "$T" = _b ] || die "slot must be _a or _b"
 adb_up; booted || die "panel not booted"

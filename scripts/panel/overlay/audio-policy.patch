@@ -1,0 +1,20 @@
+--- a/device/nxp/imx8m/evk_8mm/audio_policy_configuration.xml	2026-11-27 00:05:22.111810017 -0800
++++ b/device/nxp/imx8m/evk_8mm/audio_policy_configuration.xml	2026-11-27 00:05:22.120779111 -0800
+@@ -114,6 +114,17 @@
+         <!-- Remote Submix Audio HAL -->
+         <xi:include href="r_submix_audio_policy_configuration.xml"/>
+ 
++        <!-- TT10V2 Sonos network audio HAL: zones are discovered dynamically via UPnP
++             and reported by the HAL; no static device ports. -->
++        <module name="sonos" halVersion="7.0">
++            <mixPorts>
++                <mixPort name="Sonos mix" role="source">
++                    <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
++                             samplingRates="48000" channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
++                </mixPort>
++            </mixPorts>
++        </module>
++
+     </modules>
+ 
+     <!-- Volume section -->

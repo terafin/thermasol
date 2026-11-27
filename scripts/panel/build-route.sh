@@ -1,7 +1,7 @@
 #!/bin/bash
 # Compile hal/PanelRoute.java (output selection + silent playback test helper) to $WORK/panel-route.jar.
 # Runs on the panel via app_process; it is not installed. Needs the framework header jar from the tree.
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 FW=$BT/out/soong/.intermediates/frameworks/base/framework/android_common/turbine-combined/framework.jar
 [ -s "$FW" ] || die "no framework header jar — run build-framework.sh"
 S=$WORK/route; rm -rf "$S"; mkdir -p "$S/c"

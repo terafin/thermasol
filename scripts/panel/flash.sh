@@ -6,7 +6,7 @@
 #   2. confirm the inactive slot's boot/dtbo/product/system == pinned base (vbmeta covers them)
 #   3. dd vendor + vbmeta into the inactive slot, full-partition readback sha must match
 #   4. arm a TRIAL on it and reboot; test.sh decides success
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 D=${1:?usage: flash.sh <build-dir|latest>}; [ "$D" = latest ] && D=$OUT/latest
 D=$(readlink -f "$D"); M=$D/MANIFEST; [ -f "$M" ] || die "no MANIFEST in $D"
 VSHA=$(awk -F= '$1=="vendor"{print $2}' "$M"); BSHA=$(awk -F= '$1=="vbmeta"{print $2}' "$M")
@@ -58,16 +58,7 @@ write_part() {  # $1 file $2 partition
   local f=$1 p=$2 want; want=$(sha "$f")
   step "write $(basename "$f") -> $p"
   [ "$(slot)" = _b ] || die "slot changed under us"
-  "$ADB" -s "$PANEL" exec-in "dd of=/dev/block/by-name/$p bs=4194304 conv=notrunc,fsync" < "$f" \
-    || die "write to $p failed"
-  sh_p "sync; echo 3 > /proc/sys/vm/drop_caches"
-  # read back from the partition (caches dropped); retry once before calling it a failure
-  local got; got=$(part_sha "$p" "$(stat -c%s "$f")")
-  if [ "$got" != "$want" ]; then
-    sleep 5; sh_p "sync; echo 3 > /proc/sys/vm/drop_caches"
-    got=$(part_sha "$p" "$(stat -c%s "$f")")
-  fi
-  [ "$got" = "$want" ] || die "$p readback $got != $want"
+  write_part_verified "$f" "$p"
   ok "$p readback matches"
 }
 [ -n "$SSHA" ] && write_part "$D/system.img" system_a

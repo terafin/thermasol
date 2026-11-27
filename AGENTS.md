@@ -5,13 +5,17 @@ Guidance for AI agents working in this repo. Read this first, then
 
 ## What this repo is
 
-Field notes from converting **one** physical ThermaSol ThermaTouch TT10V2 shower panel from
-its shipped Android 10 to Android 15. It is **not a library**, not a buildable project, and
-not a supported distribution. It is a record of what was done, what was verified, and what
-is still broken — written so the next person (or agent) does not repeat the mistakes.
+Converting the ThermaSol ThermaTouch TT10V2 shower panel from its shipped Android 10 to
+Android 15, with every Sonos player as a native Android audio output. Two parts:
 
-The device is **sealed into a bathroom wall**. There is no USB, no reset button, and no
-documented recovery. Consequences below are not stylistic preferences.
+- **[`scripts/panel/`](scripts/panel/README.md) — the pipeline.** Builds, flashes, tests, backs
+  up, restores and recovers the panel. Every change to a panel goes through these scripts.
+- **`docs/` — the record.** What was done, what was verified, what is still broken, written so
+  the next person (or agent) does not repeat the mistakes.
+
+The device is **sealed into a bathroom wall**. There is no USB and no reset button. Recovery is
+over the network only (U-Boot TFTP hook), and a damaged bootloader means opening the wall.
+Consequences below are not stylistic preferences.
 
 ---
 
@@ -19,11 +23,12 @@ documented recovery. Consequences below are not stylistic preferences.
 
 | Question | Read |
 |---|---|
+| **Build, flash, test, back up, restore, recover** | **[`scripts/panel/README.md`](scripts/panel/README.md)** |
 | What is the device? | [`docs/00-overview.md`](docs/00-overview.md) |
 | Why does the panel behave this way? | [`docs/01-mechanisms.md`](docs/01-mechanisms.md) |
 | How do I get a shell on it? | [`docs/02-access.md`](docs/02-access.md) |
 | What hardware am I talking to? | [`docs/03-hardware.md`](docs/03-hardware.md) |
-| How is the image built and flashed? | [`docs/04-android15-port.md`](docs/04-android15-port.md), [`build/README.md`](build/README.md) |
+| How was the port done (history, BSP build) | [`docs/04-android15-port.md`](docs/04-android15-port.md), [`build/README.md`](build/README.md) |
 | Why does X behave like that? | [`docs/05-fixes.md`](docs/05-fixes.md) |
 | I need to do a procedure | [`docs/06-procedures.md`](docs/06-procedures.md) |
 | What is still broken? | **[the issue tracker](https://github.com/terafin/thermasol/issues)** |
@@ -33,7 +38,7 @@ documented recovery. Consequences below are not stylistic preferences.
 | What should I avoid? | [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md) |
 | How was this written / what went wrong | [`docs/08-lessons.md`](docs/08-lessons.md) |
 | The HydroVive amp and why it is silent | [`docs/14-hydrovive-recovery.md`](docs/14-hydrovive-recovery.md) |
-| The panel will not boot | [`docs/16-network-recovery-hook.md`](docs/16-network-recovery-hook.md), then [`docs/15-recovery-plan.md`](docs/15-recovery-plan.md) |
+| The panel will not boot | `scripts/panel/recover.sh <slot>`, or `restore.sh latest <slot> --uboot`; background in [`docs/16-network-recovery-hook.md`](docs/16-network-recovery-hook.md) |
 
 ---
 
@@ -46,8 +51,9 @@ Do not mirror it in a doc. Known constraints that are deliberately not issues ar
 Labels mean what they say: `needs-operator` means a human has to be physically present — do not
 "close" one from a successful adb command. `unverified` means written down but not proven.
 
-The acceptance blockers, in order: speaker hiss (#1), physical certification (#8), and an
-untested rollback path (#9). Everything else is a real defect that does not block accepting the
+The acceptance blockers, in order: speaker hiss (#1) and physical certification (#8). Rollback,
+network recovery and restore-from-backup were rehearsed on the panel on 2026-11-27 (see
+`scripts/panel/README.md`). Everything else is a real defect that does not block accepting the
 panel. **Only the operator declares the project complete.**
 
 When you fix something, close the issue with the evidence — the command, the output, the
@@ -61,6 +67,11 @@ evidence are in [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
 
 ### Never do these to the device
 
+0. **Never change a panel by hand.** No hand-run `dd`, `avbtool`, misc/A-B writes, `setenforce`,
+   `chcon` or property edits. Use `scripts/panel/`; if a script cannot do something, fix the
+   script. Run `backup.sh` before any write you have not rehearsed. Site settings (panel address,
+   power switch, token command) live only in the git-ignored `scripts/panel/local.env` — never in
+   a committed file.
 1. **Never suspend the panel** (`echo mem > /sys/power/state`). It does not wake. There is no
    RTC/alarm wake source, and the touch IRQ does not bring the SoC out.
 
@@ -76,7 +87,10 @@ evidence are in [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
 
 3. **Never chain `boot` in vbmeta.** A chain descriptor parks the slot in fastboot
    permanently — an AVB I/O error skips the tries decrement, so no reboot can drain it.
-4. **Never write the U-Boot environment without keeping `run tt_nethook;` first in `bootcmd`**,
+4. **Never write the bootloader, the GPT or the U-Boot environment** (the first 8 MB of the eMMC
+   user area, and boot0/boot1). `lib.sh` refuses raw eMMC writes; do not bypass it. The chip's
+   write-protect granularity (8 MB) would lock the recovery hook too, so it is not used.
+   **Never write the U-Boot environment without keeping `run tt_nethook;` first in `bootcmd`**,
    and never use `env default -a`. The hook is the only way in when Android does not boot
    ([`docs/16`](docs/16-network-recovery-hook.md)); the panel was dark for a week on 2026-11-17
    because a saved environment dropped the Android command line.
@@ -92,6 +106,16 @@ evidence are in [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
    It caused a board reset.
 9. **Never set `force_wifi true`.** The vendor `MainControl` takes `eth0` **down** at startup
    when it is set. The panel runs on Ethernet.
+
+### Never do these in the scripts
+
+- **Never use `adb exec-in` to write data.** It returned the right size with wrong content in 1 of
+  3 tests. Write partitions with `lib.sh`'s `write_part_verified` (chunks pushed as files,
+  sha-checked on the panel, whole-partition readback).
+- **`lib.sh` runs `set -euo pipefail`.** A `grep -c`/`grep -q` that can match nothing inside a
+  loop or `$( )` must tolerate it (`|| true`), or the script exits silently and its EXIT trap
+  fires — this deleted a restore's chunks mid-transfer twice.
+- **Never build an `rm -rf` target from variables** on the build host; use literal paths.
 
 ### Never do these in the build
 
@@ -121,6 +145,14 @@ evidence are in [`docs/10-known-pitfalls.md`](docs/10-known-pitfalls.md).
 ## Commands that work here
 
 ```sh
+# the pipeline (needs scripts/panel/local.env; see scripts/panel/README.md)
+scripts/panel/backup.sh                     # full read-only backup, checked against the panel
+scripts/panel/test.sh                       # read-only health + silent playback test
+scripts/panel/swap.sh _a|_b                 # change slot, keep the other as fallback
+scripts/panel/recover.sh _a|_b              # panel won't boot: U-Boot sets the slot over TFTP
+scripts/panel/restore.sh latest _a|_b       # put a slot back from the backup (adb)
+scripts/panel/restore.sh latest _b --uboot  # same, with Android down (U-Boot over TFTP)
+
 # panel access (see docs/02-access.md for finding the IP)
 adb -P 5038 connect <panel-ip>:5555
 ssh -p 8022 <panel-ip>

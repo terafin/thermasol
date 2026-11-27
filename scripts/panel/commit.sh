@@ -1,6 +1,6 @@
 #!/bin/bash
 # After test.sh PASSES on a trial slot: mark it successful (keeps the other slot as fallback).
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 adb_up
 "$(dirname "$0")/test.sh" || die "test.sh failed — not committing. Run rollback.sh."
 RA=$(sh_p "sha256sum /vendor/apex/com.android.hardware.audio.apex" | cut -d' ' -f1)

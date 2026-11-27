@@ -1,0 +1,163 @@
+#!/bin/bash
+# Put one slot back from a backup.sh backup, then boot it. Two paths:
+#   restore.sh <backup-dir|latest> <_a|_b>          Android is up: write the INACTIVE slot over adb,
+#                                                   verify every partition, then swap.sh to it.
+#   restore.sh <backup-dir|latest> <_a|_b> --uboot  Android is down: U-Boot writes the slot from TFTP
+#                                                   (network recovery hook), sets the A/B record, boots.
+# Only the six slot partitions (boot dtbo system vendor product vbmeta) and the A/B record are
+# written. The bootloader, its environment, misc and userdata are never touched.
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
+B=${1:?usage: restore.sh <backup-dir|latest> <_a|_b> [--uboot] [--parts "dtbo vendor ..."]}; S=${2:?slot}; shift 2
+MODE=; ONLY=
+while [ $# -gt 0 ]; do case $1 in --uboot) MODE=--uboot;; --parts) ONLY=${2:?--parts needs a list}; shift;; *) die "unknown option $1";; esac; shift; done
+[ "$B" = latest ] && B=$WORK/backup/latest; B=$(readlink -f "$B")
+[ "$S" = _a ] || [ "$S" = _b ] || die "slot must be _a or _b"
+H=$B/head.img; [ -f "$H" ] && [ -f "$B/SHA256SUMS" ] || die "not a backup: $B"
+step "verify backup $B"
+# head.img = eMMC from sector 0 up to userdata; tail.img = everything after userdata (fbmisc, vbmeta)
+for f in head.img tail.img; do
+  [ -f "$B/$f" ] || die "$f missing from the backup"
+  [ "$(sha "$B/$f")" = "$(awk -v f="$f" '$2==f{print $1}' "$B/SHA256SUMS")" ] || die "$f does not match its recorded sha"
+  ok "$f sha matches"
+done
+TAIL_SKIP=$(awk '$2=="tail.img"{sub("skip=","",$4); print $4}' "$B/SHA256SUMS")
+[ -n "$TAIL_SKIP" ] || die "tail.img has no recorded start sector"
+# partition table from the backup's own GPT: name start-sector sector-count
+PT=$(python3 - "$H" <<'PY'
+import sys, struct
+f = open(sys.argv[1], 'rb'); f.seek(512); h = f.read(92)
+assert h[:8] == b'EFI PART', 'no GPT in backup'
+lba, n, sz = struct.unpack('<QII', h[72:88])
+f.seek(lba * 512)
+for _ in range(n):
+    e = f.read(sz)
+    if e[:16] == bytes(16): continue
+    first, last = struct.unpack('<QQ', e[32:48])
+    print(e[56:128].decode('utf-16-le').rstrip('\0'), first, last - first + 1)
+PY
+) || die "could not read the backup's partition table"
+PARTS="boot dtbo system vendor product vbmeta"
+if [ -n "$ONLY" ]; then
+  for p in $ONLY; do case " $PARTS " in *" $p "*) ;; *) die "--parts: $p is not a slot partition ($PARTS)";; esac; done
+  PARTS=$ONLY
+fi
+for p in $PARTS; do grep -q "^${p}${S} " <<< "$PT" || die "${p}${S} not in the backup's partition table"; done
+HSEC=$(( $(stat -c %s "$H") / 512 )); TSEC=$(( $(stat -c %s "$B/tail.img") / 512 ))
+X=$WORK/restore; rm -rf "$X"; mkdir -p "$X"
+for p in $PARTS; do
+  read -r _ st n <<< "$(grep "^${p}${S} " <<< "$PT")"
+  if [ $((st + n)) -le "$HSEC" ]; then src=$H; off=$st
+  elif [ "$st" -ge "$TAIL_SKIP" ] && [ $((st - TAIL_SKIP + n)) -le "$TSEC" ]; then src=$B/tail.img; off=$((st - TAIL_SKIP))
+  else die "${p}${S} (sectors $st+$n) is in neither head.img nor tail.img"; fi
+  dd if="$src" of="$X/${p}${S}.img" bs=512 skip="$off" count="$n" status=none || die "extract ${p}${S}"
+  [ "$(stat -c %s "$X/${p}${S}.img")" = $((n * 512)) ] || die "extract ${p}${S}: short"
+done
+ok "extracted $PARTS for $S"
+if [ "$S" = _a ]; then REC=$(ab_make 15 0 1 14 0 1); else REC=$(ab_make 14 0 1 15 0 1); fi
+
+if [ "$MODE" != --uboot ]; then
+  adb_up; booted || die "panel not booted — use --uboot"
+  [ "$(slot)" != "$S" ] || die "$S is the running slot; restore the other one, or use rollback.sh first"
+  for p in $PARTS; do
+    f=$X/${p}${S}.img
+    [ "$(sh_p "blockdev --getsize64 /dev/block/by-name/${p}${S}")" = "$(stat -c %s "$f")" ] || die "${p}${S}: size differs from the backup"
+    if [ "$(part_sha "${p}${S}")" = "$(sha "$f")" ]; then ok "${p}${S} already matches the backup"; continue; fi
+    write_part_verified "$f" "${p}${S}"
+    ok "${p}${S} written and verified"
+  done
+  rm -rf "$X"
+  "$(dirname "$0")/swap.sh" "$S"
+  exit 0
+fi
+
+# --- U-Boot path: chunks over TFTP, written by the network recovery hook ---
+CH=16777216; CS=$((CH / 512)); ADDR=0x48000000
+T=/srv/tt-tftp; R=rst
+if timeout 8 "$ADB" connect "$PANEL" >/dev/null 2>&1 && [ "$(timeout 8 "$ADB" -s "$PANEL" shell getprop ro.boot.slot_suffix 2>/dev/null | tr -d '\r')" = "$S" ]; then
+  die "the panel is up and running $S; --uboot rewrites $S while it is the slot U-Boot falls back to — restore the other slot, or use the adb path"
+fi
+[ -z "$(ls -A "$T" 2>/dev/null)" ] || die "$T is not empty; clear it first (anything there runs on every boot)"
+# Literal paths only: a cleanup built from variables could delete the wrong tree if one were empty.
+cleanup() { sudo rm -f /srv/tt-tftp/tt-recover.scr; sudo rm -rf /srv/tt-tftp/rst; }
+trap cleanup EXIT
+step "stage chunks in /srv/tt-tftp/rst"
+sudo mkdir -p /srv/tt-tftp/rst; : > "$X/chunks.list"
+{
+  echo "mmc dev 1"
+  echo "setenv ttfail 0"
+  # the hook gives up after ~3 s; a 4 GB restore needs patience and a retry per chunk
+  echo "setenv tftptimeout 3000"
+  echo "setenv tftptimeoutcountmax 10"
+  for p in $PARTS; do
+    read -r _ st n <<< "$(grep "^${p}${S} " <<< "$PT")"
+    split -b $CH -d -a 3 "$X/${p}${S}.img" "$X/${p}${S}." || die "split ${p}${S}"
+    i=0
+    for c in "$X/${p}${S}".[0-9][0-9][0-9]; do
+      cn=$(( ($(stat -c %s "$c") + 511) / 512 ))
+      echo "$c" >> "$X/chunks.list"
+      [ $((st + i * CS)) -ge "$FIRST_PART_SECTOR" ] || die "refused: chunk would land in the first 8 MB (bootloader/GPT/env)"
+      cf=$R/$(basename "$c"); off=$(printf '0x%x' $((st + i * CS))); cnt=$(printf '0x%x' "$cn")
+      echo "if test \$ttfail = 0; then setenv ttok 0; for try in 1 2 3; do if test \$ttok = 0; then if tftpboot $ADDR $cf; then setenv ttok 1; fi; fi; done; if test \$ttok = 1; then mmc write $ADDR $off $cnt; else setenv ttfail 1; echo tt-restore: FAILED $cf; fi; fi"
+      i=$((i + 1))
+    done
+    echo "echo tt-restore: ${p}${S} done"
+  done
+  # only after every chunk landed: point the A/B record at the restored slot
+  echo "if test \$ttfail = 0; then"
+  echo "  mmc read $ADDR $(printf '0x%x' $(( $(grep '^misc ' <<< "$PT" | cut -d' ' -f2) + MISC_AB_OFFSET / 512 ))) 1"
+  echo "  if itest.l *$ADDR == 0x30424100; then"
+  j=0; for b in $REC; do echo "    mw.b $(printf '0x%x' $((ADDR + j))) 0x$b 1"; j=$((j + 1)); done
+  echo "    mmc write $ADDR $(printf '0x%x' $(( $(grep '^misc ' <<< "$PT" | cut -d' ' -f2) + MISC_AB_OFFSET / 512 ))) 1"
+  echo "    echo tt-restore: A/B record set for $S"
+  echo "  fi"
+  echo "  echo tt-restore: complete"
+  echo "else"
+  echo "  echo tt-restore: incomplete, A/B record left as it was"
+  echo "fi"
+} > "$X/tt-recover.cmd"
+grep -q '^misc ' <<< "$PT" || die "misc not in the backup's partition table"
+# Every chunk must be on the TFTP server, byte-identical, before U-Boot can see the script:
+# U-Boot fetches them back to back and gives up on the first one that is missing.
+while read -r c; do
+  sudo cp "$c" "/srv/tt-tftp/rst/$(basename "$c")" || die "stage $(basename "$c")"
+  [ "$(sudo sha256sum "/srv/tt-tftp/rst/$(basename "$c")" | cut -d' ' -f1)" = "$(sha "$c")" ] || die "staged $(basename "$c") differs"
+done < "$X/chunks.list"
+[ "$(sudo ls /srv/tt-tftp/rst | wc -l)" = "$(wc -l < "$X/chunks.list")" ] || die "chunk count on the TFTP server does not match"
+NCH=$(grep -c tftpboot "$X/tt-recover.cmd")
+LAST=$(grep -o "$R/[a-z_]*\.[0-9]*" "$X/tt-recover.cmd" | tail -1)
+/usr/bin/mkimage -A arm64 -T script -C none -n tt-restore -d "$X/tt-recover.cmd" "$X/tt-recover.scr" >/dev/null || die "mkimage failed"
+sudo cp "$X/tt-recover.scr" "$T/tt-recover.scr"
+ok "staged $NCH chunks + tt-recover.scr"
+since=$(date '+%Y-%m-%d %H:%M:%S')   # before the power cycle: only this run's fetches count
+# From here U-Boot may be mid-transfer: on any exit, remove only the script (so it cannot run on
+# the next power-on) and leave the chunks; they are removed after the panel has booted.
+trap 'sudo rm -f /srv/tt-tftp/tt-recover.scr; echo "chunks left in /srv/tt-tftp/rst — remove after the panel boots: sudo rm -rf /srv/tt-tftp/rst"' EXIT
+# U-Boot asks for the script once per boot; if that one request is lost (link not up yet), the
+# panel boots normally. Power-cycle again until the script is fetched, at most 3 times.
+for attempt in 1 2 3; do
+  power_cycle
+  for _ in $(seq 1 18); do journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/tt-recover.scr" && break; sleep 5; done
+  journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/tt-recover.scr" && break
+  [ "$attempt" -lt 3 ] || die "U-Boot did not fetch the restore script after 3 power cycles; nothing was written"
+  ok "U-Boot did not ask for the script (attempt $attempt); power-cycling again"
+done
+ok "U-Boot fetched the restore script"
+step "wait for U-Boot to fetch every chunk (last: $LAST)"
+# lib.sh runs under set -euo pipefail: a grep that matches nothing must not end the script, or
+# the EXIT trap removes the chunks while U-Boot is still fetching them.
+sent() { journalctl -u tt-tftp --since "$since" --no-pager | grep -c "sent $T/$R/" || true; }
+fetched_last() { journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/$LAST"; }
+last=0; idle=0
+until fetched_last; do
+  sleep 10; now=$(sent)
+  if [ "$now" -gt "$last" ]; then last=$now; idle=0; echo "  $now/$NCH chunks"; else idle=$((idle + 10)); fi
+  [ "$idle" -lt 300 ] || die "no chunk fetched for 5 minutes ($last of $NCH); the A/B record is unchanged"
+done
+ok "U-Boot fetched every chunk ($(sent) transfers for $NCH chunks)"
+sudo rm -f /srv/tt-tftp/tt-recover.scr   # never leave it: it would run again on the next power-on
+wait_boot "$S" 300
+trap cleanup EXIT
+for p in $PARTS; do
+  [ "$(part_sha "${p}${S}")" = "$(sha "$X/${p}${S}.img")" ] || die "${p}${S} on the panel differs from the backup"
+  ok "${p}${S} matches the backup"
+done

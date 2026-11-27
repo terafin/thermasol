@@ -64,7 +64,17 @@ adb_up() {
     sleep 3
   done
 }
-sh_p() { "$ADB" -s "$PANEL" shell "$@" </dev/null | tr -d '\r'; }
+# The first 8 MB of the eMMC user area hold the bootloader, the GPT and the U-Boot environment
+# (with the network recovery hook); boot0/boot1 are the eMMC boot areas. Nothing here may write
+# them: every panel command is refused if it names a raw eMMC device as a write target.
+FIRST_PART_SECTOR=16384
+guard_cmd() {
+  case "$*" in
+    *of=/dev/block/mmcblk2[!p]*|*of=/dev/block/mmcblk2|*of=/dev/block/mmcblk2\ *|*">"*force_ro*|*"> "*force_ro*|*">"*mmcblk2boot*|*"> "*mmcblk2boot*)
+      die "refused: command would write a raw eMMC area (bootloader/GPT/env/boot0-1): $*";;
+  esac
+}
+sh_p() { guard_cmd "$@"; "$ADB" -s "$PANEL" shell "$@" </dev/null | tr -d '\r'; }
 slot()  { sh_p getprop ro.boot.slot_suffix; }
 other() { [ "$1" = _a ] && echo _b || echo _a; }
 booted(){ [ "$(sh_p getprop sys.boot_completed)" = 1 ]; }
@@ -72,6 +82,27 @@ booted(){ [ "$(sh_p getprop sys.boot_completed)" = 1 ]; }
 part_sha() {   # $1=by-name partition  [$2=bytes to hash, default whole]
   if [ -n "${2:-}" ]; then sh_p "head -c $2 /dev/block/by-name/$1 | sha256sum" | cut -d' ' -f1
   else sh_p "sha256sum /dev/block/by-name/$1" | cut -d' ' -f1; fi
+}
+
+# Write a host image into a by-name partition over adb, verified. adb exec-in is NOT used: it
+# delivered the right byte count with wrong content in 1 of 3 tests. Each 256 MiB chunk is pushed
+# as a file, its sha checked on the panel, then dd'd to its offset; the whole partition is read
+# back at the end. Never targets a raw eMMC device (sh_p refuses).
+write_part_verified() {   # $1 = host file, $2 = by-name partition
+  local f=$1 p=$2 want size n i c cw CHB=268435456 tmp
+  want=$(sha "$f"); size=$(stat -c %s "$f")
+  [ "$size" -le "$(sh_p "blockdev --getsize64 /dev/block/by-name/$p")" ] || die "$p: image larger than the partition"
+  tmp=$(mktemp -d); n=$(( (size + CHB - 1) / CHB ))
+  for i in $(seq 0 $((n - 1))); do
+    c=$tmp/chunk; dd if="$f" of="$c" bs=$CHB skip="$i" count=1 status=none || { rm -rf "$tmp"; die "split $p"; }
+    cw=$(sha "$c")
+    "$ADB" -s "$PANEL" push "$c" /data/local/tmp/wp.chunk >/dev/null || { rm -rf "$tmp"; die "push $p chunk $i"; }
+    [ "$(sh_p "sha256sum /data/local/tmp/wp.chunk" | cut -d' ' -f1)" = "$cw" ] || { rm -rf "$tmp"; die "$p chunk $i: pushed copy differs"; }
+    sh_p "dd if=/data/local/tmp/wp.chunk of=/dev/block/by-name/$p bs=$CHB seek=$i conv=notrunc,fsync 2>/dev/null; rm -f /data/local/tmp/wp.chunk"
+  done
+  rm -rf "$tmp"
+  sh_p "sync; blockdev --flushbufs /dev/block/by-name/$p; echo 3 > /proc/sys/vm/drop_caches"
+  [ "$(part_sha "$p" "$size")" = "$want" ] || die "$p readback differs from $(basename "$f")"
 }
 
 ab_read() { sh_p "dd if=/dev/block/by-name/misc bs=1 skip=$MISC_AB_OFFSET count=32 2>/dev/null | od -An -tx1" | tr -s ' \n' ' ' | sed 's/^ //;s/ $//'; }

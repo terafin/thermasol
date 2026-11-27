@@ -1,0 +1,8 @@
+[Unit]
+Description=TFTP for ThermaTouch panel U-Boot recovery hook (serves /srv/tt-tftp; empty = normal boot)
+After=network-online.target
+[Service]
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --port=0 --enable-tftp --tftp-root=/srv/tt-tftp --log-facility=- --log-queries
+Restart=always
+[Install]
+WantedBy=multi-user.target

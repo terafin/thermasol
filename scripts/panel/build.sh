@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build a signed vendor + vbmeta pair from: pinned base vendor + overlay/ + the HAL binary.
 # No panel access. Fails closed at every check. Output: $OUT/<id>/{vendor.img,vbmeta.img,MANIFEST}
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 AUDIO_APEX=$TREE/vendor/apex/com.android.hardware.audio.apex
 OV=${OVERLAY:-$REPO/scripts/panel/overlay}
 

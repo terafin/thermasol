@@ -3,7 +3,7 @@
 # active, then falls through to normal boot (boota). Use when adb is gone (hung trial boot).
 # Usage: recover.sh _b      (then the script power-cycles the panel via Home Assistant)
 # Proven recipe (Nov 22/25): eMMC is mmc dev 1, load at 0x60000000, never 'reset' at the end.
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 SLOT=${1:?usage: recover.sh _a|_b}
 case $SLOT in _a) REC=$(ab_make 15 0 1 14 0 1);; _b) REC=$(ab_make 14 0 1 15 0 1);; *) die "slot must be _a or _b";; esac
 MISC_LBA=0x738000                      # misc partition start (GPT); A/B record at +0x800 = block +4
@@ -27,10 +27,20 @@ BYTES=$(echo "$REC" | tr ' ' '\n')
 /usr/bin/mkimage -A arm64 -T script -C none -n tt-recover -d "$S/tt-recover.cmd" "$S/tt-recover.scr" >/dev/null || die "mkimage failed"
 sudo cp "$S/tt-recover.scr" /srv/tt-tftp/tt-recover.scr
 ok "staged /srv/tt-tftp/tt-recover.scr"
-power_cycle
-step "wait for U-Boot to fetch the recovery script"
-for i in $(seq 1 24); do journalctl -u tt-tftp --since "-3min" --no-pager | grep -q "sent /srv/tt-tftp/tt-recover.scr" && break; sleep 5; done
+# Only a fetch after this power cycle counts: an earlier recovery's "sent" line in the log would
+# otherwise read as this one and remove the script before U-Boot asks for it.
+since=$(date "+%Y-%m-%d %H:%M:%S")
+fetched() { journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent /srv/tt-tftp/tt-recover.scr"; }
+# U-Boot asks once per boot; if that request is lost the panel boots normally. Retry up to 3 times.
+for attempt in 1 2 3; do
+  power_cycle
+  step "wait for U-Boot to fetch the recovery script"
+  for i in $(seq 1 18); do fetched && break; sleep 5; done
+  fetched && break
+  [ "$attempt" -lt 3 ] || break
+  ok "U-Boot did not ask for the script (attempt $attempt); power-cycling again"
+done
 sudo rm -f /srv/tt-tftp/tt-recover.scr
-journalctl -u tt-tftp --since "-3min" --no-pager | grep -q "sent /srv/tt-tftp/tt-recover.scr" || die "U-Boot never fetched the recovery script"
+fetched || die "U-Boot never fetched the recovery script"
 ok "recovery script served; TFTP cleared"
 wait_boot "$SLOT" 300
