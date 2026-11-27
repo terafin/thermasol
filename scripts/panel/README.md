@@ -2,9 +2,9 @@
 
 This directory rebuilds the ThermaTouch panel's vendor and system images so that every Sonos player on
 the network is its own Android audio output: picked from Android's standard output switcher, named by
-its Sonos name, one amp per output, no Sonos grouping and no app in the audio path. The scripts, the source patches and the checks that gate every flash are here. Two gaps are tracked:
-`build.sh` starts from an unpublished base vendor image ([#67](https://github.com/terafin/thermasol/issues/67)),
-and the helper apps the vendor init expects have no source here ([#66](https://github.com/terafin/thermasol/issues/66)).
+its Sonos name, one amp per output, no Sonos grouping and no app in the audio path. Everything needed to rebuild it is here: the scripts, the source patches, the checks that gate every
+flash, and the published release the build starts from (v1.2). The helper apps the image starts are in
+[`apps/`](../../apps/README.md).
 
 ## How it works
 
@@ -47,7 +47,7 @@ App (YouTube, Netflix, Plex, Apple TV, ThermaSol, ...)  -- ordinary Android medi
 
 | Step | Script | Touches the panel? |
 |---|---|---|
-| Pin the base images (once; only against a panel still holding the pinned bases, vendor `e9fd6030…` and system `2c838f0b…` — the base vendor image is unpublished, see [#67](https://github.com/terafin/thermasol/issues/67)) | `pull-base.sh _b` | read-only |
+| Fetch and pin the base images from the published v1.2 release (once) | `pull-base.sh` | no |
 | Build the audio service + Sonos module (APEX) | `build-audio.sh` | no |
 | Build services.jar with the framework patch | `build-framework.sh` | no |
 | Build the signed images | `build.sh` | no |
@@ -81,7 +81,8 @@ script.
 
 - **build-audio.sh** refuses any network send that could raise SIGPIPE (it would kill every audio
   module), builds the APEX, and verifies its payload signature and hashtree against the key it ships.
-- **build.sh** starts from the pinned base images (sha-checked; the base vendor image is not published, see [#67](https://github.com/terafin/thermasol/issues/67)), applies the overlay, labels every
+- **build.sh** starts from the pinned base images (sha-checked; all from the published v1.2 release), applies the overlay
+  and the `sonos` module of `overlay/audio-policy.patch` to the vendor audio policy, labels every
   added file (an unlabeled file fails the build), refuses an APEX built for a pre-release SDK, signs
   with the device key and verifies the whole AVB chain.
 - **flash.sh** checks policy and VINTF, writes only the inactive slot, requires a readback match on

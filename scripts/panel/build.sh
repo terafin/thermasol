@@ -67,6 +67,20 @@ if [ -s "$OV/remove" ]; then
   done < "$OV/remove"
 fi
 
+# audio policy: the vendor image carries its own copy of the policy XML the source tree builds from, so the
+# "sonos" module block that overlay/audio-policy.patch adds to the tree is applied here as well. Without it
+# the audio service never creates the Sonos outputs.
+AP=$REPO/scripts/panel/overlay/audio-policy.patch
+[ -s "$AP" ] || die "missing $AP"
+APX=$T/etc/audio_policy_configuration.xml
+sudo test -f "$APX" || die "base vendor has no etc/audio_policy_configuration.xml"
+if sudo grep -q '<module name="sonos"' "$APX"; then ok "audio policy already has the sonos module"
+else
+  sudo patch -s -f "$APX" < "$AP" || die "audio-policy.patch does not apply to the vendor audio policy"
+  sudo grep -q '<module name="sonos"' "$APX" || die "sonos module missing after audio-policy.patch"
+  ok "audio policy: sonos module added (audio-policy.patch)"
+fi
+
 # append: each line of overlay/append/<vendor-relpath> is appended to that existing vendor file if absent
 if [ -d "$OV/append" ]; then
   for rel in $(cd "$OV/append" && find . -type f | sed 's#^\./##'); do
