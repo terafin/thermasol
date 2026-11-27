@@ -135,6 +135,21 @@ if [ -s "$OV/framework.patch" ] && [ -z "${NO_FRAMEWORK:-}" ]; then
     sudo setfattr -n security.selinux -v "$lab" "$ST/system/$f"
     ok "system/$f replaced [$lab]"
   done
+  # platform policy: refused, harmless platform-domain denials, dontaudit only (overlay/plat-sepolicy.cil.add).
+  # plat_sepolicy_and_mapping.sha256 is the sha256 of plat_sepolicy.cil + mapping/<ver>.cil; keep it true.
+  if [ -s "$OV/plat-sepolicy.cil.add" ]; then
+    PSEL=$ST/system/etc/selinux
+    sudo test -f "$PSEL/plat_sepolicy.cil" || die "base system has no plat_sepolicy.cil"
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      sudo grep -qxF -- "$line" "$PSEL/plat_sepolicy.cil" && { ok "plat policy already has: $line"; continue; }
+      echo "$line" | sudo tee -a "$PSEL/plat_sepolicy.cil" >/dev/null; ok "plat policy added: $line"
+    done < "$OV/plat-sepolicy.cil.add"
+    PVER=$(sudo ls "$PSEL/mapping" | sed -n 's/^\([0-9]\{6\}\)\.cil$/\1/p' | sort | tail -1)
+    [ -n "$PVER" ] || die "no versioned mapping/<ver>.cil in the base system policy"
+    sudo sh -c "cat '$PSEL/plat_sepolicy.cil' '$PSEL/mapping/$PVER.cil' | sha256sum | cut -d' ' -f1 > '$PSEL/plat_sepolicy_and_mapping.sha256'"
+    ok "plat_sepolicy_and_mapping.sha256 recomputed (mapping $PVER)"
+  fi
   if [ -d "$OV/system-files" ]; then
     for rel in $(cd "$OV/system-files" && find . -type f | sed 's#^\./##'); do
       lab=$(awk -F'\t' -v p="$rel" '$1==p{print $2}' "$OV/system-labels")
