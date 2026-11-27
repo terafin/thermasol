@@ -12,9 +12,14 @@ B=${1:?usage: restore.sh <backup-dir|latest> <_a|_b> [--uboot]}; S=${2:?slot}; M
 [ "$S" = _a ] || [ "$S" = _b ] || die "slot must be _a or _b"
 H=$B/head.img; [ -f "$H" ] && [ -f "$B/SHA256SUMS" ] || die "not a backup: $B"
 step "verify backup $B"
-grep -q " head.img " "$B/SHA256SUMS" || die "head.img not in SHA256SUMS"
-[ "$(sha "$H")" = "$(awk '$2=="head.img"{print $1}' "$B/SHA256SUMS")" ] || die "head.img does not match its recorded sha"
-ok "head.img sha matches"
+# head.img = eMMC from sector 0 up to userdata; tail.img = everything after userdata (fbmisc, vbmeta)
+for f in head.img tail.img; do
+  [ -f "$B/$f" ] || die "$f missing from the backup"
+  [ "$(sha "$B/$f")" = "$(awk -v f="$f" '$2==f{print $1}' "$B/SHA256SUMS")" ] || die "$f does not match its recorded sha"
+  ok "$f sha matches"
+done
+TAIL_SKIP=$(awk '$2=="tail.img"{sub("skip=","",$4); print $4}' "$B/SHA256SUMS")
+[ -n "$TAIL_SKIP" ] || die "tail.img has no recorded start sector"
 # partition table from the backup's own GPT: name start-sector sector-count
 PT=$(python3 - "$H" <<'PY'
 import sys, struct
@@ -31,12 +36,15 @@ PY
 ) || die "could not read the backup's partition table"
 PARTS="boot dtbo system vendor product vbmeta"
 for p in $PARTS; do grep -q "^${p}${S} " <<< "$PT" || die "${p}${S} not in the backup's partition table"; done
-HSZ=$(stat -c %s "$H")
-for p in $PARTS; do read -r _ st n <<< "$(grep "^${p}${S} " <<< "$PT")"; [ $(( (st + n) * 512 )) -le "$HSZ" ] || die "${p}${S} is past the end of head.img"; done
+HSEC=$(( $(stat -c %s "$H") / 512 )); TSEC=$(( $(stat -c %s "$B/tail.img") / 512 ))
 X=$WORK/restore; rm -rf "$X"; mkdir -p "$X"
 for p in $PARTS; do
   read -r _ st n <<< "$(grep "^${p}${S} " <<< "$PT")"
-  dd if="$H" of="$X/${p}${S}.img" bs=512 skip="$st" count="$n" status=none || die "extract ${p}${S}"
+  if [ $((st + n)) -le "$HSEC" ]; then src=$H; off=$st
+  elif [ "$st" -ge "$TAIL_SKIP" ] && [ $((st - TAIL_SKIP + n)) -le "$TSEC" ]; then src=$B/tail.img; off=$((st - TAIL_SKIP))
+  else die "${p}${S} (sectors $st+$n) is in neither head.img nor tail.img"; fi
+  dd if="$src" of="$X/${p}${S}.img" bs=512 skip="$off" count="$n" status=none || die "extract ${p}${S}"
+  [ "$(stat -c %s "$X/${p}${S}.img")" = $((n * 512)) ] || die "extract ${p}${S}: short"
 done
 ok "extracted $PARTS for $S"
 if [ "$S" = _a ]; then REC=$(ab_make 15 0 1 14 0 1); else REC=$(ab_make 14 0 1 15 0 1); fi
