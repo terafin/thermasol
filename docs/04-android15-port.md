@@ -35,7 +35,7 @@ Display timings in it are **measured, not guessed** — see
 ```sh
 cd <android_build>
 source build/envsetup.sh
-lunch dart_mx8mm-userdebug
+lunch dart_mx8mm-ap4a-userdebug   # not trunk_staging: its APEX minSdk codename hangs boot
 m -j"$(nproc)"
 ```
 
@@ -369,12 +369,10 @@ and the result it accepted:
  "fallback_A_preserved": "9171719e…"}
 ```
 
-**The panel has been on slot `_b` since the swap at 22:34 on 2026-10-18.** Reads before that
-still returned `_a`; the last read returned `_b`.
-
-What has **not** been done since the wall closed is a deliberate switch on a working panel. The
-documented history is real; the current readiness of the idle slot is a hash comparison, not a
-recent boot.
+That record is from the 2026-10-18 swap to `_b`. The slot scheme has since changed: `_a` runs
+the committed build and `scripts/panel/commit.sh` copies every `_a` partition to `_b` with a byte
+check, so `_b` is an identical fallback. `scripts/panel/swap.sh`, `rollback.sh` and `recover.sh`
+move between slots.
 
 What you actually have, in decreasing order of confidence:
 

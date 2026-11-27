@@ -30,7 +30,7 @@ speaker firmware — the size changes, the principle does not.
 cd <android_build>
 repo sync            # must be run from android_build/
 source build/envsetup.sh
-lunch dart_mx8mm-userdebug
+lunch dart_mx8mm-ap4a-userdebug   # not trunk_staging: its APEX minSdk codename hangs boot
 m -j"$(nproc)"
 ```
 
@@ -49,8 +49,12 @@ Traps we hit (details in `../docs/04-android15-port.md`):
 2. **Bluetooth HAL** — apply [`patches/bluetooth-hci-command-drain.patch`](../patches/bluetooth-hci-command-drain.patch)
    to `hardware/interfaces/bluetooth/aidl/default/`. This is the bounded command drain that
    stops the second OFF/ON cycle from timing out the HCI RESET.
-3. **Vendor APK** — the navigation/layout and volume fixes are app-side; see
+3. **Vendor APK** — the navigation/layout fix is app-side; see
    [`../docs/06-procedures.md`](../docs/06-procedures.md) §G for the patch technique.
+4. **Audio and framework** — [`scripts/panel/`](../scripts/panel/README.md) applies
+   `overlay/audio-tree.patch` (the Sonos module in the reference AIDL audio service) and
+   `overlay/framework.patch` (amp volume default, remembered output), then builds, gates and
+   flashes the image.
 
 ## Reproducing the full image set
 

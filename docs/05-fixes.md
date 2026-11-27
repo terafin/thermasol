@@ -368,6 +368,9 @@ passed.
 
 ## 7. Volume range unusable
 
+> **Superseded.** The floating volume UI below was retired. Volume is Android's own output
+> switcher slider, and the Sonos outputs default to full volume via `scripts/panel/overlay/framework.patch`.
+
 **Symptom.** Native media volume 0–15; below ~10 nothing is audible over running steam.
 
 **Fix.** Native `STREAM_MUSIC` max raised 0..15 → 0..18, and the floating UI maps ten display
@@ -395,6 +398,9 @@ startup verifier, 27 device `InputState` checks.
 ---
 
 ## 8. Fullscreen media leaves a stuck volume overlay
+
+> **Superseded.** The `ttvolume` bubble described here was removed from the panel
+> (`scripts/panel/remove-apps.sh`). Volume is the Quick Settings media card → output chip → slider.
 
 **Fix.** `net.example.ttvolume` / `.VolumeService` — a circular speaker bubble that
 hides itself when **both** status and navigation insets are absent, and becomes

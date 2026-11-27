@@ -73,8 +73,8 @@ issues just creates chores that never close. Work items live in the [issue track
 |---|---|
 | **Deep suspend** | Not a sleep policy — there is no RTC/alarm wake source. If one is suspended, wait ~90 s before power cycling: the i.MX2 watchdog resets the panel unattended. |
 | **Power cycling** | The panel is not PoE. The only power action is a physical power cycle, i.e. a human. |
-| **Rollback** | Both slots hold A15. Switching is proven and the panel was deliberately moved to slot `_b` as the last action before the wall closed. The **idle slot's current bootability** is a hash comparison, not a recent boot. See [04-android15-port.md](04-android15-port.md) §Rolling back. |
-| **Bluetooth audio** | Bring-up baud is 115200 — enough to connect, not enough for A2DP. Not being chased. Pairing, range and accessory audio need a real peer and have not been tested. |
+| **Rollback** | Both slots hold A15. `_a` runs the committed build; `scripts/panel/commit.sh` copies it to `_b` with a byte check. `scripts/panel/rollback.sh` and `swap.sh` switch slots. See [04-android15-port.md](04-android15-port.md) §Rolling back. |
+| **Bluetooth audio** | The Bluetooth hardware on this board is currently broken, so Bluetooth output is untested. |
 | **WebView** | The **A10** image ships Chromium 74. **A15 ships 128 and takes 155 as a normal data update** (signer-verified, survives reboot), which runs the modern HA frontend. No system flash needed. |
 | **Home Assistant dashboard** | ~82% of the SoC. That is a **dashboard** problem, not a panel defect — a lighter dashboard is the fix, and it belongs in the HA repo. |
 | **Apple TV** | Deferred by the operator. Not work until they say it is. |

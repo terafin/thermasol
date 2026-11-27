@@ -602,8 +602,9 @@ failure.
 
 - Android 15 booting, `sys.boot_completed=1`
 - adb on 5555, root via `adb shell su 0 …`
-- display, touch, audio, Ethernet, CAN and Bluetooth working
-- the shower app running, with a navigable UI
+- display, touch, audio (each Sonos player a native Android output), Ethernet and CAN working;
+  the Bluetooth hardware on this board is currently broken
+- the panel booting to the launcher, with the ThermaSol app launchable like any other app
 - Chrome launching and rendering, after the flags in §6.1 and once load has settled
 
 Known defects that remain are tracked as issues, not described here —

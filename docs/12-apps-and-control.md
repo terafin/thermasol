@@ -1,70 +1,24 @@
 # 12 — Apps, audio control and the UI surface
 
-The port is only half the work. This page is the other half: what was actually installed, the
-local control app that front-ends the vendor service, and the adb recipes that made it possible
-to drive a sealed panel from a terminal.
+The port is only half the work. This page is the other half: how audio and volume work, what is
+installed, and the adb recipes that make it possible to drive a sealed panel from a terminal.
 
 Everything here was run on the deployed Android 15 panel.
 
 ---
 
-## 1. The local control app: `net.example.ttaudiosource`
+## 1. Audio and volume
 
-A small companion app written during the hiss investigation. It exposes vendor service codes
-through activities so adb can drive them, and it is **the lever used for all the audio
-isolation work**.
+There is no audio app. Each Sonos player is its own Android audio output, provided by the Sonos
+module in the reference AIDL audio service (`scripts/panel/overlay/audio-tree.patch`). Pick an
+output and set its volume in Android's own UI: Quick Settings → media card → output chip →
+output switcher with a volume slider. The Sonos outputs default to full volume, and the chosen
+output is restored after a reboot (`scripts/panel/overlay/framework.patch`).
 
-```sh
-# apply a code — force-stop FIRST, or the second --ei is silently ignored
-am force-stop net.example.ttaudiosource
-am start -W -n net.example.ttaudiosource/.AudioSourceActivity --ei code 104 --ei value 1
+The earlier helper apps (`ttaudiosource`, `ttvolume`, `ttaudio`, `airvia`, ShowerCast) are
+retired; `scripts/panel/remove-apps.sh` removes them.
 
-# hold silence for a bounded time
-am start -W -n net.example.ttaudiosource/.SilenceHoldActivity --ei seconds 300
-
-# read back what was applied
-cat /data/user/0/net.example.ttaudiosource/files/audio-source-status.json
-cat /data/user/0/net.example.ttaudiosource/files/silence-status.json
-```
-
-| code | meaning |
-|---|---|
-| 104 | source select. The only verified value is **0** (`A5 B7 7B 00` restores audio); the library swaps 1↔2 by Bluetooth capability, so do not assume 1 is "analog" |
-| 100 | master volume |
-| 111 | `hvlsr_bluetooth_power_off` — **not** a mute |
-
-`am force-stop` between codes is **required**. The activity reads the extras once at start; a
-second `am start` without a force-stop reuses the existing instance and drops the new values.
-
-Restoring normal audio after an experiment:
-
-```sh
-am force-stop net.example.ttaudiosource
-am start -W -n net.example.ttaudiosource/.AudioSourceActivity --ei code 104 --ei value 1
-am start -W -n net.example.ttaudiosource/.AudioSourceActivity --ei code 100 --ei value 50
-```
-
-## 2. Volume: `net.example.ttvolume`
-
-The stock volume UI is not usable on a panel with no hardware buttons. `ttvolume` supplies a
-foreground service plus a notification-shade control.
-
-```sh
-adb install --no-incremental -r ttvolume.apk
-pm grant net.example.ttvolume android.permission.POST_NOTIFICATIONS
-am start-foreground-service -n net.example.ttvolume/.VolumeService
-```
-
-`--no-incremental` is mandatory for vendor APKs here (see [06-procedures.md](06-procedures.md) §G).
-
-**The volume curve:** the MediaSession index the app displays is **8 below the raw stream
-value** — `display = raw − 8`. Verified against the mixer's dB anchors. Do not "correct" this;
-the offset is real and consistent.
-
-Without the notification grant the service starts but its control is invisible, which looks
-exactly like a broken service.
-
-## 3. Driving the UI from a terminal
+## 2. Driving the UI from a terminal
 
 ```sh
 # what is on screen, with bounds
@@ -94,7 +48,7 @@ input keyevent KEYCODE_WAKEUP
 `uiautomator dump` must run **directly as `su 0`**. Wrapping it in `su 0 sh -c` breaks on
 redirect quoting and yields empty dumps.
 
-## 4. Installed apps and entry points
+## 3. Installed apps and entry points
 
 | App | Package / component |
 |---|---|
@@ -193,7 +147,7 @@ adb shell 'for p in $(pgrep -f com.android.chrome); do
 verified, survives reboot, and runs the modern HA frontend (`legacyResources: 0,
 modernResources: 109`). Replacing the WebView provider does not need a system flash.
 
-## 5. Audio forensics for the hiss work
+## 4. Audio forensics for the hiss work
 
 The probes that actually discriminated "is audio playing" from "is the codec silent":
 
@@ -210,7 +164,6 @@ tinymix -D 0 | grep -iE 'hp|line|dac|aif'
 
 ```sh
 am force-stop com.google.android.youtube
-am force-stop net.example.ttaudiosource
 dumpsys media.audio_flinger | sed -n '/Tracks of/,/^$/p' | head -8   # must be empty
 ```
 
@@ -220,11 +173,11 @@ Then listen. If the hiss survives with zero tracks and the codec idle, the clien
 `0000` **during normal, working playback**. Treating those as a power indicator produced a
 completely wrong conclusion that had to be retracted. See [08-lessons.md](08-lessons.md).
 
-## 6. What the app work does not cover
+## 5. What the app work does not cover
 
 - **Apple TV** sign-in is deferred (issue [#7](https://github.com/terafin/thermasol/issues/7)).
 - **Netflix** works; DRM is fine on this image.
 - **HA dashboard** runs but costs ~82% of the SoC. That is a Home Assistant dashboard problem,
   not a panel defect — a lighter dashboard is the fix, not code.
-- **Bluetooth audio** is not usable at 115200 baud (issue
-  [#4](https://github.com/terafin/thermasol/issues/4)).
+- **Bluetooth audio** is untested: the Bluetooth hardware on this board is currently broken
+  (issue [#4](https://github.com/terafin/thermasol/issues/4)).

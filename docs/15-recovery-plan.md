@@ -163,7 +163,7 @@ exactly like a dead console.
    - `ping <panel-ip>` answers
    - `adb connect <panel-ip>:5555` connects
    - `adb shell getprop sys.boot_completed` prints `1`
-   - `adb shell getprop ro.boot.slot_suffix` prints `_b`
+   - `adb shell getprop ro.boot.slot_suffix` prints `_a` or `_b`
 
    Close the wall only after all four pass.
 
