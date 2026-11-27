@@ -28,8 +28,9 @@ fail=0
 dup=$(sed 's/@[^/]*\//\//' $M/new.txt | sort | uniq -d)
 [ -z "$dup" ] || { echo "  FAIL: HAL declared more than once: $dup"; fail=1; }
 while IFS= read -r l; do
-  key=$(echo "$l" | sed 's/@[^/]*\//\//'); b=$(sed 's/@[^/]*\//\//' $M/base.txt | grep -xF "$key" | head -1)
-  bv=$(grep -F "${key%%/*}@" $M/base.txt | grep -F "/${key#*/}" | head -1)
+  # lib.sh runs set -euo pipefail: a HAL the base does not declare (a new one) must not end the script
+  key=$(echo "$l" | sed 's/@[^/]*\//\//')
+  bv=$(grep -F "${key%%/*}@" $M/base.txt | grep -F "/${key#*/}" | head -1 || true)
   if [ -n "$bv" ] && [ "$bv" != "$l" ]; then echo "  FAIL: $l differs from base $bv"; fail=1; fi
 done < $M/new.txt
 [ $fail = 0 ] || die "VINTF declarations would fail at boot"
