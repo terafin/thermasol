@@ -61,6 +61,7 @@ App (YouTube, Netflix, Plex, Apple TV, ThermaSol, ...)  -- ordinary Android medi
 | Put one slot back from a backup | `restore.sh latest <slot> [--parts "..."]` | **yes** (inactive slot only) |
 | Recover a panel that won't boot | `recover.sh <slot>` | **yes** (U-Boot over TFTP + power cycle) |
 | Rebuild a slot with Android down | `restore.sh latest <slot> --uboot` | **yes** (U-Boot over TFTP + power cycle) |
+| Check an image set, A/B record or U-Boot env offline | `imgcheck.py release <dir>` / `ab-select <hex>` / `uboot-env <file>` | no |
 
 Never hand-run `dd`, `avbtool`, misc writes or `setenforce`. If a script cannot do something, fix the
 script.
@@ -105,6 +106,12 @@ script.
 - **All writes** go through `write_part_verified` (chunks pushed as files and sha-checked on the
   panel; `adb exec-in` corrupted data in testing), and `lib.sh` refuses any write to the raw eMMC
   device or boot0/boot1, so no script can reach the bootloader, GPT or U-Boot environment.
+
+- **imgcheck.py** verifies an image set the way the panel's U-Boot does (vbmeta signature with the
+  public test key, flags 0, no chain descriptors, every hash and hashtree, kernel under 32 MiB) and
+  prints the vbmeta digest the panel reports as `ro.boot.vbmeta.digest`; decodes an A/B record to the
+  slot U-Boot boots first; and fails a U-Boot environment whose `bootcmd` does not start with the
+  network recovery hook. It never prints device identifiers.
 
 ## Proven on the panel (2026-11-27)
 
