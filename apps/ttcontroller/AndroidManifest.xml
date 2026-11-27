@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:versionCode="1"
+    android:versionName="1.0"
+    android:compileSdkVersion="35"
+    android:compileSdkVersionCodename="15"
+    package="net.siliconspirit.ttcontroller"
+    platformBuildVersionCode="35"
+    platformBuildVersionName="15">
+    <uses-sdk
+        android:minSdkVersion="29"
+        android:targetSdkVersion="35"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <queries>
+        <package android:name="com.thermasol.thermatouchservice"/>
+    </queries>
+    <application
+        android:label="@string/app_name"
+        android:hasCode="true"
+        android:allowBackup="false">
+        <service
+            android:name="net.siliconspirit.ttcontroller.ControllerKeeperService"
+            android:permission="android.permission.DUMP"
+            android:exported="true"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="shower_controller_connection"/>
+        </service>
+        <receiver
+            android:name="net.siliconspirit.ttcontroller.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
