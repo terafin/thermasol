@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:compileSdkVersion="35"
+    android:compileSdkVersionCodename="15"
+    package="net.siliconspirit.ttstop"
+    platformBuildVersionCode="35"
+    platformBuildVersionName="15">
+    <uses-sdk
+        android:minSdkVersion="29"
+        android:targetSdkVersion="35"/>
+    <queries>
+        <package android:name="com.thermasol.thermatouchservice"/>
+    </queries>
+    <application
+        android:label="TT Stop Verification"
+        android:allowBackup="false">
+        <activity
+            android:name="net.siliconspirit.ttstop.StopActivity"
+            android:exported="true"/>
+    </application>
+</manifest>

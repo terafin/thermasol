@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:versionCode="1"
+    android:versionName="1.0"
+    android:compileSdkVersion="35"
+    android:compileSdkVersionCodename="15"
+    package="net.siliconspirit.overlay.ttsimplehome"
+    platformBuildVersionCode="35"
+    platformBuildVersionName="15">
+    <uses-sdk
+        android:minSdkVersion="35"
+        android:targetSdkVersion="35"/>
+    <overlay
+        android:priority="2"
+        android:targetPackage="com.android.launcher3"
+        android:isStatic="false"/>
+    <application
+        android:label="Shower Home layout"
+        android:hasCode="false"/>
+</manifest>

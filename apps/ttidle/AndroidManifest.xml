@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:compileSdkVersion="35"
+    android:compileSdkVersionCodename="15"
+    package="net.siliconspirit.ttidle"
+    platformBuildVersionCode="35"
+    platformBuildVersionName="15">
+    <uses-sdk
+        android:minSdkVersion="29"
+        android:targetSdkVersion="35"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_ROUTING"/>
+    <queries>
+        <package android:name="com.thermasol.thermatouchservice"/>
+    </queries>
+    <application
+        android:label="TT Idle Peripherals"
+        android:allowBackup="false">
+        <receiver
+            android:name="net.siliconspirit.ttidle.PeripheralReceiver"
+            android:permission="android.permission.DUMP"
+            android:exported="true"/>
+    </application>
+</manifest>

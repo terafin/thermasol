@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:compileSdkVersion="35"
+    android:compileSdkVersionCodename="15"
+    package="net.siliconspirit.ttstatus"
+    platformBuildVersionCode="35"
+    platformBuildVersionName="15">
+    <uses-sdk
+        android:minSdkVersion="24"
+        android:targetSdkVersion="35"/>
+    <queries>
+        <package android:name="com.thermasol.thermatouchservice"/>
+    </queries>
+    <application
+        android:label="@string/app_name"
+        android:hasCode="true"
+        android:allowBackup="false">
+        <activity
+            android:name="net.siliconspirit.ttstatus.StatusActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
