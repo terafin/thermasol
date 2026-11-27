@@ -9,7 +9,7 @@ layout and the repairs below.
 | App | Package | What it does |
 |---|---|---|
 | `ttcontroller` | `net.siliconspirit.ttcontroller` | Keeps a binding to ThermaSol's `HardwareService` alive and rebinds when it drops, so the shower controller stays connected. Started by the vendor init (`tt-controller-keeper`). |
-| `ttidle` | `net.siliconspirit.ttidle` | Handles the idle broadcasts `STANDBY`, `STATUS`, `OFF` and `RESUME`. When nothing is playing (checked through the audio service), `OFF` sends the peripheral off sequence (`98, 97, 38`) to ThermaSol's `HardwareService`; `RESUME` unmutes only a mute it made itself. Uses hidden platform APIs. |
+| `ttidle` | `net.siliconspirit.ttidle` | Handles the idle broadcasts `STANDBY`, `STATUS`, `OFF` and `RESUME`. When nothing is playing (checked through the audio service), `OFF` sends the peripheral off sequence (`98, 97, 38`) to ThermaSol's `HardwareService`; `RESUME` unmutes only a mute it made itself. Uses hidden platform APIs. Installed but **disabled** on the reference panel; the idle daemon (`services/tt-idle-dim/deployed`) does this job. |
 | `ttstatus` | `net.siliconspirit.ttstatus` | Read-only probe: calls `HardwareService` getters and writes the results to a JSON status file. |
 | `ttsensor` | `net.siliconspirit.ttsensor` | Listens to the ambient-temperature sensor (type 13) for up to 12 s and writes a report of what it saw. |
 | `ttstop` | `net.siliconspirit.ttstop` | Sends the off command through `HardwareService` only when the controller is already in standby (state 255, no errors, no steam or flush timer), and reports the controller state before and after; otherwise it refuses (`precondition_not_standby`). |
