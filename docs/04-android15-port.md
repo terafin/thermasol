@@ -112,7 +112,7 @@ Six A/B partitions: `boot`, `dtbo`, `system`, `vendor`, `product`, `vbmeta`.
 
 | Route | Needs | Use when |
 |---|---|---|
-| **`adb` + `dd` to the inactive slot** | only a shell — no UART, no wall | **the default.** This is what [09-install-from-stock.md](09-install-from-stock.md) Stage 2 does, start to finish. |
+| **`adb` + `dd` to the inactive slot** | only a shell — no UART, no wall | **the default.** This is what [09-install-from-stock.md](09-install-from-stock.md) Stage 4 does. |
 | **U-Boot + TFTP** | the UART adapter and the wall open | you have no shell at all — a dark panel, or a slot that will not boot |
 
 The `dd` route is the one that made this whole effort possible on a sealed panel, because it
@@ -336,9 +336,9 @@ U-Boot brings up the ADIN1300 PHY, then the kernel disables it:
 The A10-side device-tree overlay's `regulator-eth-phy` has neither `regulator-always-on` nor
 `boot-on`, so nothing re-enables it. There is no `Link is Up` anywhere in 427 s of log.
 
-**Consequence:** "roll back to stock" on this panel produces a dark, network-less screen — the
-exact state the docs warn is unrecoverable without opening the wall. Do not treat slot
-restore as a safety net here.
+**Consequence:** "roll back to stock Android 10" on this panel produces a dark, network-less screen. The
+safety net is the proven A15 `_a`/`_b` pair plus `scripts/panel/backup.sh`, `restore.sh` and `recover.sh`,
+not a return to Android 10.
 
 ### What the safety net actually is — and what it is not
 
@@ -377,14 +377,12 @@ move between slots.
 What you actually have, in decreasing order of confidence:
 
 1. **The running slot works.** Verified every day, for free.
-2. **The other slot has a matching image on it** — verified by hash, not by booting it.
+2. **The other slot has an identical image on it** (commit.sh copies _a to _b with a byte check), and swapping slots both ways has been proven on the panel (swap.sh, rollback.sh, recover.sh).
 3. **The watchdog.** `imx2_wdt` starts at probe with a 60 s timeout and has been observed
    resetting a stalled panel unattended.
 4. **UART.** Needs the wall open and an adapter that may not be present.
 
 So: a write to the **inactive** slot is recoverable in the sense that the running slot is
-unaffected. A write to the **running** slot is not recoverable by slot switch, because the switch
-itself is unproven. See [06-procedures.md](06-procedures.md) §J.
-
-If the wall is ever open for other reasons, *then* prove the switch. Until then, do not claim it
-works.
+unaffected. Slot switching and recovery are proven on the panel (2026-11-27): `swap.sh` both ways, `recover.sh`
+over the U-Boot TFTP hook, `restore.sh` over adb, and `restore.sh --uboot` rebuilding a whole slot with
+Android down. Still write only the inactive slot — see [06-procedures.md](06-procedures.md) §J.

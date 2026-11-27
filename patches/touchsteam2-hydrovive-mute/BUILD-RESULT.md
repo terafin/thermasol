@@ -63,7 +63,7 @@ That was not caused by this work alone, but the build scratch contributed
 ## Call-chain verification against the INSTALLED dex
 
 The chain the patch depends on was re-read from the **installed** `classes2.dex`
-(the one pulled off the panel, `09fd113e…` — not the stale recovery-tree copy).
+(the one pulled off the panel, `686e1086…` — not the stale recovery-tree copy `09fd113e…`).
 Every link is present, in this order:
 
 ```

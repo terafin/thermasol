@@ -1,6 +1,6 @@
 # tt-idle-dim — the panel's idle/lock daemon, with HydroVive quiet-on-idle
 
-> **Deployed today:** `v1.2-android15` runs [`deployed/`](deployed/) — the original daemon plus
+> **Deployed today:** the current release (`v1.4-android15`) runs [`deployed/`](deployed/), the same daemon that first shipped in `v1.2-android15`: the original daemon plus
 > idle-to-home, without the HydroVive coupling below. This directory carries the same
 > idle-to-home change on top of the HydroVive work.
 

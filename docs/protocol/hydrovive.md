@@ -139,11 +139,10 @@ clears the flag. It is not a fixed retry timer. It returns 1 only if the ack arr
 For a replacement application, these change what the room does and must reproduce the vendor's
 ordering rather than being sent opportunistically:
 
-- `B5` mute/unmute — the panel's idle daemon owns this today, and it re-asserts a mute the app
-  lifts while the display is dimmed (`services/tt-idle-dim`).
+- `B5` mute/unmute — the deployed idle daemon (`services/tt-idle-dim/deployed`) sends no B5. Only the unshipped variant in `services/tt-idle-dim` mutes on dim and re-asserts a mute the app lifts.
 - `B4` light on/off and `B2`/`B3` colour and mood — the light and the sound share the unit.
 - `B6` volume — a `B6` with bit 7 set can unmute as a side effect; see
-  [`svc`-side note] in `docs/14` for the firmware path.
+  [`patches/touchsteam2-hydrovive-mute/README.md`](../../patches/touchsteam2-hydrovive-mute/README.md) (the B6 volume-15 origin) for the B6 unmute path.
 - The whole bootloader section: an update erases and rewrites the unit's flash. Do not use it
   without the image in hand and a verified way back.
 

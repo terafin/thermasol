@@ -1,7 +1,7 @@
 # HydroVive MCU recovery through the ST ROM bootloader
 
 For a unit whose MCU sits in the ST system bootloader after `BC 01` (see
-[docs/14, root cause](../../../docs/14-hydrovive-recovery.md#why-the-unit-did-not-fall-back-to-v7-root-cause)).
+[docs/14, why the unit did not fall back to v7](../../../docs/14-hydrovive-recovery.md#why-the-unit-did-not-fall-back-to-v7)).
 Needs a wired connection to the MCU's USART2 on the unit's board; nothing on the CAN harness reaches it.
 
 - `amp-uart.yaml` — ESPHome config for an ESP32 that bridges USART2 to TCP port 6639, 57600 8E1.
@@ -104,7 +104,7 @@ the idle-voltage check below.
 `restore-bank1.sh <esp32-ip> [port] <source>` first, then `recover.sh` again:
 
 - `slot2` copies bank 2's image into bank 1. Use this if bank 2 holds the working firmware (v7).
-- `latest.bin` writes ThermaSol's v5 (`firmware/hydrovive/latest.bin`; checked against its sha256).
+- `<image.bin>` writes ThermaSol's v5 `latest.bin` (download it per `firmware/README.md`; it is checked against sha256 37c81d0b…3279f).
   Bank 1 boots directly with BFB2 clear, so v5's stack pointer is not a problem there.
 
 It backs up both banks, refuses if bank 1 already boots, erases only the bank-1 pages the image needs,

@@ -23,7 +23,8 @@
 The panel is **sealed into a finished bathroom wall** with silicone. Consequences that shape
 every decision in this repo:
 
-- There is **no reset button, no USB port, and no documented recovery procedure.** The other
+- There is **no reset button and no USB port.** Recovery is over the network: see
+  [`scripts/panel/README.md`](../scripts/panel/README.md) (`backup.sh`, `swap.sh`, `recover.sh`, `restore.sh`). The other
   ThermaSol manual (`manual_dspu-tt10-xx.pdf`) shows a reset button — but it is on the *Smart
   PDM*, which this installation does not have.
 - The panel is **not PoE-powered**, so the network cannot power-cycle it. A power cycle is a
@@ -50,10 +51,11 @@ Concretely, the acceptance list that drove the work:
 - Remote recovery over Ethernet.
 - No change to the physical installation.
 
-**One item on that list is not met.** The speaker does *not* go quiet when idle: it hisses
-continuously, and no control the panel owns changes it. That is
-[issue #1](https://github.com/terafin/thermasol/issues/1),
-and it is unresolved. Everything else on the list was verified on the device.
+**Open items.** The ceiling amp (HydroVive) has been unresponsive since 2026-11-16 and the board is out
+for repair ([issue #1](https://github.com/terafin/thermasol/issues/1)); the hiss question waits on it.
+Two reproducibility gaps are tracked: helper-app sources ([#66](https://github.com/terafin/thermasol/issues/66))
+and the unpublished base vendor image ([#67](https://github.com/terafin/thermasol/issues/67)).
+Everything else on the list was verified on the device.
 
 ## The shape of the work
 
@@ -66,12 +68,11 @@ Four things have to be true, in this order. Each one is a whole document.
 2. **The access stack has to survive reboots.** Termux + Termux:Boot hooks over SSH, with adb
    started by hand. This is the only remote path once the wall is closed —
    [06-procedures.md](06-procedures.md) §I.
-3. **The image has to be built and flashed without breaking the panel.** Device tree, EROFS
-   rebuild, A/B slots, vbmeta — [04-android15-port.md](04-android15-port.md).
-
-   **The flash needs no UART.** Write the inactive slot with `dd` over `adb`, arm it, reboot —
-   the whole install runs over the shell from step 1. U-Boot + TFTP is the *fallback*, for a
-   panel with no shell at all.
+3. **The image has to be built and flashed without breaking the panel.** Use the pipeline in
+   [`scripts/panel/README.md`](../scripts/panel/README.md) (`flash.sh`, `swap.sh`, `recover.sh`); background on
+   the device tree, EROFS, A/B slots and vbmeta is in [04-android15-port.md](04-android15-port.md).
+   The flash needs no UART: it runs over adb. U-Boot + TFTP is the *fallback*, for a panel with no
+   shell at all.
 4. **The hardware has to actually work.** Display, touch, audio, Bluetooth and CAN each needed
    a real fix — [05-fixes.md](05-fixes.md).
 

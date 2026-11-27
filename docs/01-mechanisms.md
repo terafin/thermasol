@@ -158,7 +158,8 @@ Reachable transports on the current build:
 | SSH 8022 (Termux `sshd`) | **not present on the current A15 image** — Termux is not installed |
 ## Everything remote lives in `/data`, and a system flash destroys it
 
-The access stack is Termux plus boot hooks under `~/.termux/boot/`. All of it is in `/data`.
+On the stock Android 10 build, the access stack is Termux plus boot hooks under `~/.termux/boot/`, all in
+`/data`. On A15 nothing has to be rebuilt after a flash: adb on 5555 survives.
 **A system image flash wipes `/data`**, taking Termux, `sshd` and every hook with it — leaving a
 sealed panel with no remote path.
 

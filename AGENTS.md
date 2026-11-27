@@ -188,12 +188,9 @@ produced false conclusions here.
 6. **Scope your claim to the gate you actually passed.** "Booted twice" is not "Bluetooth
    works".
 
-## If you are asked about the ceiling speaker hiss
+## If you are asked about the ceiling amp
 
-It is **unresolved**. Read [issue #1](https://github.com/terafin/thermasol/issues/1) before
-proposing anything: nine distinct controls were tried and verified on the bus, and the noise
-survived even a full SoC suspend. The remaining evidence points at the ceiling unit itself.
-Do not restart the investigation from the beginning.
+The HydroVive has been unresponsive since the 2026-11-16 update command, and the board is out for repair (see [issue #1](https://github.com/terafin/thermasol/issues/1) and `docs/14-hydrovive-recovery.md`). Do not send CAN frames to it or restart the old hiss investigation.
 
 ## If you are asked to publish the images
 

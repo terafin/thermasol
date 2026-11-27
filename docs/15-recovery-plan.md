@@ -77,8 +77,7 @@ the October work log, 3.5 minutes after a clean boot):
 `workingset_refault` 40k/s and I/O pressure 75%. At the same moment `MemFree` was 598 MB, and
 586 MB of that was `CmaFree`. About 600 MB sat idle in CMA while the rest of memory thrashed.
 `cmaargs` was overridden to use the device-tree default (320M) at 20:21:53 that evening
-(line 173). The saved environment has carried that override since, and the v10 environment on
-the panel now still carries it. It has not been re-measured at 800M on Android 15. The fix below
+(line 173). The saved environment has carried that override since, and still does. It has not been re-measured at 800M on Android 15. The fix below
 restores the October values instead.
 
 ## Tools
@@ -182,18 +181,13 @@ exactly like a dead console.
 The bootloader itself (eMMC `0x8400`), slot A, slot B, `misc`, `vbmeta` and `dtbo` are not
 written. Only four environment variables change.
 
-## Restoring the whole environment, if needed
+## Do not restore the October environment
 
-The October backup's environment (`uboot_env.img`, md5 `1b1533ff…`) can be written back once
-Android is up again:
-
-```
-adb push uboot_env.img /data/local/tmp/
-adb shell su 0 dd if=/data/local/tmp/uboot_env.img of=/dev/block/mmcblk2 bs=4096 seek=1024 count=1 conv=fsync
-```
-
-This removes the leftover variables from the v10 experiment (`payargs`, `fdtaddr`,
-`bootcmd_safe`, `bootcmd_orig`). It is optional; step 4 alone fixes the boot.
+The October backup's environment (`uboot_env.img`, md5 `1b1533ff…`) predates `tt_nethook`. Writing
+it back would remove the network recovery hook ([docs/16](16-network-recovery-hook.md)), the only way
+into a panel that does not boot. Its leftover variables from the v10 experiment (`payargs`,
+`fdtaddr`, `bootcmd_safe`, `bootcmd_orig`) are harmless; leave them. No script writes the U-Boot
+environment.
 
 ## The amp
 
@@ -225,9 +219,9 @@ rides in them. The J-shaped notches open toward the gap between the two straps, 
 notch has to lift slightly and move toward that gap before the unit drops; while the unit hangs
 crooked, its weight pins the tab.
 
-**The next step:** lower the unit and photograph the board, then follow the recovery README: read the
-chip marking, check PA2/PA3 with a voltmeter, attach the ESP32 bridge, and run `recover.sh`. Its first
-act is a full flash backup, which `analyze-backup.sh` turns into a v7 decompile.
+**The next step:** the board is out for repair; see [issue #1](https://github.com/terafin/thermasol/issues/1). When it
+is back, `services/hv-recovery/rom-bootloader/recover.sh` starts with a full flash backup, which
+`analyze-backup.sh` turns into a v7 decompile.
 
 ### How ThermaSol's own amp update works, and why it stopped
 
