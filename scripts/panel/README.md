@@ -56,7 +56,10 @@ App (YouTube, Netflix, Plex, Apple TV, ThermaSol, ...)  -- ordinary Android medi
 | Keep it: mark good, copy to the fallback slot | `commit.sh` | **yes** |
 | Back out / switch slots | `rollback.sh` / `swap.sh <_a\|_b>` | **yes** |
 | Remove retired apps, reclaim space | `remove-apps.sh` | yes |
+| Full backup to the build host (do this first) | `backup.sh` | read-only |
+| Put one slot back from a backup | `restore.sh latest <slot> [--parts "..."]` | **yes** (inactive slot only) |
 | Recover a panel that won't boot | `recover.sh <slot>` | **yes** (U-Boot over TFTP + power cycle) |
+| Rebuild a slot with Android down | `restore.sh latest <slot> --uboot` | **yes** (U-Boot over TFTP + power cycle) |
 
 Never hand-run `dd`, `avbtool`, misc writes or `setenforce`. If a script cannot do something, fix the
 script.
@@ -88,3 +91,33 @@ script.
   confirmed muted; a failure rolls back.
 - **commit.sh** needs `test.sh` and a VTS pass for the running audio build, then copies the committed
   slot to the other one so the fallback is always the last good build.
+- **backup.sh** copies boot0, boot1, the user area up to userdata (bootloader, GPT, U-Boot env, both
+  slots, misc), userdata and the area after it (vbmeta), and checks each file's sha against the same
+  bytes read on the panel. It writes nothing to the panel.
+- **restore.sh** checks the backup's own shas, takes partitions from its own GPT, writes only the
+  slot that is not running, verifies every partition by readback, then boots it. `--uboot` does the
+  same with Android down: every chunk is staged and sha-checked before U-Boot can see the script, the
+  panel is power-cycled until U-Boot fetches it (up to 3 times), the A/B record changes only after
+  every chunk landed, and the result is verified after boot.
+- **recover.sh** sets the A/B record from U-Boot over TFTP and power-cycles; it counts only fetches
+  after its own power cycle and retries the power cycle up to 3 times.
+- **All writes** go through `write_part_verified` (chunks pushed as files and sha-checked on the
+  panel; `adb exec-in` corrupted data in testing), and `lib.sh` refuses any write to the raw eMMC
+  device or boot0/boot1, so no script can reach the bootloader, GPT or U-Boot environment.
+
+## Proven on the panel (2026-11-27)
+
+Backup; slot switch both ways; network recovery three times back to back; restore over adb with real
+writes; a full-slot restore through U-Boot with Android down (261 chunks, all six partitions match
+the backup); both slots then identical and `test.sh` passing on each.
+
+## What it cannot recover
+
+A damaged bootloader (first 8 MB of the eMMC) or U-Boot environment without the `tt_nethook`: the
+panel then needs its UART console, which means opening the wall. No script here writes either.
+
+## The recovery server
+
+`recover.sh` and `restore.sh --uboot` need the TFTP server the U-Boot hook fetches from
+(`host/tt-tftp.service`: dnsmasq serving `/srv/tt-tftp`, empty except during a recovery) and the
+hook in the panel's U-Boot environment ([docs/16](../../docs/16-network-recovery-hook.md)).
