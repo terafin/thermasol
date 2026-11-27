@@ -80,12 +80,18 @@ fi
 # --- U-Boot path: chunks over TFTP, written by the network recovery hook ---
 CH=16777216; CS=$((CH / 512)); ADDR=0x48000000
 T=/srv/tt-tftp; R=rst
+if timeout 8 "$ADB" connect "$PANEL" >/dev/null 2>&1 && [ "$(timeout 8 "$ADB" -s "$PANEL" shell getprop ro.boot.slot_suffix 2>/dev/null | tr -d '\r')" = "$S" ]; then
+  die "the panel is up and running $S; --uboot rewrites $S while it is the slot U-Boot falls back to — restore the other slot, or use the adb path"
+fi
 [ -z "$(ls -A "$T" 2>/dev/null)" ] || die "$T is not empty; clear it first (anything there runs on every boot)"
 step "stage chunks in $T/$R"
 sudo mkdir -p "$T/$R"
 {
   echo "mmc dev 1"
   echo "setenv ttfail 0"
+  # the hook gives up after ~3 s; a 4 GB restore needs patience and a retry per chunk
+  echo "setenv tftptimeout 3000"
+  echo "setenv tftptimeoutcountmax 10"
   for p in $PARTS; do
     read -r _ st n <<< "$(grep "^${p}${S} " <<< "$PT")"
     split -b $CH -d -a 3 "$X/${p}${S}.img" "$X/${p}${S}." || die "split ${p}${S}"
@@ -93,7 +99,8 @@ sudo mkdir -p "$T/$R"
     for c in "$X/${p}${S}".[0-9][0-9][0-9]; do
       cn=$(( ($(stat -c %s "$c") + 511) / 512 ))
       sudo cp "$c" "$T/$R/$(basename "$c")"
-      echo "if test \$ttfail = 0; then if tftpboot $ADDR $R/$(basename "$c"); then mmc write $ADDR $(printf '0x%x' $((st + i * CS))) $(printf '0x%x' "$cn"); else setenv ttfail 1; echo tt-restore: FAILED $(basename "$c"); fi; fi"
+      cf=$R/$(basename "$c"); off=$(printf '0x%x' $((st + i * CS))); cnt=$(printf '0x%x' "$cn")
+      echo "if test \$ttfail = 0; then setenv ttok 0; for try in 1 2 3; do if test \$ttok = 0; then if tftpboot $ADDR $cf; then setenv ttok 1; fi; fi; done; if test \$ttok = 1; then mmc write $ADDR $off $cnt; else setenv ttfail 1; echo tt-restore: FAILED $cf; fi; fi"
       i=$((i + 1))
     done
     echo "echo tt-restore: ${p}${S} done"
@@ -119,13 +126,17 @@ sudo cp "$X/tt-recover.scr" "$T/tt-recover.scr"
 ok "staged $NCH chunks + tt-recover.scr"
 cleanup() { sudo rm -rf "$T/tt-recover.scr" "$T/$R"; rm -rf "$X"; }
 trap cleanup EXIT
+since=$(date '+%Y-%m-%d %H:%M:%S')   # before the power cycle: only this run's fetches count
 power_cycle
 step "wait for U-Boot to fetch every chunk (last: $LAST)"
-since=$(date '+%Y-%m-%d %H:%M:%S')
-for _ in $(seq 1 360); do journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/$LAST" && break; sleep 5; done
-journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/$LAST" || die "U-Boot did not fetch every chunk; the A/B record is unchanged"
-got=$(journalctl -u tt-tftp --since "$since" --no-pager | grep -c "sent $T/$R/")
-ok "U-Boot fetched $got of $NCH chunks"
+sent() { journalctl -u tt-tftp --since "$since" --no-pager | grep -c "sent $T/$R/"; }
+last=0; idle=0
+until journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/$LAST"; do
+  sleep 10; now=$(sent)
+  if [ "$now" -gt "$last" ]; then last=$now; idle=0; echo "  $now/$NCH chunks"; else idle=$((idle + 10)); fi
+  [ "$idle" -lt 300 ] || die "no chunk fetched for 5 minutes ($last of $NCH); the A/B record is unchanged"
+done
+ok "U-Boot fetched every chunk ($(sent) transfers for $NCH chunks)"
 sudo rm -f "$T/tt-recover.scr"   # never leave it: it would run again on the next power-on
 wait_boot "$S" 300
 for p in $PARTS; do
