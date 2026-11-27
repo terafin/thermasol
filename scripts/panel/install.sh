@@ -3,7 +3,7 @@
 # panel comes up healthy on it. The running slot is never written, so it stays the fallback.
 #
 #   install.sh <release-tag|dir> [--yes]
-#     <release-tag>  e.g. v1.4-android15, downloaded from GitHub into $WORK/releases/<tag>
+#     <release-tag>  e.g. v1.7-android15, downloaded from GitHub into $WORK/releases/<tag>
 #     <dir>          a directory already holding boot dtbo system vendor product vbmeta .img + SHA256SUMS
 #
 # Order, each step refusing on any mismatch:
