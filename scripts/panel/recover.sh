@@ -27,10 +27,14 @@ BYTES=$(echo "$REC" | tr ' ' '\n')
 /usr/bin/mkimage -A arm64 -T script -C none -n tt-recover -d "$S/tt-recover.cmd" "$S/tt-recover.scr" >/dev/null || die "mkimage failed"
 sudo cp "$S/tt-recover.scr" /srv/tt-tftp/tt-recover.scr
 ok "staged /srv/tt-tftp/tt-recover.scr"
+# Only a fetch after this power cycle counts: an earlier recovery's "sent" line in the log would
+# otherwise read as this one and remove the script before U-Boot asks for it.
+since=$(date "+%Y-%m-%d %H:%M:%S")
 power_cycle
 step "wait for U-Boot to fetch the recovery script"
-for i in $(seq 1 24); do journalctl -u tt-tftp --since "-3min" --no-pager | grep -q "sent /srv/tt-tftp/tt-recover.scr" && break; sleep 5; done
+fetched() { journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent /srv/tt-tftp/tt-recover.scr"; }
+for i in $(seq 1 24); do fetched && break; sleep 5; done
 sudo rm -f /srv/tt-tftp/tt-recover.scr
-journalctl -u tt-tftp --since "-3min" --no-pager | grep -q "sent /srv/tt-tftp/tt-recover.scr" || die "U-Boot never fetched the recovery script"
+fetched || die "U-Boot never fetched the recovery script"
 ok "recovery script served; TFTP cleared"
 wait_boot "$SLOT" 300
