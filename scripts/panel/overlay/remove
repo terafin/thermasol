@@ -1,0 +1,4 @@
+app/ShowerCast
+bin/hw/sonos_audio_service
+etc/init/sonos_audio_service.rc
+etc/vintf/manifest/android.hardware.audio.sonos.xml

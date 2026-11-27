@@ -1,0 +1,2 @@
+(allow audioserver hal_audio_sonos (binder (transfer)))	(allow audioserver hal_audio_sonos (binder (call transfer)))
+(typeattributeset netdomain (hal_tv_tuner_default hal_wifi_hostapd_default hal_wifi_supplicant_default rild wpa_supplicant_macsec))	(typeattributeset netdomain (hal_tv_tuner_default hal_wifi_hostapd_default hal_wifi_supplicant_default rild wpa_supplicant_macsec hal_audio_default))

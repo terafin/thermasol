@@ -1,0 +1,7 @@
+# Persistent logging is how panel failures get diagnosed: keep it on across a factory reset, capped at
+# 4 x 50 MB so it can never fill /data. A system rc runs as init, which may set the logd properties
+# (vendor_init may not).
+on property:sys.boot_completed=1
+    setprop persist.logd.logpersistd.size 4
+    setprop persist.logd.logpersistd.buffer all
+    setprop persist.logd.logpersistd logcatd

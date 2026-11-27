@@ -10,6 +10,7 @@ hardware state unless the filename says so.
 | `can-capture.sh` | Passive capture of `can0` traffic | no |
 | `pull-installed-apk.sh` | Pull + hash the APK actually installed for a package | no |
 | `panel-reboot-verify.sh` | Reboot and verify the panel comes back healthy | yes (reboot) |
+| `panel/` | Build, flash, test and roll back the vendor image (Sonos HAL). See `panel/README.md`. | **yes** (flash/swap/commit/rollback) |
 
 Set `PANEL` and `ADB` to override defaults:
 
