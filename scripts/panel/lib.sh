@@ -33,9 +33,11 @@ SYSTEM_SALT=13e2bee85b30e14c8301591a11b4d763c5259dabce29640ec24e598e3bc4effb
 TREE=$BT/out/target/product/dart_mx8mm
 FW_JARS="framework/services.jar framework/oat/arm64/services.odex framework/oat/arm64/services.vdex framework/oat/arm64/services.art"
 
-# Known-good base images (live slot _b, 2026-11-25). Builds start from these, nothing else.
+# Base images. Builds start from these, nothing else. All five are assets of the published release
+# BASE_RELEASE (vendor from v1.2, the others unchanged since v1.0), so anyone can fetch them with pull-base.sh.
+BASE_RELEASE=${BASE_RELEASE:-v1.2-android15}
 declare -A BASE_SHA=(
-  [vendor]=e9fd60309697e8fad04c2d3509cc7b0205a9d9ca8fc479b15a742551f426884e
+  [vendor]=8b4ab623ab1f0e31e8ee19d8afd2d9536fd6755b869ac0a08a1980c6a7191946
   [boot]=5d81612048846396a2a93fc5b7a2da7157c6c7146414f773fab641d09db820dd
   [dtbo]=c9d519893db938fa9c8133943911ba63d528cc408ab30107bc784e9f818f538c
   [product]=839432b1eb6ac636703ac00939bb694515202284b5c39f01a65174996e8bad5f
