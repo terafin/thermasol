@@ -8,3 +8,10 @@ dontaudit hal_camera_default/hal_graphics_composer_default search on system_data
 dontaudit init-insmod-sh module_load on system_lib_file and ioctl on its own exec: NXP's module script also tries modules under /system/lib/modules (rfkill, 9pnet, 8021q, 6lowpan, pps_core) that this panel does not use, and runs ls on early.init.cfg. Refused, harmless. Silenced, nothing granted.
 dontaudit hal_sensors_default binder call to system_server: a sensor HAL callback the platform does not allow; sensors keep working (ttsensor reads the steam room sensor). Silenced, nothing granted.
 dontaudit vendor_init property set on build_prop/default_prop/future_pm_prop: /vendor/build.prop sets ro.adb.secure, persist.adb.tcp.port and pm.dexopt.boot, which Android 15 reserves to the system. The first two already hold the intended values from the system side (adb works on 5555); pm.dexopt.boot keeps its default. Silenced; granting vendor_init these would weaken a deliberate protection.
+plat-sepolicy.cil.add (appended to the system image's plat_sepolicy.cil; plat_sepolicy_and_mapping.sha256 is recomputed to match). dontaudit only, nothing granted:
+  bootanim search system_data_file: the same Vivante GPU driver /data/data/<process> lookup, from the boot animation.
+  init write debugfs_wifi_tracing/debugfs_bootreceiver_tracing: the vendor init script switching on kernel trace events init may not write.
+  gmscore_app read adbd_prop/system_adbd_prop: Google Play services checking whether adb is enabled.
+  system_app write apk_data_file, search privapp_data_file: the settings app and Google services touching app data directories.
+  system_suspend read sysfs: wakeup statistics under /sys/devices/.../wakeup0.
+  toolbox ioctl ram_device: mkswap probing the zram block device.
