@@ -4,7 +4,7 @@
 # U-Boot environment, every slot partition, misc, metadata) and userdata separately, then checks
 # each file's sha256 against the same bytes read on the panel. Nothing is written to the panel.
 # Usage: backup.sh            (userdata is included; it is in use while copied, so best effort)
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 adb_up; booted || die "panel not booted"
 D=$WORK/backup/$(date -u +%Y%m%dT%H%M%SZ); mkdir -p "$D"
 SEC() { sh_p "cat /sys/block/$1/size"; }

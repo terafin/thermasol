@@ -1,7 +1,7 @@
 #!/bin/bash
 # Compile a build's SELinux policy exactly as init does at boot (secilc, same args and files).
 # A policy that fails here hangs the panel in early init. Usage: check-sepolicy.sh <build-dir|latest>
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 D=${1:-latest}; [ "$D" = latest ] && D=$OUT/latest; D=$(readlink -f "$D")
 SYS=$D/system.img; [ -s "$SYS" ] || SYS=$BASE/system.img
 VEN=$D/vendor.img; [ -s "$VEN" ] || die "no vendor.img in $D"

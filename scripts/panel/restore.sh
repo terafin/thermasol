@@ -6,8 +6,10 @@
 #                                                   (network recovery hook), sets the A/B record, boots.
 # Only the six slot partitions (boot dtbo system vendor product vbmeta) and the A/B record are
 # written. The bootloader, its environment, misc and userdata are never touched.
-source "$(dirname "$0")/lib.sh"
-B=${1:?usage: restore.sh <backup-dir|latest> <_a|_b> [--uboot]}; S=${2:?slot}; MODE=${3:-}
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
+B=${1:?usage: restore.sh <backup-dir|latest> <_a|_b> [--uboot] [--parts "dtbo vendor ..."]}; S=${2:?slot}; shift 2
+MODE=; ONLY=
+while [ $# -gt 0 ]; do case $1 in --uboot) MODE=--uboot;; --parts) ONLY=${2:?--parts needs a list}; shift;; *) die "unknown option $1";; esac; shift; done
 [ "$B" = latest ] && B=$WORK/backup/latest; B=$(readlink -f "$B")
 [ "$S" = _a ] || [ "$S" = _b ] || die "slot must be _a or _b"
 H=$B/head.img; [ -f "$H" ] && [ -f "$B/SHA256SUMS" ] || die "not a backup: $B"
@@ -35,6 +37,10 @@ for _ in range(n):
 PY
 ) || die "could not read the backup's partition table"
 PARTS="boot dtbo system vendor product vbmeta"
+if [ -n "$ONLY" ]; then
+  for p in $ONLY; do case " $PARTS " in *" $p "*) ;; *) die "--parts: $p is not a slot partition ($PARTS)";; esac; done
+  PARTS=$ONLY
+fi
 for p in $PARTS; do grep -q "^${p}${S} " <<< "$PT" || die "${p}${S} not in the backup's partition table"; done
 HSEC=$(( $(stat -c %s "$H") / 512 )); TSEC=$(( $(stat -c %s "$B/tail.img") / 512 ))
 X=$WORK/restore; rm -rf "$X"; mkdir -p "$X"

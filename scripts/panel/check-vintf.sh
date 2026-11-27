@@ -2,7 +2,7 @@
 # Compare the VINTF HAL declarations of a build's vendor image (manifest fragments + the audio APEX's
 # fragments) against the base. A HAL declared twice, or at a different version than base, fails at
 # early boot (before logd) and hangs the panel. Usage: check-vintf.sh <build-dir|latest>
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 D=${1:-latest}; [ "$D" = latest ] && D=$OUT/latest; D=$(readlink -f "$D")
 M=$WORK/vintfcheck; sudo umount -q $M/b $M/n 2>/dev/null || true; rm -rf $M; mkdir -p $M/b $M/n
 trap 'sudo umount -q $M/b $M/n 2>/dev/null || true' EXIT

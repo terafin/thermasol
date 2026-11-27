@@ -3,7 +3,7 @@
 # active, then falls through to normal boot (boota). Use when adb is gone (hung trial boot).
 # Usage: recover.sh _b      (then the script power-cycles the panel via Home Assistant)
 # Proven recipe (Nov 22/25): eMMC is mmc dev 1, load at 0x60000000, never 'reset' at the end.
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 SLOT=${1:?usage: recover.sh _a|_b}
 case $SLOT in _a) REC=$(ab_make 15 0 1 14 0 1);; _b) REC=$(ab_make 14 0 1 15 0 1);; *) die "slot must be _a or _b";; esac
 MISC_LBA=0x738000                      # misc partition start (GPT); A/B record at +0x800 = block +4

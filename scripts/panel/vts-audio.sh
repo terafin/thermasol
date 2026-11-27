@@ -4,7 +4,7 @@
 # but every reachable amp is still muted first (confirmed over UPnP) and its mute restored after. An
 # amp that answers but cannot be confirmed muted stops the run before anything is sent.
 # Records the result against the audio APEX sha, so flash.sh can refuse audio code VTS has not passed.
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 adb_up; booted || die "panel not booted"
 U="$(dirname "$0")/sonos-upnp.sh"
 VTS=$BT/out/target/product/dart_mx8mm/data/nativetest64/VtsHalAudioCoreTargetTest/VtsHalAudioCoreTargetTest

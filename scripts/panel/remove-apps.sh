@@ -4,7 +4,7 @@
 #  - ShowerCast / tone / submix capture: the retired app-based Sonos path.
 #  - ttaudio, ttaudiosource, airvia: the retired HydroVive / AirPlay audio path.
 # Then clear caches that only hold downloaded models and voice packs; each app re-downloads on use.
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 adb_up; booted || die "panel not booted"
 step "uninstall apps that are not part of the design"
 #  - ttvolume: a custom volume bubble; Android's own output picker (Quick Settings media card ->

@@ -2,7 +2,7 @@
 # Build services.jar (and its compiled odex/vdex/art) from the pinned tree plus overlay/framework.patch.
 # The tree's unpatched services.jar is byte-identical to the panel's base system, so the only change
 # in the result is the patch. Records the patch sha so build.sh refuses a stale or unpatched jar.
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 OV=$REPO/scripts/panel/overlay; P=$OV/framework.patch
 [ -s "$P" ] || die "no overlay/framework.patch"
 step "apply framework.patch to frameworks/base"

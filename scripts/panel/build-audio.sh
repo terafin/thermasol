@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build the vendor audio APEX (reference AIDL audio service, NXP's copy, plus the Sonos module)
 # from the pinned tree. Records its sha so build.sh refuses an APEX it did not produce.
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib.sh" || { echo "FAIL: cannot load lib.sh next to $0" >&2; exit 1; }
 # audio-tree.patch: reference audio service + Sonos module. audio-policy.patch: the "sonos" module in
 # the vendor audio policy, without which the audio service never creates the Sonos outputs.
 cd "$BT" || die "no build tree"
