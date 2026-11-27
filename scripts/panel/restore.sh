@@ -141,11 +141,17 @@ LAST=$(grep -o "$R/[a-z_]*\.[0-9]*" "$X/tt-recover.cmd" | tail -1)
 sudo cp "$X/tt-recover.scr" "$T/tt-recover.scr"
 ok "staged $NCH chunks + tt-recover.scr"
 since=$(date '+%Y-%m-%d %H:%M:%S')   # before the power cycle: only this run's fetches count
+# From here U-Boot may be mid-transfer: on any exit, remove only the script (so it cannot run on
+# the next power-on) and leave the chunks; they are removed after the panel has booted.
+trap 'sudo rm -f /srv/tt-tftp/tt-recover.scr; echo "chunks left in /srv/tt-tftp/rst — remove after the panel boots: sudo rm -rf /srv/tt-tftp/rst"' EXIT
 power_cycle
 step "wait for U-Boot to fetch every chunk (last: $LAST)"
-sent() { journalctl -u tt-tftp --since "$since" --no-pager | grep -c "sent $T/$R/"; }
+# lib.sh runs under set -euo pipefail: a grep that matches nothing must not end the script, or
+# the EXIT trap removes the chunks while U-Boot is still fetching them.
+sent() { journalctl -u tt-tftp --since "$since" --no-pager | grep -c "sent $T/$R/" || true; }
+fetched_last() { journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/$LAST"; }
 last=0; idle=0
-until journalctl -u tt-tftp --since "$since" --no-pager | grep -q "sent $T/$LAST"; do
+until fetched_last; do
   sleep 10; now=$(sent)
   if [ "$now" -gt "$last" ]; then last=$now; idle=0; echo "  $now/$NCH chunks"; else idle=$((idle + 10)); fi
   [ "$idle" -lt 300 ] || die "no chunk fetched for 5 minutes ($last of $NCH); the A/B record is unchanged"
@@ -153,6 +159,7 @@ done
 ok "U-Boot fetched every chunk ($(sent) transfers for $NCH chunks)"
 sudo rm -f /srv/tt-tftp/tt-recover.scr   # never leave it: it would run again on the next power-on
 wait_boot "$S" 300
+trap cleanup EXIT
 for p in $PARTS; do
   [ "$(part_sha "${p}${S}")" = "$(sha "$X/${p}${S}.img")" ] || die "${p}${S} on the panel differs from the backup"
   ok "${p}${S} matches the backup"
