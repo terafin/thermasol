@@ -37,6 +37,9 @@ jobs:
       - name: reboot-pin
         working-directory: services/vendor-helpers/reboot-pin
         run: python3 -I test_tt_reboot_pin.py
+      - name: imgcheck (A/B record and U-Boot env checks)
+        working-directory: scripts/panel
+        run: python3 -I test_imgcheck.py
       - name: store mirror
         working-directory: scripts/store-mirror
         run: python3 -I test_serve_store.py
