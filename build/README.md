@@ -3,7 +3,7 @@
 This is **our** image: Variscite's `imx-android-15.0.0_1.2.0` BSP plus the ThermaSol panel
 port and the fixes described in [`../docs/05-fixes.md`](../docs/05-fixes.md).
 
-The images themselves are **not published here** — see [Why not the images](#why-not-the-images).
+The images are not committed to git; they are published as release assets — see [Availability of the images](#availability-of-the-images).
 
 ## What is ours vs. what is somebody else's
 
@@ -44,8 +44,10 @@ Traps we hit (details in `../docs/04-android15-port.md`):
 ## Then the panel-specific layer
 
 1. **Device tree** — merge [`devicetree/tt10v2-port.dtsi`](../devicetree/tt10v2-port.dtsi) and
-   [`devicetree/bluetooth-uart2.dtsi`](../devicetree/bluetooth-uart2.dtsi) into the Variscite
-   DART DT. Display timings are measured, not guessed.
+   [`devicetree/bluetooth-uart2.dtsi`](../devicetree/bluetooth-uart2.dtsi) into
+   `arch/arm64/boot/dts/freescale/imx8mm-var-dart-dt8mcustomboard.dts` of Variscite's `linux-imx`,
+   branch `android-15.0.0_1.2.0-var01` (the target named in the dtsi header). Display timings are
+   measured, not guessed.
 2. **Bluetooth HAL** — apply [`patches/bluetooth-hci-command-drain.patch`](../patches/bluetooth-hci-command-drain.patch)
    to `hardware/interfaces/bluetooth/aidl/default/`. This is the bounded command drain that
    stops the second OFF/ON cycle from timing out the HCI RESET.
@@ -68,7 +70,21 @@ with the five-descriptor / `flags=0` / no-chain layout, then verify with
 
 ## The deployed set
 
-Recorded so you can confirm you have the same thing we ran.
+**Current: v1.4-android15** — the exact set on both slots of the reference panel. Verify a download with
+the release's `SHA256SUMS`.
+
+| Partition | SHA-256 | Bytes |
+|---|---|---|
+| boot | `5d81612048846396a2a93fc5b7a2da7157c6c7146414f773fab641d09db820dd` | 50,331,648 |
+| dtbo | `c9d519893db938fa9c8133943911ba63d528cc408ab30107bc784e9f818f538c` | 4,194,304 |
+| product | `839432b1eb6ac636703ac00939bb694515202284b5c39f01a65174996e8bad5f` | 1,879,048,192 |
+| system | `a8db01221467408ab898ed7fd9bda8307580f77d18bf2c6aa6606429c5e18d2c` | 1,879,048,192 |
+| vendor | `02632d9747c89537ac0411a51a88332316fa42ea64f7a5856be26f83295ac50a` | 536,870,912 |
+| vbmeta | `9a416ce744e0141b93b6fd7cf4e5ebd8bbda60a951da0100b06780a920967b13` | 1,048,576 |
+
+### History: v1.0 and v1.2
+
+Recorded so earlier downloads can still be checked.
 
 **These are the hashes of the release assets, not of any single flash.** `product` and `system`
 match the deployed set; `dtbo` (`c9d51989…`) matches no witnessed deployment — several dtbo builds

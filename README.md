@@ -53,7 +53,4 @@ changing anything.
 
 Documentation, device tree and patches: CC BY 4.0. Scripts: MIT.
 
-**No binaries are redistributed here** — not ThermaSol's speaker firmware, not the Android
-image. Our `product.img` contains 1.4 GB of Google's proprietary apps and `vendor.img` is
-NXP/Variscite content; neither is ours to publish. Image hashes are recorded in
-`build/README.md` so you can verify one you build yourself.
+**The images are not stored in git** (4.4 GB). They are published as release assets for owners of this hardware; `product.img` contains Google's proprietary apps and `vendor.img` is NXP/Variscite content. No ThermaSol firmware is redistributed. Verify images with the `SHA256SUMS` attached to each release.

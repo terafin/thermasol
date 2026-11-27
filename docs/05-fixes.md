@@ -48,9 +48,6 @@ on the bottom bar are all messed up, green and random crap".
 **Root cause.** The panel's device tree declared `data-mapping = "jeida-24"`; this panel is
 **VESA-24**.
 
-**Fix.** Rename the device-tree node so it publishes **both** heap names NXP gralloc requests —
-`reserved` and `reserved-uncached`. The kernel was publishing `linux,cma`.
-
 **Colour fault (1d), separately.** On a screen that *is* lit but pixelated with colour
 corruption, the fix is one semantic value in the `panel-lvds` node: `jeida-24` → `vesa-24`. The
 dtbo was repacked and re-signed with the same key and salt (public key sha1 `2597c218…`,
@@ -277,8 +274,9 @@ fallback/config value."* The DT compatible string was kept anyway — it binds t
 driver with no quirks and no `.data`, so relabelling it would churn a working binding for
 nothing.
 
-**Verified.** Host tests 10 pass against a real baseline that fails 4; `hci0_registered: true`;
-Android **ON** with zero aborts — a 300 s window, with `time since enabled: 00:05:40` in the same
+> **Status 2026-11-27:** the Bluetooth hardware on this board is broken. The results below are historical; Bluetooth is not currently usable.
+
+**Verified.** Host tests 10 pass against a real baseline that fails 4; `hci0_registered: true`; Android **ON** with zero aborts — a 300 s window, with `time since enabled: 00:05:40` in the same
 run on the first boot — and zero
 aborts after a normal automatic reboot with no manual enable and no module load.
 
@@ -443,9 +441,8 @@ Holding `SCREEN_BRIGHT_WAKE_LOCK 'TTIdleDim'` for the supervisor's lifetime keep
 `mStayOn=true` and leaves dimming entirely to the controlled native child. That is also why
 the panel never enters deep suspend.
 
-**The CAN allowlist is exactly four frames** — mute `A5 B5 7B 01 …`, light-off
-`A5 B4 7B 00 …`, standby `A5 5F 7B FF`, and unmute `A5 B5 7B 00 …` which is only sent if this
-coordinator owns the current mute. Anything heat/water/flush/radio/BT-power related is
+**The CAN allowlist is exactly four frames** (this is the unshipped `services/tt-idle-dim` variant; the
+deployed `services/tt-idle-dim/deployed` daemon sends no CAN frames — it opens HOME, then sets the backlight to 0) — mute `A5 B5 7B 01 …`, light-off `A5 B4 7B 00 …`, standby `A5 5F 7B FF`, and unmute `A5 B5 7B 00 …` which is only sent if this coordinator owns the current mute. Anything heat/water/flush/radio/BT-power related is
 forbidden by construction.
 
 **Related defect found here:** the bind-only `HardwareService` died when the last UI went

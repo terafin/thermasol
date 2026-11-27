@@ -52,8 +52,8 @@ redirect quoting and yields empty dumps.
 
 | App | Package / component |
 |---|---|
-| Termux | `com.termux` |
-| Termux:Boot | `com.termux.boot` |
+| Termux | `com.termux` (installable; not present after a flash) |
+| Termux:Boot | `com.termux.boot` (installable; not present after a flash) |
 | 1Password | `com.onepassword.android/.setup.welcome.WelcomeActivity` |
 | Plex | `com.plexapp.android/com.plexapp.plex.activities.SplashActivity` |
 | Netflix | `com.netflix.mediaclient` |
@@ -175,9 +175,8 @@ completely wrong conclusion that had to be retracted. See [08-lessons.md](08-les
 
 ## 5. What the app work does not cover
 
-- **Apple TV** sign-in is deferred (issue [#7](https://github.com/terafin/thermasol/issues/7)).
+- **Apple TV** sign-in is deferred by the operator.
 - **Netflix** works; DRM is fine on this image.
 - **HA dashboard** runs but costs ~82% of the SoC. That is a Home Assistant dashboard problem,
   not a panel defect — a lighter dashboard is the fix, not code.
-- **Bluetooth audio** is untested: the Bluetooth hardware on this board is currently broken
-  (issue [#4](https://github.com/terafin/thermasol/issues/4)).
+- **Bluetooth audio** is untested: the Bluetooth hardware on this board is currently broken.

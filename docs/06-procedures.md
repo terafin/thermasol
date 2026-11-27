@@ -84,19 +84,16 @@ network and no way in.
 3. Confirm the **other** slot is the good A15 — not an unverified write, and not A10.
 4. Only then switch.
 
-**Before you switch, know how you get back.** A bad rollback on a sealed panel has no recovery
-except UART (wall open) or the watchdog. See [04-android15-port.md](04-android15-port.md)
+**Before you switch, know how you get back.** `scripts/panel/rollback.sh` or `swap.sh` switch slots while adb works. If adb is gone, `scripts/panel/recover.sh <slot>` rewrites the A/B record over the U-Boot TFTP hook ([16-network-recovery-hook.md](16-network-recovery-hook.md)). UART is the last resort. See [04-android15-port.md](04-android15-port.md)
 §"Rolling back".
 
 **Slot switching has been performed**, with receipts: A15 written to B from A10 on A, armed by a
 raw `misc+0x800` write, booted and marked successful (`A{14,0,1} B{15,0,1}`); later A15 written to
-A and booted there. See [09-install-from-stock.md](09-install-from-stock.md) §2.4 for the record
-layout.
+A and booted there. See [09-install-from-stock.md](09-install-from-stock.md) §4.3 for the record layout.
 
 **Verify the target slot by hash before switching** — `sha256sum /dev/block/by-name/vbmeta_<other>`
 against the image you recorded. That is the check; it takes one command and it is what makes the
 switch safe.
-It stopped being true here once both slots were converted.
 
 ---
 

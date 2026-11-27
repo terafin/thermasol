@@ -1,6 +1,6 @@
 # 02 — Access: getting a shell on the panel
 
-If the panel is on the network and healthy, you have three ways in. If it is not, read
+If the panel is on the network and healthy, adb over TCP 5555 is the way in (SSH 8022 exists only on the stock A10 Termux setup). If it is not, read
 [06-procedures.md](06-procedures.md).
 
 ## Finding the panel
@@ -43,7 +43,7 @@ panel ever sees them.
 
 ## SSH
 
-Termux `sshd` on **port 8022**. The original installation used **password authentication** with a
+Termux `sshd` on **port 8022** (stock Android 10 only; not present on the A15 images v1.0–v1.4). The original installation used **password authentication** with a
 zero-byte `authorized_keys` — the setuid `su` lives at `/system/xbin/su` and Termux cannot run it,
 so a key-only setup has to be added deliberately. Set a key (`~/.ssh/authorized_keys`, mode 600)
 before you rely on this path; the key is **not** in this repo and cannot be recovered from it.
@@ -162,7 +162,9 @@ To change CMA, change the DT node and rebuild `dtbo`.
 
 ## The recovery contract
 
-Three independent paths must stay alive, and they are not equally reliable:
+On A15 the independent paths are ADB on 5555, the U-Boot TFTP hook (`scripts/panel/recover.sh`,
+`restore.sh --uboot`), and UART/U-Boot as the last resort; SSH is Android 10 only. On Android 10, three
+independent paths must stay alive, and they are not equally reliable:
 
 1. **ADB 5555** — fast, root, but wedges if a Termux adb server races it.
 2. **SSH 8022** — independent of adbd, depends on Termux + `BOOT_COMPLETED`.

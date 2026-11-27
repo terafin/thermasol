@@ -416,10 +416,10 @@ Expect `00 41 42 30 01 00 00 00 0e 00 01 00 0f 04 00 00 ... 06 ef 18 bb`.
 > which is what is written above.
 
 > **The 5-minute self-revert.** `/vendor/etc/init/hw/init.freescale.rc:280` runs
-> `tt_misc_writer guard ${ro.boot.slot_suffix} 300`. An **unmarked** A15 boot returns to the
-> previous slot five minutes later — the argument is the guard's window in seconds — and it
-> presents as `A15 came up and then died`. If you see that, look for the guard before you debug
-> anything.
+> `tt_misc_writer guard ${ro.boot.slot_suffix} 300`. On an **unmarked** A15 boot the guard reverts the A/B
+> record to the previous slot after 300 s (the argument is the window in seconds). It does **not**
+> reboot: the panel switches on the next reboot, which presents as `A15 came up and then died`.
+> See [04-android15-port.md](04-android15-port.md) ("The boot guard does not reboot on its own").
 
 Then `adb reboot`.
 
@@ -447,6 +447,8 @@ Recovery:
 
 | Path | Needs | Status |
 |---|---|---|
+| `scripts/panel/recover.sh <slot>` — U-Boot sets the A/B record over the TFTP hook | network, power switch | **proven 2026-11-27**, no UART ([16](16-network-recovery-hook.md)) |
+| `scripts/panel/restore.sh latest <slot> [--uboot]` — rebuild a slot from the backup | network, power switch | **proven 2026-11-27**, including with Android down |
 | U-Boot console → rewrite `misc+0x800` | UART adapter, wall open | **proven** — one 512-byte `mmc write` restored A10 with `/data` and the Play registration intact |
 | **Watchdog** | nothing | **proven** — reset the panel unattended (uptime 30,628 → 106, new `boot_id`) |
 | Fastboot / SDP | USB | not available |

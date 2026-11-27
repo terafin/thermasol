@@ -175,7 +175,7 @@ Subsystems behind CAN:
 | `psb_*` | Steam generator (pressure/steam board) |
 | `esv_*` | Water/valve board (“ESV”/DSV-4000) — **not present on this installation** |
 | `slsr_*` | Legacy speaker/light — **not present** |
-| `hvlsr_*` | HydroVive ceiling speaker/light — **the live one** |
+| `hvlsr_*` | HydroVive ceiling speaker/light — present, but unresponsive since 2026-11-16 ([#1](https://github.com/terafin/thermasol/issues/1)); the CAN speaker frames below were verified before that date |
 
 ## Video decode (Hantro VPU)
 
@@ -209,8 +209,10 @@ The HydroVive ceiling unit's Bluetooth module is not discoverable from the panel
 and LE scan, 2026-11-17). It is powered by the unit's MCU, which is not running. The panel has never
 been paired with it.
 
-Broadcom **BCM4335C0** on **UART2** (`30890000.serial`) via serdev, `hci_uart_bcm`, firmware
-`brcm/BCM4335C0.hcd` build 0809. Bring-up baud is **115200**, which is enough to connect but
+> **Status 2026-11-27:** the Bluetooth hardware on this board is broken and unusable. The facts below
+> are from bring-up and are historical.
+
+Broadcom **BCM4335C0** on **UART2** (`30890000.serial`) via serdev, `hci_uart_bcm`, firmware `brcm/BCM4335C0.hcd` build 0809. Bring-up baud is **115200**, which is enough to connect but
 **not** enough for audio streaming.
 
 The DT compatible string is `brcm,bcm43430a1-bt` even though the part is a BCM4335C0 — it binds
@@ -281,9 +283,8 @@ Why the usual knobs don't help here:
 - **~600 MB sits idle in CMA** while the movable list thrashes, because the allocator only falls
   back to CMA when it is empty.
 
-The reversible lever is `panel-stabilize.sh`: it disables 8 Google packages and writes the
-`pm enable --user 0` receipt **before** acting, refusing to run if that receipt cannot be
-written. See issue [#16](https://github.com/terafin/thermasol/issues/16).
+`scripts/panel/remove-apps.sh` removes the retired apps and clears regenerable caches to free space. It does
+not disable Google packages.
 
 ## Known hardware-adjacent traps
 
