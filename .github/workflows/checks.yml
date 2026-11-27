@@ -1,0 +1,47 @@
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: git ls-files -z '*.sh' | xargs -0 -n1 bash -n
+      - name: Python syntax
+        run: git ls-files -z '*.py' | xargs -0 python3 -m py_compile
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: tt-idle-dim unit tests
+        run: |
+          make -C services/tt-idle-dim test
+          make -C services/tt-idle-dim/deployed test
+      - name: tt-idle-dim daemon host tests
+        working-directory: services/tt-idle-dim/tests
+        run: |
+          python3 -I test_daemon_host.py
+          python3 -I test_playback_host.py
+      - name: idle-peripheral frame whitelist
+        working-directory: services/vendor-helpers/idle-peripheral
+        run: cc -std=c11 -Wall -Werror -o "$RUNNER_TEMP/test_frames" test_frames.c && "$RUNNER_TEMP/test_frames"
+      - name: reboot-pin
+        working-directory: services/vendor-helpers/reboot-pin
+        run: python3 -I test_tt_reboot_pin.py
+      - name: store mirror
+        working-directory: scripts/store-mirror
+        run: python3 -I test_serve_store.py
+      - name: touchsteam2 mute model
+        working-directory: patches/touchsteam2-hydrovive-mute/tests
+        run: |
+          python3 -I test_delayed_volume_race.py
+          python3 -I test_shutdown_mute_model.py
