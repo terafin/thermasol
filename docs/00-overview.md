@@ -53,8 +53,8 @@ Concretely, the acceptance list that drove the work:
 
 **Open items.** The ceiling amp (HydroVive) has been unresponsive since 2026-11-16 and the board is out
 for repair ([issue #1](https://github.com/terafin/thermasol/issues/1)); the hiss question waits on it.
-Two reproducibility gaps are tracked: helper-app sources ([#66](https://github.com/terafin/thermasol/issues/66))
-and the unpublished base vendor image ([#67](https://github.com/terafin/thermasol/issues/67)).
+The image is rebuilt from published inputs only (`scripts/panel/pull-base.sh` fetches the v1.2 release),
+and the helper apps' source is in [`apps/`](../apps/README.md).
 Everything else on the list was verified on the device.
 
 ## The shape of the work
