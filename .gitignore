@@ -25,3 +25,4 @@ services/hv-recovery/flasher/hvcatch
 services/hv-recovery/flasher/hvpoll
 services/hv-recovery/flasher/hvwatch
 services/hv-recovery/payload/out/
+scripts/panel/local.env

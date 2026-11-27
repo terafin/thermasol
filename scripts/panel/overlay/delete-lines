@@ -1,0 +1,2 @@
+etc/init/hw/init.freescale.rc	    start touchsteam
+etc/init/hw/init.freescale.rc	    start touchsteam-back

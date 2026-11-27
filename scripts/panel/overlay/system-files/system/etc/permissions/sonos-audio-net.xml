@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Sonos audio module runs inside the reference audio service (uid audioserver). It needs the
+     network for SSDP discovery, UPnP control and the HTTP stream the players pull. netd allows a
+     uid to create sockets only with INTERNET, granted to native uids like this (cf. uid="media"
+     in system platform.xml). -->
+<permissions>
+    <assign-permission name="android.permission.INTERNET" uid="audioserver" />
+</permissions>

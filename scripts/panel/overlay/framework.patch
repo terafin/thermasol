@@ -1,0 +1,274 @@
+diff -ruN a/services/core/java/com/android/server/audio/AudioService.java b/services/core/java/com/android/server/audio/AudioService.java
+--- a/services/core/java/com/android/server/audio/AudioService.java	2026-11-26 14:21:59.773531634 -0800
++++ b/services/core/java/com/android/server/audio/AudioService.java	2026-11-26 14:21:59.925216558 -0800
+@@ -9216,6 +9216,12 @@
+                     // device, continue otherwise
+                     int defaultIndex = (device == AudioSystem.DEVICE_OUT_DEFAULT) ?
+                             AudioSystem.DEFAULT_STREAM_VOLUME[mStreamType] : -1;
++                    // thermasol: a network speaker sets its own loudness, so the panel sends it
++                    // full scale; without this the bus device inherits the quiet default.
++                    if (device == AudioSystem.DEVICE_OUT_BUS
++                            && mStreamType == AudioSystem.STREAM_MUSIC) {
++                        defaultIndex = mIndexMax / 10;
++                    }
+                     int index;
+                     if (!hasValidSettingsName()) {
+                         index = defaultIndex;
+diff -ruN a/services/core/java/com/android/server/media/AudioManagerRouteController.java b/services/core/java/com/android/server/media/AudioManagerRouteController.java
+--- a/services/core/java/com/android/server/media/AudioManagerRouteController.java	2026-11-26 14:21:59.782370500 -0800
++++ b/services/core/java/com/android/server/media/AudioManagerRouteController.java	2026-11-26 14:21:59.916216530 -0800
+@@ -89,7 +89,7 @@
+     @NonNull private final AudioManager mAudioManager;
+     @NonNull private final Handler mHandler;
+     @NonNull private final OnDeviceRouteChangedListener mOnDeviceRouteChangedListener;
+-    @NonNull private final BluetoothDeviceRoutesManager mBluetoothRouteController;
++    @Nullable private final BluetoothDeviceRoutesManager mBluetoothRouteController;
+ 
+     @NonNull private final AudioProductStrategy mStrategyForMedia;
+ 
+@@ -123,7 +123,7 @@
+             @NonNull AudioManager audioManager,
+             @NonNull Looper looper,
+             @NonNull AudioProductStrategy strategyForMedia,
+-            @NonNull BluetoothAdapter btAdapter,
++            @Nullable BluetoothAdapter btAdapter,
+             @NonNull OnDeviceRouteChangedListener onDeviceRouteChangedListener) {
+         mContext = Objects.requireNonNull(context);
+         mAudioManager = Objects.requireNonNull(audioManager);
+@@ -135,8 +135,11 @@
+                 DeviceRouteController.getBuiltInSpeakerSuitabilityStatus(mContext);
+ 
+         mBluetoothRouteController =
+-                new BluetoothDeviceRoutesManager(
+-                        mContext, mHandler, btAdapter, this::rebuildAvailableRoutesAndNotify);
++                btAdapter == null
++                        ? null
++                        : new BluetoothDeviceRoutesManager(
++                                mContext, mHandler, btAdapter,
++                                this::rebuildAvailableRoutesAndNotify);
+         // Just build routes but don't notify. The caller may not expect the listener to be invoked
+         // before this constructor has finished executing.
+         rebuildAvailableRoutes();
+@@ -149,7 +152,7 @@
+             })
+     @Override
+     public void start(UserHandle mUser) {
+-        mBluetoothRouteController.start(mUser);
++        if (mBluetoothRouteController != null) mBluetoothRouteController.start(mUser);
+         mAudioManager.registerAudioDeviceCallback(mAudioDeviceCallback, mHandler);
+         mAudioManager.addOnDevicesForAttributesChangedListener(
+                 AudioRoutingUtils.ATTRIBUTES_MEDIA,
+@@ -167,7 +170,7 @@
+         mAudioManager.removeOnDevicesForAttributesChangedListener(
+                 mOnDevicesForAttributesChangedListener);
+         mAudioManager.unregisterAudioDeviceCallback(mAudioDeviceCallback);
+-        mBluetoothRouteController.stop();
++        if (mBluetoothRouteController != null) mBluetoothRouteController.stop();
+         mHandler.removeCallbacksAndMessages(/* token= */ null);
+     }
+ 
+@@ -204,6 +207,12 @@
+             Slog.w(TAG, "transferTo: Ignoring transfer request to unknown route id : " + routeId);
+             return;
+         }
++        // thermasol: the last chosen output is sticky across reboots.
++        synchronized (this) {
++            mPendingRestore = null;
++        }
++        android.provider.Settings.Global.putString(
++                mContext.getContentResolver(), "thermasol_last_output_route", routeId);
+         Runnable transferAction = getTransferActionForRoute(mediaRoute2InfoHolder);
+         Runnable guardedTransferAction =
+                 () -> {
+@@ -238,7 +247,8 @@
+     }
+ 
+     private Runnable getTransferActionForRoute(MediaRoute2InfoHolder mediaRoute2InfoHolder) {
+-        if (mediaRoute2InfoHolder.mCorrespondsToInactiveBluetoothRoute) {
++        if (mediaRoute2InfoHolder.mCorrespondsToInactiveBluetoothRoute
++                && mBluetoothRouteController != null) {
+             String deviceAddress = mediaRoute2InfoHolder.mMediaRoute2Info.getAddress();
+             return () -> {
+                 // By default, the last connected device is the active route so we don't
+@@ -252,7 +262,10 @@
+                     new AudioDeviceAttributes(
+                             AudioDeviceAttributes.ROLE_OUTPUT,
+                             mediaRoute2InfoHolder.mAudioDeviceInfoType,
+-                            /* address= */ ""); // This is not a BT device, hence no address needed.
++                            // thermasol: a bus device (network speaker) is picked by address.
++                            mediaRoute2InfoHolder.mAudioDeviceInfoType == AudioDeviceInfo.TYPE_BUS
++                                    ? mediaRoute2InfoHolder.mMediaRoute2Info.getAddress()
++                                    : "");
+             return () ->
+                     mAudioManager.setPreferredDeviceForStrategy(
+                             mStrategyForMedia, deviceAttributes);
+@@ -277,8 +290,32 @@
+                 Manifest.permission.MODIFY_AUDIO_ROUTING,
+                 Manifest.permission.QUERY_AUDIO_STATE
+             })
++    private boolean mRestoredLastOutput = false;
++    // thermasol: route id the boot-time restore is switching to; nothing is saved until media is on it.
++    @Nullable private String mPendingRestore = null;
++
++    // thermasol: once the last chosen output is listed again (after boot, or when the speaker
++    // comes back), select it.
++    private void maybeRestoreLastOutput() {
++        if (mRestoredLastOutput) return;
++        String last = android.provider.Settings.Global.getString(
++                mContext.getContentResolver(), "thermasol_last_output_route");
++        if (TextUtils.isEmpty(last)) { mRestoredLastOutput = true; return; }
++        MediaRoute2InfoHolder holder;
++        synchronized (this) {
++            holder = mRouteIdToAvailableDeviceRoutes.get(last);
++            if (holder == null) return;
++            mRestoredLastOutput = true;
++            if (last.equals(mSelectedRoute.getId())) return;
++            mPendingRestore = last;
++        }
++        Slog.i(TAG, "Restoring last chosen output " + last);
++        mHandler.post(getTransferActionForRoute(holder));
++    }
++
+     private void rebuildAvailableRoutesAndNotify() {
+         rebuildAvailableRoutes();
++        maybeRestoreLastOutput();
+         mOnDeviceRouteChangedListener.onDeviceRouteChanged();
+     }
+ 
+@@ -290,6 +327,10 @@
+     private void rebuildAvailableRoutes() {
+         List<AudioDeviceAttributes> attributesOfSelectedOutputDevices =
+                 mAudioManager.getDevicesForAttributes(MEDIA_USAGE_AUDIO_ATTRIBUTES);
++        String selectedDeviceAddress =
++                attributesOfSelectedOutputDevices.isEmpty()
++                        ? ""
++                        : attributesOfSelectedOutputDevices.get(0).getAddress();
+         int selectedDeviceAttributesType;
+         if (attributesOfSelectedOutputDevices.isEmpty()) {
+             Slog.e(
+@@ -308,9 +349,11 @@
+ 
+         updateAvailableRoutes(
+                 selectedDeviceAttributesType,
++                selectedDeviceAddress,
+                 /* audioDeviceInfos= */ mAudioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS),
+-                /* availableBluetoothRoutes= */ mBluetoothRouteController
+-                        .getAvailableBluetoothRoutes(),
++                /* availableBluetoothRoutes= */ mBluetoothRouteController == null
++                        ? java.util.Collections.emptyList()
++                        : mBluetoothRouteController.getAvailableBluetoothRoutes(),
+                 /* musicVolume= */ mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC),
+                 /* musicMaxVolume= */ mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC),
+                 /* isVolumeFixed= */ mAudioManager.isVolumeFixed());
+@@ -338,6 +381,7 @@
+      */
+     private synchronized void updateAvailableRoutes(
+             int selectedDeviceAttributesType,
++            String selectedDeviceAddress,
+             AudioDeviceInfo[] audioDeviceInfos,
+             List<MediaRoute2Info> availableBluetoothRoutes,
+             int musicVolume,
+@@ -356,7 +400,9 @@
+                         MediaRoute2InfoHolder.createForAudioManagerRoute(
+                                 mediaRoute2Info, audioDeviceInfoType);
+                 mRouteIdToAvailableDeviceRoutes.put(mediaRoute2Info.getId(), newHolder);
+-                if (selectedDeviceAttributesType == audioDeviceInfoType) {
++                if (selectedDeviceAttributesType == audioDeviceInfoType
++                        && (audioDeviceInfoType != AudioDeviceInfo.TYPE_BUS
++                                || audioDeviceInfo.getAddress().equals(selectedDeviceAddress))) {
+                     newSelectedRouteHolder = newHolder;
+                 }
+             }
+@@ -388,6 +434,19 @@
+                 newSelectedRouteHolder.mMediaRoute2Info.getId(),
+                 selectedRouteHolderWithUpdatedVolumeInfo);
+         mSelectedRoute = selectedRouteHolderWithUpdatedVolumeInfo.mMediaRoute2Info;
++        // thermasol: remember whatever output media ends up on, however it was chosen; only after the
++        // boot-time restore has run, so the startup default never overwrites the saved choice.
++        if (mPendingRestore != null && mPendingRestore.equals(mSelectedRoute.getId())) {
++            mPendingRestore = null;
++        }
++        if (mRestoredLastOutput && mPendingRestore == null) {
++            String prev = android.provider.Settings.Global.getString(
++                    mContext.getContentResolver(), "thermasol_last_output_route");
++            if (!mSelectedRoute.getId().equals(prev)) {
++                android.provider.Settings.Global.putString(mContext.getContentResolver(),
++                        "thermasol_last_output_route", mSelectedRoute.getId());
++            }
++        }
+ 
+         // We only add those BT routes that we have not already obtained from audio manager (which
+         // are active).
+@@ -420,7 +479,19 @@
+         // to derive a name ourselves from the type instead.
+         String deviceName = audioDeviceInfo.getPort().name();
+ 
+-        if (!TextUtils.isEmpty(address)) {
++        if (audioDeviceInfo.getType() == AudioDeviceInfo.TYPE_BUS) {
++            // thermasol: one route per network speaker. The HAL addresses each by IP and
++            // publishes its room name as vendor.sonos.name.<ip with _>.
++            if (TextUtils.isEmpty(address)) return null;
++            String room =
++                    android.os.SystemProperties.get(
++                            "vendor.sonos.name." + address.replace('.', '_'), "");
++            if (TextUtils.isEmpty(room)) return null;
++            return createMediaRoute2Info(
++                    "ROUTE_ID_BUS_" + address, AudioDeviceInfo.TYPE_BUS, room, address);
++        }
++
++        if (!TextUtils.isEmpty(address) && mBluetoothRouteController != null) {
+             routeId = mBluetoothRouteController.getRouteIdForBluetoothAddress(address);
+             deviceName = mBluetoothRouteController.getNameForBluetoothAddress(address);
+         }
+@@ -573,15 +644,23 @@
+         public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
+             for (AudioDeviceInfo deviceInfo : addedDevices) {
+                 if (AUDIO_DEVICE_INFO_TYPE_TO_ROUTE_INFO.contains(deviceInfo.getType())) {
++                    // thermasol: only a plugged-in output (headset, USB, Bluetooth) takes over
++                    // media. A network speaker coming online, or the built-in speaker reported when
++                    // this callback registers at boot, is listed without clearing the chosen output.
++                    int type = deviceInfo.getType();
++                    if (type == AudioDeviceInfo.TYPE_BUS
++                            || type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
++                        continue;
++                    }
+                     // When a new valid media output is connected, we clear any routing policies so
+                     // that the default routing logic from the audio framework kicks in. As a result
+                     // of this, when the user connects a bluetooth device or a wired headset, the
+                     // new device becomes the active route, which is the traditional behavior.
+                     mAudioManager.removePreferredDeviceForStrategy(mStrategyForMedia);
+-                    rebuildAvailableRoutesAndNotify();
+                     break;
+                 }
+             }
++            rebuildAvailableRoutesAndNotify();
+         }
+ 
+         @RequiresPermission(
+@@ -706,6 +785,12 @@
+                         /* defaultRouteId= */ "ROUTE_ID_AUX_LINE",
+                         /* nameResource= */ R.string.default_audio_route_name_external_device));
+         AUDIO_DEVICE_INFO_TYPE_TO_ROUTE_INFO.put(
++                AudioDeviceInfo.TYPE_BUS,
++                new SystemRouteInfo(
++                        MediaRoute2Info.TYPE_REMOTE_SPEAKER,
++                        /* defaultRouteId= */ "ROUTE_ID_BUS",
++                        /* nameResource= */ R.string.default_audio_route_name_external_device));
++        AUDIO_DEVICE_INFO_TYPE_TO_ROUTE_INFO.put(
+                 AudioDeviceInfo.TYPE_DOCK_ANALOG,
+                 new SystemRouteInfo(
+                         MediaRoute2Info.TYPE_DOCK,
+diff -ruN a/services/core/java/com/android/server/media/DeviceRouteController.java b/services/core/java/com/android/server/media/DeviceRouteController.java
+--- a/services/core/java/com/android/server/media/DeviceRouteController.java	2026-11-26 14:21:59.783957525 -0800
++++ b/services/core/java/com/android/server/media/DeviceRouteController.java	2026-11-26 14:21:59.917271862 -0800
+@@ -62,8 +62,9 @@
+         // bluetooth adapter or a strategy for media. If no strategy for media is available we can
+         // disallow media router transfers, and without a bluetooth adapter we can remove support
+         // for transfers to inactive bluetooth routes.
++        // thermasol: a device with no Bluetooth adapter still gets the full controller, so
++        // HAL bus devices (network speakers) are listed and transferable.
+         if (strategyForMedia != null
+-                && btAdapter != null
+                 && Flags.enableAudioPoliciesDeviceAndBluetoothController()) {
+             return new AudioManagerRouteController(
+                     context,
