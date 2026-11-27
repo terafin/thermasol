@@ -33,7 +33,7 @@ Record the **boot UUID** and **slot** in your notes. Every gate below compares a
 | Controller errors | `psb_get_errors` = 0, `psb_get_state` = 255 (standby) |
 | Touch | `getprop vendor.tt.touch_driver` = `success:tt_mxt_polled` |
 | Audio gain | `tinymix -D 0 "Headphone Volume"` → `63 63` |
-| Media volume | `cmd media_session volume --stream 3 --get` → raw 12 (`4/10`) |
+| Amp volume | music on a Sonos output defaults to max (`framework.patch`); `scripts/panel/test.sh` checks it |
 | CAN errors | `cat /sys/class/net/can0/statistics/{tx,rx}_errors` → `0 0` |
 | Ethernet | `cat /sys/class/net/eth0/carrier_changes` → 1 per boot, no errors |
 | Idle | `tt-idle-dim.status` → `input_open=1` |

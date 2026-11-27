@@ -1,5 +1,8 @@
 # Live test runbook — touchsteam2 v4
 
+> **Superseded — do not run.** The chosen approach is the idle daemon
+> (`services/tt-idle-dim`); see [README.md](README.md).
+
 Everything below is a device action and needs the operator's explicit approval.
 Nothing here has been executed.
 
