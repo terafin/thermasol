@@ -70,7 +70,7 @@ with the five-descriptor / `flags=0` / no-chain layout, then verify with
 
 ## The deployed set
 
-**Current: v1.7-android15** — the exact set on both slots of the reference panel, built from published
+**Current: v1.8-android15** — the exact set on both slots of the reference panel, built from published
 inputs only. Verify a download with the release's `SHA256SUMS`.
 
 | Partition | SHA-256 | Bytes |
@@ -78,9 +78,9 @@ inputs only. Verify a download with the release's `SHA256SUMS`.
 | boot | `5d81612048846396a2a93fc5b7a2da7157c6c7146414f773fab641d09db820dd` | 50,331,648 |
 | dtbo | `c9d519893db938fa9c8133943911ba63d528cc408ab30107bc784e9f818f538c` | 4,194,304 |
 | product | `839432b1eb6ac636703ac00939bb694515202284b5c39f01a65174996e8bad5f` | 1,879,048,192 |
-| system | `1fe36ed949668cba4b2f7644f37f8063089f12254e19f3bbbfe8346aec4bbc52` | 1,879,048,192 |
-| vendor | `21df3ac1503662eed2ceb05925795f5ccf90b5a56e76b05eb43bcf0982973f31` | 536,870,912 |
-| vbmeta | `5666d1bbfabfe553ef23b6eceebd3f9b87a11a2cc7b9cb14df1635a5f6e32742` | 1,048,576 |
+| system | `25f7de62a961f561cda153c5df9eb14c168f990ad7df29436af1b177d4fb24f2` | 1,879,048,192 |
+| vendor | `c9cf1a1118dfa674fcfe8f0d50590306d30480e59b5e42d3e1e3baffce1cc295` | 536,870,912 |
+| vbmeta | `78e90942b11995c7e0c73615045f6bb3e28285ab1cc1ecd1aad26181800b12ac` | 1,048,576 |
 
 ### History: v1.0 and v1.2
 
