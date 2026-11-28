@@ -13,7 +13,7 @@ layout and the repairs below.
 | `ttstatus` | `net.siliconspirit.ttstatus` | Read-only probe: calls `HardwareService` getters and writes the results to a JSON status file. |
 | `ttsensor` | `net.siliconspirit.ttsensor` | Listens to the ambient-temperature sensor (type 13) for up to 12 s and writes a report of what it saw. |
 | `ttstop` | `net.siliconspirit.ttstop` | Sends the off command through `HardwareService` only when the controller is already in standby (state 255, no errors, no steam or flush timer), and reports the controller state before and after; otherwise it refuses (`precondition_not_standby`). |
-| `ttsimplehome` | `net.siliconspirit.overlay.ttsimplehome` | Resource overlay on the launcher (`com.android.launcher3`) for the home screen. |
+| `ttsimplehome` | `net.siliconspirit.overlay.ttsimplehome` | Resource overlay on the launcher (`com.android.launcher3`) for the home screen, including its default layout (`res/xml/default_workspace_6x5.xml`). |
 | `ttblacktaskbar` | `net.siliconspirit.overlay.ttblacktaskbar` | Resource overlay on the launcher that sets the taskbar colour, light and dark. |
 
 ## Repairs made to the decompiled source
@@ -35,3 +35,13 @@ FRAMEWORK_JAR=<aosp>/out/soong/.intermediates/frameworks/base/framework/android_
 Needs the Android SDK (build-tools, platform 35) and a JDK. The installed copies are signed with the
 platform key (`--sign <key.pk8> <cert.x509.pem>` to match); unsigned output is for checking only. CI
 builds every app except `ttidle`, which needs the AOSP tree's `framework.jar`.
+
+## Home screen layout
+
+`ttsimplehome` replaces the launcher's default 6x5 layout: TouchSteam top right, a music row (Sonos,
+Spotify, YouTube Music, Audible, NPR, Music Assistant) and a video row (Apple TV, Netflix, YouTube,
+Plex, Home Assistant). The launcher reads it only when its own layout is empty: install the overlay,
+then `adb shell pm clear com.android.launcher3`. The digital clock widget does not bind from the
+layout file on this launcher, so add it by hand at the top left: long-press the home screen, Widgets,
+Clock, "Digital clock" (3 wide by 2 high). The installed overlay is signed with the BSP testkey
+(`device/nxp/common/security/testkey`), so build it with that key to install over it.
