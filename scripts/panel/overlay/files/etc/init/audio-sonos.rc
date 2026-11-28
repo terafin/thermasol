@@ -1,4 +1,4 @@
-# A newly found Sonos amp is added to persist.vendor.sonos.amp.*; restarting the audio HAL rebuilds the
-# Sonos module ports from that list (and the HAL rc restarts audioserver, which re-reads them).
+# The Sonos module sets this when the background search finds a player that is not an output yet.
+# Restarting the audio HAL makes its start-up search list it (and the HAL rc restarts audioserver).
 on property:vendor.sonos.rooms_gen=*
     restart vendor.audio-hal-aidl
