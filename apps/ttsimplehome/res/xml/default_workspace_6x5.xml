@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shower panel home screen (6x5): TouchSteam top right, a music row, a video row. -->
+<favorites xmlns:launcher="http://schemas.android.com/apk/res-auto/com.android.launcher3">
+
+    <!-- Row 0: the shower control; the clock widget (top left) is added by hand, see apps/README.md -->
+    <favorite launcher:packageName="com.thermasol.touchsteam2"
+        launcher:className="com.thermasol.touchsteam2.activities.LoadActivity"
+        launcher:screen="0" launcher:x="5" launcher:y="0" />
+
+    <!-- Row 3: music -->
+    <favorite launcher:packageName="com.sonos.acr2"
+        launcher:className="com.sonos.passport.ui.launcheractivity.LauncherActivity"
+        launcher:screen="0" launcher:x="0" launcher:y="3" />
+    <favorite launcher:packageName="com.spotify.music"
+        launcher:className="com.spotify.music.MainActivity"
+        launcher:screen="0" launcher:x="1" launcher:y="3" />
+    <favorite launcher:packageName="com.google.android.apps.youtube.music"
+        launcher:className="com.google.android.apps.youtube.music.activities.MusicActivity"
+        launcher:screen="0" launcher:x="2" launcher:y="3" />
+    <favorite launcher:packageName="com.audible.application"
+        launcher:className="com.audible.application.MainLauncher"
+        launcher:screen="0" launcher:x="3" launcher:y="3" />
+    <favorite launcher:packageName="org.npr.android.news"
+        launcher:className="org.npr.one.StartActivity"
+        launcher:screen="0" launcher:x="4" launcher:y="3" />
+    <favorite launcher:packageName="io.music_assistant.client"
+        launcher:className="io.music_assistant.client.MainActivity"
+        launcher:screen="0" launcher:x="5" launcher:y="3" />
+
+    <!-- Row 4: video, and Home Assistant -->
+    <favorite launcher:packageName="com.apple.atve.androidtv.appletv"
+        launcher:className="com.apple.android.tv.MainActivity"
+        launcher:screen="0" launcher:x="0" launcher:y="4" />
+    <favorite launcher:packageName="com.netflix.mediaclient"
+        launcher:className="com.netflix.mediaclient.ui.launch.UIWebViewActivity"
+        launcher:screen="0" launcher:x="1" launcher:y="4" />
+    <favorite launcher:packageName="com.google.android.youtube"
+        launcher:className="com.google.android.youtube.app.honeycomb.Shell$HomeActivity"
+        launcher:screen="0" launcher:x="2" launcher:y="4" />
+    <favorite launcher:packageName="com.plexapp.android"
+        launcher:className="tv.plex.app.MainActivity"
+        launcher:screen="0" launcher:x="3" launcher:y="4" />
+    <favorite launcher:packageName="io.homeassistant.companion.android"
+        launcher:className="io.homeassistant.companion.android.launch.LaunchActivity"
+        launcher:screen="0" launcher:x="5" launcher:y="4" />
+</favorites>
