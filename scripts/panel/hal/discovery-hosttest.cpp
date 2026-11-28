@@ -7,11 +7,8 @@
 #define SDLOGE SDLOGI
 #include "discovery.h"
 int main() {
-    SonosDiscovery d("/nonexistent", 4097);
-    d.start();
-    // start() searches on its own thread; wait out the whole first search (SSDP 2.5 s + topology 3 s)
-    usleep(9 * 1000 * 1000);
+    SonosDiscovery d(4097);
+    d.searchNow();   // the same blocking search the audio service runs at start
     for (auto& z : d.all()) printf("%s\t%s\t%d\t%s\n", z.ip.c_str(), z.name.c_str(), z.portId, z.uuid.c_str());
-    d.stop();
     return d.all().empty() ? 1 : 0;
 }

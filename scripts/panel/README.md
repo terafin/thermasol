@@ -20,14 +20,15 @@ App (YouTube, Netflix, Plex, Apple TV, ThermaSol, ...)  -- ordinary Android medi
 - **Discovery** finds Sonos players over SSDP and keeps only devices that can play (they advertise
   AVTransport); Boosts and the hidden half of bonded pairs are not outputs. Names come from each
   player. Nothing is hard-coded.
-- **Remembered amps.** The audio service starts before the network is up, so every amp found is
-  remembered (`persist.vendor.sonos.amp.<n>`, written by the service itself). Remembered amps are
-  outputs from the first moment of boot, so the saved output choice can be restored immediately and a
-  slow or absent player at boot never makes outputs disappear. A newly found amp is added and the audio
-  service restarts to list it (seconds, no rebuild); a remembered device that answers but cannot play
-  is dropped.
-- **Sticky output.** `framework.patch` (services.jar) saves the chosen output and restores it at boot.
-  Only a real plug-in (headset, USB, Bluetooth) takes media over; an amp coming online never does.
+- **No saved amp list.** Every output is a player that answered a live search; nothing about the amps
+  is stored on the panel. The audio service searches when it starts and lists what answers. It starts
+  before the network is up, so at boot it usually lists none; the background search (every 20 s)
+  then finds each player and restarts the audio service so it is listed (seconds, no rebuild). A
+  player switched off stays listed until the audio service next restarts.
+- **Sticky output.** `framework.patch` (services.jar) saves the chosen output (one setting,
+  `thermasol_last_output_route`) and selects it as soon as that player is listed, at boot or whenever
+  it comes online later. Only a real plug-in (headset, USB, Bluetooth) takes media over; any other
+  amp coming online never does.
 - **Volume.** Use Android's own controls: the Quick Settings media card's output chip opens the system
   output switcher with the volume slider for the selected amp. Amp outputs default to full media
   volume so the panel's volume, not a hidden attenuation, sets the level.

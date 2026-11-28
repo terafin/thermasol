@@ -17,10 +17,11 @@ step "mute every reachable amp"
 MUTES=""
 restore() { for m in $MUTES; do "$U" "${m%=*}" mute "${m#*=}" >/dev/null 2>&1 || true; done; }
 trap restore EXIT
-# Every amp the HAL lists (persisted, not just discovered now) is a port VTS may open: VTS picks
-# whichever device port it likes, so one that cannot be confirmed muted stops the run.
-LISTED=$(sh_p "getprop" | sed -nE 's/^\[persist\.vendor\.sonos\.amp\.[0-9]+\]: \[([0-9.]+)\|.*/\1/p' | sort -u)
-[ -n "$LISTED" ] || die "no persisted amps read from the panel"
+# Every amp the HAL lists is a port VTS may open: VTS picks whichever device port it likes, so one
+# that cannot be confirmed muted stops the run. The HAL publishes each listed amp as
+# vendor.sonos.name.<ip with _>.
+LISTED=$(sh_p "getprop" | sed -nE 's/^\[vendor\.sonos\.name\.([0-9_]+)\]: \[.+\]/\1/p' | tr _ . | sort -u)
+[ -n "$LISTED" ] || die "the audio HAL lists no Sonos amps"
 for ip in $LISTED; do
   was=$("$U" "$ip" getmute 2>/dev/null | tr -dc '01' || true)
   if [ -z "$was" ]; then

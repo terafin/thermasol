@@ -7,12 +7,12 @@ OV=$REPO/scripts/panel/overlay
 EXPECT=${EXPECT_ROOMS_FILE:-}
 if [ -z "$EXPECT" ]; then EXPECT=$WORK/expected-rooms.tsv; "$(dirname "$0")/sonos-rooms.sh" > "$EXPECT" || die "could not read the Sonos room list"; fi
 adb_up
-# Wait for the audio HAL to settle: discovery may restart it once after boot to add a new amp or drop
-# a device that cannot play, and a check taken mid-restart sees no outputs. Settled = the saved amp
-# list has not changed and the HAL has been up, with the same pid, for 20 s.
+# Wait for the audio HAL to settle: discovery restarts it after boot to list players found by the
+# background search, and a check taken mid-restart sees no outputs. Settled = the HAL has been up,
+# with the same pid, and the same Sonos outputs, for 20 s.
 settle_end=$(( $(date +%s) + 120 )); prev=""; same=0
 while [ "$(date +%s)" -lt "$settle_end" ]; do
-  cur="$(sh_p "pidof android.hardware.audio.service-aidl.imx; getprop | grep persist.vendor.sonos.amp" 2>/dev/null | md5sum)"
+  cur="$(sh_p "pidof android.hardware.audio.service-aidl.imx; getprop | grep vendor.sonos.name" 2>/dev/null | md5sum)"
   if [ "$cur" = "$prev" ]; then same=$((same+5)); [ "$same" -ge 20 ] && break; else same=0; prev=$cur; fi
   sleep 5
 done
@@ -53,13 +53,16 @@ while IFS=$'\t' read -r ip name; do
   else pass "room $name ($ip) is an output"; fi
 done < "$EXPECT"
 extra=$(comm -13 <(cut -f1 "$EXPECT" | sort -u) <(echo "$ROUTES" | cut -f1 | grep . | sort -u) | grep . || true)
-# A listed amp that did not answer discovery this time is a remembered amp that is switched off,
-# not grouping; only a route that answers as a Sonos player under a different name is wrong.
+# A listed amp that does not answer now was switched off after the audio service last searched (it
+# stays listed until the next restart); only a route that answers under a different name is wrong.
 for ip in $extra; do
   if curl -s -m4 "http://$ip:1400/xml/device_description.xml" | grep -q "<roomName>"; then
     bad "unexpected sonos route $ip (answers but not in discovery)"
-  else echo "  note: $ip is listed but offline (remembered amp)"; fi
+  else echo "  note: $ip is listed but went offline since the last search"; fi
 done
+# no amp list is kept on the panel (builds up to v1.7 saved one in persist.vendor.sonos.amp.*)
+saved=$(sh_p "getprop" | grep -E '^\[persist\.vendor\.sonos\.amp\.[0-9]+\]: \[.+\]' || true)
+[ -z "$saved" ] && pass "no saved amp list on the panel" || bad "saved amp list present: $saved"
 # every app remove-apps.sh retires must stay gone (one list, owned by remove-apps.sh)
 RETIRED=$(sed -n '/^RETIRED="/,/"$/p' "$(dirname "$0")/remove-apps.sh" | tr -d '"' | sed 's/^RETIRED=//')
 apps=""; installed=$(sh_p "pm list packages 2>/dev/null")
